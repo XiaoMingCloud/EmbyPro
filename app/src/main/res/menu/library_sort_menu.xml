@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/sortDateModified" android:title="@string/sort_date_modified" />
+    <item android:id="@+id/sortDateCreated" android:title="@string/sort_date_created" />
+    <item android:id="@+id/sortTitle" android:title="@string/sort_title" />
+    <item android:id="@+id/sortImdbRating" android:title="@string/sort_imdb_rating" />
+    <item android:id="@+id/sortCriticRating" android:title="@string/sort_critic_rating" />
+    <item android:id="@+id/sortProductionYear" android:title="@string/sort_production_year" />
+    <item android:id="@+id/sortPremiereDate" android:title="@string/sort_premiere_date" />
+    <item android:id="@+id/sortOfficialRating" android:title="@string/sort_official_rating" />
+    <item android:id="@+id/sortDatePlayed" android:title="@string/sort_date_played" />
+    <item android:id="@+id/sortPlaybackDuration" android:title="@string/sort_playback_duration" />
+    <item android:id="@+id/sortRandom" android:title="@string/sort_random" />
+</menu>

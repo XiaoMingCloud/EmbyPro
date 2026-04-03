@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/actionToggleContinuous"
+        android:title="@string/continuous_off" />
+    <item
+        android:id="@+id/actionRotateVideo"
+        android:title="@string/rotate_video" />
+    <item
+        android:id="@+id/actionSpeed1x"
+        android:title="@string/speed_1_0" />
+    <item
+        android:id="@+id/actionSpeed125x"
+        android:title="@string/speed_1_25" />
+    <item
+        android:id="@+id/actionSpeed15x"
+        android:title="@string/speed_1_5" />
+    <item
+        android:id="@+id/actionSpeed2x"
+        android:title="@string/speed_2_0" />
+</menu>

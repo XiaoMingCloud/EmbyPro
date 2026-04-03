@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_relogin"
+        android:title="@string/menu_relogin" />
+    <item
+        android:id="@+id/action_change_icon"
+        android:title="@string/menu_change_icon" />
+    <item
+        android:id="@+id/action_change_password"
+        android:title="@string/menu_change_password" />
+    <item
+        android:id="@+id/action_edit"
+        android:title="@string/menu_edit_server" />
+    <item
+        android:id="@+id/action_delete"
+        android:title="@string/menu_delete_server" />
+</menu>
