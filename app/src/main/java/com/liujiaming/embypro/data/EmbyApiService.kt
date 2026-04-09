@@ -10,6 +10,11 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 data class ServerInfo(
     val serverId: String,
@@ -44,6 +49,20 @@ data class LibraryFilterOptionsUiModel(
     val tags: List<String>
 )
 
+data class PlaybackHistoryItemUiModel(
+    val itemId: String,
+    val title: String,
+    val libraryName: String,
+    val playedTimeLabel: String,
+    val imageUrl: String?,
+    val itemType: String
+)
+
+data class PlaybackHistoryPageUiModel(
+    val items: List<PlaybackHistoryItemUiModel>,
+    val totalCount: Int
+)
+
 enum class LibraryBrowseMode {
     ALL,
     CONTINUE,
@@ -52,6 +71,13 @@ enum class LibraryBrowseMode {
     TAGS,
     COLLECTIONS,
     FOLDERS
+}
+
+enum class PlaybackHistoryCategory(val includeItemTypes: String, val labelRes: Int) {
+    ALL("Movie,Episode,Video,MusicVideo,Series,Season,BoxSet,Program,TvChannel", R.string.tab_all),
+    VIDEO("Movie,Episode,Video,MusicVideo", R.string.playback_history_tab_video),
+    LIVE("Program,TvChannel", R.string.playback_history_tab_live),
+    COLUMN("Series,Season,BoxSet", R.string.playback_history_tab_column)
 }
 
 enum class LibrarySortField(val apiValue: String, val labelRes: Int) {
@@ -554,6 +580,68 @@ class EmbyApiService(
         }
     }
 
+    fun fetchPlaybackHistoryPage(
+        baseUrl: String,
+        userId: String,
+        accessToken: String,
+        startIndex: Int,
+        limit: Int,
+        category: PlaybackHistoryCategory = PlaybackHistoryCategory.ALL
+    ): Result<PlaybackHistoryPageUiModel> {
+        return runCatching {
+            val request = Request.Builder()
+                .url(buildPlaybackHistoryUrl(baseUrl, userId, startIndex, limit, category))
+                .header("X-Emby-Token", accessToken)
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("读取播放历史失败：${response.code}")
+                }
+
+                val json = JSONObject(response.body?.string().orEmpty())
+                val libraryTitleMap = runCatching {
+                    fetchViews(baseUrl, userId, accessToken).associate { it.id to it.title }
+                }.getOrDefault(emptyMap())
+                val libraryNameCache = mutableMapOf<String, String>()
+                val items = buildPlaybackHistoryItems(
+                    baseUrl = baseUrl,
+                    accessToken = accessToken,
+                    items = json.optJSONArray("Items"),
+                    libraryTitleMap = libraryTitleMap,
+                    libraryNameCache = libraryNameCache
+                )
+
+                PlaybackHistoryPageUiModel(
+                    items = items,
+                    totalCount = json.optInt("TotalRecordCount", startIndex + items.size)
+                )
+            }
+        }
+    }
+
+    fun clearPlayedState(
+        baseUrl: String,
+        userId: String,
+        accessToken: String,
+        itemId: String
+    ): Result<Unit> {
+        return runCatching {
+            val request = Request.Builder()
+                .url("$baseUrl/emby/Users/$userId/PlayedItems/$itemId")
+                .header("X-Emby-Token", accessToken)
+                .delete()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("清除播放历史失败：${response.code}")
+                }
+            }
+        }
+    }
+
     private fun fetchResumeItems(baseUrl: String, userId: String, accessToken: String): List<MediaPosterUiModel> {
         val request = Request.Builder()
             .url(
@@ -610,6 +698,53 @@ class EmbyApiService(
                         )
                     )
                 }
+            }
+        }
+    }
+
+    private fun buildPlaybackHistoryItems(
+        baseUrl: String,
+        accessToken: String,
+        items: JSONArray?,
+        libraryTitleMap: Map<String, String>,
+        libraryNameCache: MutableMap<String, String>
+    ): List<PlaybackHistoryItemUiModel> {
+        return buildList {
+            for (index in 0 until (items?.length() ?: 0)) {
+                val item = items?.optJSONObject(index) ?: continue
+                val userData = item.optJSONObject("UserData")
+                val lastPlayedDate = userData?.optString("LastPlayedDate").orEmpty()
+                val playbackPositionTicks = userData?.optLong("PlaybackPositionTicks") ?: 0L
+                val played = userData?.optBoolean("Played") == true
+                if (lastPlayedDate.isBlank() && playbackPositionTicks <= 0L && !played) continue
+
+                val itemId = item.optString("Id")
+                if (itemId.isBlank()) continue
+
+                val imageInfo = resolveImageInfo(item)
+                add(
+                    PlaybackHistoryItemUiModel(
+                        itemId = itemId,
+                        title = item.optString("Name", context.getString(R.string.untitled_media)),
+                        libraryName = resolveHistoryLibraryName(
+                            baseUrl = baseUrl,
+                            accessToken = accessToken,
+                            itemId = itemId,
+                            libraryTitleMap = libraryTitleMap,
+                            libraryNameCache = libraryNameCache
+                        ),
+                        playedTimeLabel = formatPlaybackHistoryTime(lastPlayedDate),
+                        imageUrl = buildImageUrl(
+                            baseUrl = baseUrl,
+                            imageItemId = imageInfo.first,
+                            imageType = imageInfo.second,
+                            imageTag = imageInfo.third,
+                            maxWidth = 420,
+                            maxHeight = 236
+                        ),
+                        itemType = item.optString("Type")
+                    )
+                )
             }
         }
     }
@@ -1057,6 +1192,139 @@ class EmbyApiService(
         }
     }
 
+    private fun buildPlaybackHistoryUrl(
+        baseUrl: String,
+        userId: String,
+        startIndex: Int,
+        limit: Int,
+        category: PlaybackHistoryCategory
+    ): String {
+        return buildString {
+            append("$baseUrl/emby/Users/$userId/Items?")
+            append("Recursive=true")
+            append("&StartIndex=$startIndex")
+            append("&Limit=$limit")
+            append("&IncludeItemTypes=${encodeQueryValue(category.includeItemTypes)}")
+            append("&Fields=ImageTags,UserData,PrimaryImageAspectRatio")
+            append("&EnableImageTypes=Primary,Thumb,Backdrop&ImageTypeLimit=1")
+            append("&EnableUserData=true")
+            append("&SortBy=DatePlayed")
+            append("&SortOrder=Descending")
+        }
+    }
+
+    private fun resolveHistoryLibraryName(
+        baseUrl: String,
+        accessToken: String,
+        itemId: String,
+        libraryTitleMap: Map<String, String>,
+        libraryNameCache: MutableMap<String, String>
+    ): String {
+        libraryNameCache[itemId]?.let { return it }
+        if (itemId.isBlank()) return context.getString(R.string.media_library)
+
+        return runCatching {
+            val request = Request.Builder()
+                .url("$baseUrl/emby/Items/$itemId/Ancestors")
+                .header("X-Emby-Token", accessToken)
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("读取媒体库祖先信息失败：${response.code}")
+                }
+
+                val raw = response.body?.string().orEmpty()
+                val ancestors = if (raw.trim().startsWith("[")) JSONArray(raw) else {
+                    JSONObject(raw).optJSONArray("Items") ?: JSONArray()
+                }
+
+                val parsedAncestors = buildList {
+                    for (index in 0 until ancestors.length()) {
+                        val ancestor = ancestors.optJSONObject(index) ?: continue
+                        val ancestorId = ancestor.optString("Id")
+                        val ancestorName = ancestor.optString("Name")
+                        val ancestorType = ancestor.optString("Type")
+                        if (ancestorId.isNotBlank() && ancestorName.isNotBlank()) {
+                            add(Triple(ancestorId, ancestorName, ancestorType))
+                        }
+                    }
+                }
+
+                val matchedName = parsedAncestors.firstNotNullOfOrNull { (ancestorId, ancestorName, _) ->
+                    libraryTitleMap[ancestorId] ?: ancestorName.takeIf {
+                        ancestorId in libraryTitleMap.keys
+                    }
+                }
+
+                matchedName
+                    ?: parsedAncestors.firstOrNull { (_, ancestorName, ancestorType) ->
+                        ancestorType in HISTORY_LIBRARY_ANCESTOR_TYPES && !isSystemAncestorName(ancestorName)
+                    }?.second
+                    ?: parsedAncestors.firstOrNull { (_, ancestorName, _) ->
+                        !isSystemAncestorName(ancestorName)
+                    }?.second
+                    ?: context.getString(R.string.media_library)
+            }
+        }.getOrDefault(context.getString(R.string.media_library)).also {
+            libraryNameCache[itemId] = it
+        }
+    }
+
+    private fun isSystemAncestorName(name: String): Boolean {
+        val normalized = name.trim().lowercase(Locale.getDefault())
+        return normalized.isBlank() || normalized == "root"
+    }
+
+    private fun formatPlaybackHistoryTime(lastPlayedDate: String): String {
+        val playedAt = parseUtcDate(lastPlayedDate)
+        if (playedAt <= 0L) return ""
+
+        val now = Calendar.getInstance()
+        val target = Calendar.getInstance().apply { timeInMillis = playedAt }
+        val timeLabel = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(playedAt))
+
+        return when {
+            isSameDay(now, target) -> context.getString(R.string.playback_history_time_today, timeLabel)
+            isYesterday(now, target) -> context.getString(R.string.playback_history_time_yesterday, timeLabel)
+            else -> SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(playedAt))
+        }
+    }
+
+    private fun parseUtcDate(value: String): Long {
+        if (value.isBlank()) return 0L
+        val normalized = value
+            .replace(Regex("\\.(\\d{3})\\d*Z$"), ".$1Z")
+            .replace(Regex("\\.(\\d{1,2})Z$")) { match ->
+                "." + match.groupValues[1].padEnd(3, '0') + "Z"
+            }
+        val patterns = listOf(
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        )
+        for (pattern in patterns) {
+            val formatter = SimpleDateFormat(pattern, Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            runCatching {
+                return formatter.parse(normalized)?.time ?: 0L
+            }
+        }
+        return 0L
+    }
+
+    private fun isSameDay(first: Calendar, second: Calendar): Boolean {
+        return first.get(Calendar.YEAR) == second.get(Calendar.YEAR) &&
+            first.get(Calendar.DAY_OF_YEAR) == second.get(Calendar.DAY_OF_YEAR)
+    }
+
+    private fun isYesterday(today: Calendar, target: Calendar): Boolean {
+        val copy = today.clone() as Calendar
+        copy.add(Calendar.DAY_OF_YEAR, -1)
+        return isSameDay(copy, target)
+    }
+
     private fun buildServerHomeCache(home: ServerHomeUiModel): JSONObject {
         val sectionsJson = JSONObject()
         home.librarySections.forEach { (libraryId, items) ->
@@ -1217,5 +1485,6 @@ class EmbyApiService(
         private const val HOME_CACHE_MAX_AGE_MS = 15L * 60L * 1000L
         private const val LIBRARY_CACHE_MAX_AGE_MS = 15L * 60L * 1000L
         private const val FILTER_CACHE_MAX_AGE_MS = 30L * 60L * 1000L
+        private val HISTORY_LIBRARY_ANCESTOR_TYPES = setOf("CollectionFolder", "UserView", "Channel")
     }
 }

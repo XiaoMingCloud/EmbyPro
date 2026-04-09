@@ -93,6 +93,14 @@ class HomeTabsActivity : AppCompatActivity() {
         findViewById<View>(R.id.myServerListEntry).setDebouncedClickListener {
             startActivity(Intent(this, MainActivity::class.java))
         }
+        findViewById<View>(R.id.myPlaybackHistoryEntry).setDebouncedClickListener {
+            startActivity(
+                Intent(this, PlaybackHistoryActivity::class.java)
+                    .putExtra(PlaybackHistoryActivity.EXTRA_BASE_URL, baseUrl)
+                    .putExtra(PlaybackHistoryActivity.EXTRA_USER_ID, userId)
+                    .putExtra(PlaybackHistoryActivity.EXTRA_ACCESS_TOKEN, accessToken)
+            )
+        }
         findViewById<View>(R.id.myHomeSettingsEntry).setDebouncedClickListener {
             startActivity(
                 Intent(this, HomeSettingsActivity::class.java)
