@@ -384,7 +384,7 @@
                     android:id="@+id/navigationHomeIcon"
                     android:layout_width="20dp"
                     android:layout_height="20dp"
-                    android:src="@android:drawable/ic_menu_view"
+                    android:src="@drawable/ic_nav_home_house"
                     android:tint="@color/nav_active" />
 
                 <TextView
@@ -413,7 +413,7 @@
                     android:id="@+id/navigationMediaIcon"
                     android:layout_width="20dp"
                     android:layout_height="20dp"
-                    android:src="@android:drawable/ic_menu_gallery"
+                    android:src="@drawable/ic_nav_media_pinwheel_outline"
                     android:tint="@color/nav_inactive" />
 
                 <TextView
