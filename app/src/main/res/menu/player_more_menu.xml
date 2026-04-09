@@ -7,6 +7,9 @@
         android:id="@+id/actionRotateVideo"
         android:title="@string/rotate_video" />
     <item
+        android:id="@+id/actionPictureInPicture"
+        android:title="@string/picture_in_picture" />
+    <item
         android:id="@+id/actionSpeed1x"
         android:title="@string/speed_1_0" />
     <item

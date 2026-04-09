@@ -1,11 +1,17 @@
 package com.liujiaming.embypro
 
+import android.app.PendingIntent
+import android.app.PictureInPictureParams
+import android.app.RemoteAction
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.drawable.Icon
 import android.media.AudioManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -155,18 +161,49 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        activeInstance = this
         PlayerCache.cleanupExpiredPrefetch(this, protectedItemIds = setOf(itemId))
         initializePlayer()
     }
 
     override fun onStop() {
         super.onStop()
-        releasePlayer()
+        if (activeInstance === this && !isInPictureInPictureMode) {
+            activeInstance = null
+        }
+        if (!isInPictureInPictureMode) {
+            releasePlayer()
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        if (activeInstance === this) {
+            activeInstance = null
+        }
+        releasePlayer()
         networkExecutor.shutdownNow()
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        maybeEnterPictureInPicture(autoEnter = true)
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (isInPictureInPictureMode) {
+            playerView.hideController()
+            topBar.visibility = View.GONE
+            loadingView.visibility = View.GONE
+            gestureText.visibility = View.GONE
+            updatePictureInPictureParams()
+        } else {
+            syncPlaybackControls()
+        }
     }
 
     override fun finish() {
@@ -236,6 +273,7 @@ class PlayerActivity : AppCompatActivity() {
                 if (isPlaying) {
                     playerView.hideController()
                 }
+                updatePictureInPictureParams()
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -255,6 +293,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun releasePlayer() {
+        if (player == null) return
         playbackPosition = player?.currentPosition ?: playbackPosition
         playWhenReady = player?.playWhenReady ?: playWhenReady
         reportPlaybackProgress(playbackPosition)
@@ -294,6 +333,11 @@ class PlayerActivity : AppCompatActivity() {
 
                 R.id.actionRotateVideo -> {
                     rotateVideo()
+                    true
+                }
+
+                R.id.actionPictureInPicture -> {
+                    maybeEnterPictureInPicture(autoEnter = false)
                     true
                 }
 
@@ -484,6 +528,23 @@ class PlayerActivity : AppCompatActivity() {
         syncPlaybackControls()
     }
 
+    private fun handlePictureInPictureControl(action: String) {
+        val currentPlayer = player ?: return
+        when (action) {
+            ACTION_PIP_PAUSE -> currentPlayer.pause()
+            ACTION_PIP_PLAY,
+            ACTION_PIP_TOGGLE -> {
+                if (currentPlayer.isPlaying) {
+                    currentPlayer.pause()
+                } else {
+                    currentPlayer.play()
+                }
+            }
+        }
+        syncPlaybackControls()
+        updatePictureInPictureParams()
+    }
+
     private fun switchPlaylistItem(direction: Int) {
         if (isSwitchingItem) return
         if (playlistItemIds.isEmpty() || playlistIndex !in playlistItemIds.indices) {
@@ -652,6 +713,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun applyImmersivePlayback(isPlaying: Boolean) {
+        if (isInPictureInPictureMode) return
         topBar.visibility = if (isPlaying) View.GONE else View.VISIBLE
         val controller = WindowCompat.getInsetsController(window, window.decorView) ?: return
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -694,6 +756,74 @@ class PlayerActivity : AppCompatActivity() {
         centerTimeText.text = "${formatMillis(position)} / ${formatMillis(duration)}"
     }
 
+    private fun maybeEnterPictureInPicture(autoEnter: Boolean) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            if (!autoEnter) {
+                Toast.makeText(this, getString(R.string.picture_in_picture_not_supported), Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        if (!packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+            if (!autoEnter) {
+                Toast.makeText(this, getString(R.string.picture_in_picture_not_supported), Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        val currentPlayer = player ?: return
+        if (autoEnter && !currentPlayer.isPlaying) return
+
+        val videoSize = currentVideoSize
+        val ratio = when {
+            videoSize != null && videoSize.width > 0 && videoSize.height > 0 ->
+                Rational(videoSize.width, videoSize.height)
+            else -> Rational(16, 9)
+        }
+        val params = PictureInPictureParams.Builder()
+            .setAspectRatio(ratio)
+            .setActions(buildPictureInPictureActions(player?.isPlaying == true))
+            .build()
+        enterPictureInPictureMode(params)
+    }
+
+    private fun updatePictureInPictureParams() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (!isInPictureInPictureMode) return
+        val videoSize = currentVideoSize
+        val ratio = when {
+            videoSize != null && videoSize.width > 0 && videoSize.height > 0 ->
+                Rational(videoSize.width, videoSize.height)
+            else -> Rational(16, 9)
+        }
+        setPictureInPictureParams(
+            PictureInPictureParams.Builder()
+                .setAspectRatio(ratio)
+                .setActions(buildPictureInPictureActions(player?.isPlaying == true))
+                .build()
+        )
+    }
+
+    private fun buildPictureInPictureActions(isPlaying: Boolean): List<RemoteAction> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return emptyList()
+        val action = if (isPlaying) ACTION_PIP_PAUSE else ACTION_PIP_PLAY
+        val titleRes = if (isPlaying) android.R.string.cancel else android.R.string.ok
+        val iconRes = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+        val intent = Intent(this, PlayerPipActionReceiver::class.java).setAction(action)
+        val pendingIntent = PendingIntent.getBroadcast(
+            this,
+            if (isPlaying) 201 else 202,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        return listOf(
+            RemoteAction(
+                Icon.createWithResource(this, iconRes),
+                getString(titleRes),
+                getString(titleRes),
+                pendingIntent
+            )
+        )
+    }
+
     private enum class AdjustMode {
         SEEK,
         SWITCH_ITEM,
@@ -713,6 +843,9 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     companion object {
+        const val ACTION_PIP_PLAY = "com.liujiaming.embypro.action.PIP_PLAY"
+        const val ACTION_PIP_PAUSE = "com.liujiaming.embypro.action.PIP_PAUSE"
+        const val ACTION_PIP_TOGGLE = "com.liujiaming.embypro.action.PIP_TOGGLE"
         const val EXTRA_PLAYBACK_URL = "extra_playback_url"
         const val EXTRA_ACCESS_TOKEN = "extra_access_token"
         const val EXTRA_TITLE = "extra_title"
@@ -736,5 +869,14 @@ class PlayerActivity : AppCompatActivity() {
         private const val STATE_PLAYLIST_INDEX = "state_playlist_index"
         private const val LONG_PRESS_SEEK_MS = 8_000L
         private const val LONG_PRESS_REPEAT_MS = 350L
+
+        @Volatile
+        private var activeInstance: PlayerActivity? = null
+
+        fun handlePipControlAction(action: String) {
+            activeInstance?.runOnUiThread {
+                activeInstance?.handlePictureInPictureControl(action)
+            }
+        }
     }
 }

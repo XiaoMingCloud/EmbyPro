@@ -81,14 +81,6 @@
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp" />
             </LinearLayout>
-
-            <ImageButton
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/global_theme_title"
-                android:padding="8dp"
-                android:src="@drawable/ic_more_vertical" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
@@ -136,14 +128,6 @@
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp" />
             </LinearLayout>
-
-            <ImageButton
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/home_settings_title"
-                android:padding="8dp"
-                android:src="@drawable/ic_more_vertical" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
