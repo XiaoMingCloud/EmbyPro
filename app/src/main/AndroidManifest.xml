@@ -21,6 +21,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".SearchActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".VideoDetailActivity"
             android:exported="false" />
 
@@ -34,6 +38,10 @@
 
         <activity
             android:name=".MainActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".HomeTabsActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

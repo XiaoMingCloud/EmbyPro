@@ -47,6 +47,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var titleText: TextView
     private lateinit var moreButton: ImageButton
     private lateinit var playPauseButton: ImageButton
+    private lateinit var centerTimeText: TextView
     private lateinit var topBar: View
 
     private var player: ExoPlayer? = null
@@ -124,6 +125,7 @@ class PlayerActivity : AppCompatActivity() {
         titleText = findViewById(R.id.playerTitleText)
         moreButton = findViewById(R.id.playerMoreButton)
         playPauseButton = playerView.findViewById(androidx.media3.ui.R.id.exo_play_pause)
+        centerTimeText = playerView.findViewById(R.id.playerCenterTimeText)
         topBar = findViewById<ImageButton>(R.id.playerBackButton).parent as View
 
         playerView.controllerShowTimeoutMs = 1800
@@ -531,6 +533,16 @@ class PlayerActivity : AppCompatActivity() {
     private fun handlePlaybackEnded() {
         if (isContinuousPlayEnabled && playlistItemIds.isNotEmpty() && playlistIndex in playlistItemIds.indices && playlistIndex < playlistItemIds.lastIndex) {
             switchPlaylistItem(1)
+        } else if (!isContinuousPlayEnabled) {
+            player?.let { currentPlayer ->
+                reportPlaybackProgress(0L)
+                playbackPosition = 0L
+                currentPlayer.seekTo(0L)
+                currentPlayer.playWhenReady = true
+                currentPlayer.play()
+                playerView.hideController()
+                syncPlaybackControls()
+            }
         } else {
             finish()
         }
@@ -618,9 +630,15 @@ class PlayerActivity : AppCompatActivity() {
         if (shouldShowResumeButton) {
             playPauseButton.setImageResource(R.drawable.exo_styled_controls_play)
             playPauseButton.imageTintList = null
+            updateCenterTimeText()
+            centerTimeText.visibility = View.VISIBLE
+            centerTimeText.removeCallbacks(centerTimeTicker)
+            centerTimeText.post(centerTimeTicker)
         }
         playPauseButton.visibility = if (shouldShowResumeButton) View.VISIBLE else View.INVISIBLE
+        centerTimeText.visibility = if (shouldShowResumeButton) View.VISIBLE else View.INVISIBLE
         if (!shouldShowResumeButton) {
+            centerTimeText.removeCallbacks(centerTimeTicker)
             playerView.hideController()
         }
     }
@@ -669,6 +687,13 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    private fun updateCenterTimeText() {
+        val currentPlayer = player ?: return
+        val position = currentPlayer.currentPosition.coerceAtLeast(0L)
+        val duration = currentPlayer.duration.takeIf { it > 0 } ?: 0L
+        centerTimeText.text = "${formatMillis(position)} / ${formatMillis(duration)}"
+    }
+
     private enum class AdjustMode {
         SEEK,
         SWITCH_ITEM,
@@ -680,6 +705,12 @@ class PlayerActivity : AppCompatActivity() {
     private val hideGestureRunnable = Runnable { gestureText.visibility = View.GONE }
     private val longPressStartRunnable = Runnable { startLongPressSeek() }
     private val longPressSeekRunnable = Runnable { performLongPressSeekTick() }
+    private val centerTimeTicker = object : Runnable {
+        override fun run() {
+            updateCenterTimeText()
+            centerTimeText.postDelayed(this, 1000L)
+        }
+    }
 
     companion object {
         const val EXTRA_PLAYBACK_URL = "extra_playback_url"

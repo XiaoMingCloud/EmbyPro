@@ -46,6 +46,7 @@ dependencies {
     implementation("androidx.media3:media3-datasource:1.1.1")
     implementation("androidx.palette:palette-ktx:1.0.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation("com.google.android.material:material:1.8.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("junit:junit:4.13.2")

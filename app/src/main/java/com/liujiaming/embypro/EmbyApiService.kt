@@ -289,6 +289,12 @@ class EmbyApiService(
         }
     }
 
+    fun fetchMediaLibraries(baseUrl: String, userId: String, accessToken: String): Result<List<MediaLibraryUiModel>> {
+        return runCatching {
+            fetchViews(baseUrl, userId, accessToken)
+        }
+    }
+
     fun fetchVideoDetail(
         baseUrl: String,
         userId: String,
@@ -497,6 +503,36 @@ class EmbyApiService(
                 } else {
                     throw error
                 }
+            }
+        }
+    }
+
+    fun searchMediaItemsPage(
+        baseUrl: String,
+        userId: String,
+        accessToken: String,
+        query: String,
+        startIndex: Int,
+        limit: Int
+    ): Result<LibraryItemsPageUiModel> {
+        return runCatching {
+            val request = Request.Builder()
+                .url(buildSearchItemsUrl(baseUrl, userId, query, startIndex, limit))
+                .header("X-Emby-Token", accessToken)
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("搜索内容失败：${response.code}")
+                }
+
+                val json = JSONObject(response.body?.string().orEmpty())
+                val items = parseMediaItems(baseUrl, json.optJSONArray("Items"))
+                LibraryItemsPageUiModel(
+                    items = items,
+                    totalCount = json.optInt("TotalRecordCount", items.size + startIndex)
+                )
             }
         }
     }
@@ -981,6 +1017,27 @@ class EmbyApiService(
         builder.append("&SortBy=${sortField.apiValue}")
         builder.append("&SortOrder=${if (sortDescending) "Descending" else "Ascending"}")
         return builder.toString()
+    }
+
+    private fun buildSearchItemsUrl(
+        baseUrl: String,
+        userId: String,
+        query: String,
+        startIndex: Int,
+        limit: Int
+    ): String {
+        return buildString {
+            append("$baseUrl/emby/Users/$userId/Items?")
+            append("Recursive=true")
+            append("&SearchTerm=${encodeQueryValue(query)}")
+            append("&StartIndex=$startIndex")
+            append("&Limit=$limit")
+            append("&IncludeItemTypes=Movie,Episode,Video,Series,MusicVideo,BoxSet,Folder")
+            append("&Fields=PrimaryImageAspectRatio,Overview,People,ImageTags,PrimaryImageAspectRatio,ChildCount")
+            append("&EnableImageTypes=Primary,Thumb,Backdrop&ImageTypeLimit=1")
+            append("&SortBy=SortName")
+            append("&SortOrder=Ascending")
+        }
     }
 
     private fun buildServerHomeCache(home: ServerHomeUiModel): JSONObject {

@@ -16,7 +16,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import com.google.android.material.navigation.NavigationBarView
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -45,7 +44,6 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
         emptyStateText = findViewById(R.id.emptyStateText)
         val addServerButton = findViewById<FloatingActionButton>(R.id.addServerButton)
         val moreButton = findViewById<ImageButton>(R.id.moreButton)
-        val bottomNavigation = findViewById<NavigationBarView>(R.id.bottomNavigation)
         val topBar = findViewById<TextView>(R.id.titleText).parent as View
 
         serverItems.addAll(sessionStore.loadServers())
@@ -63,13 +61,11 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
         }
 
         EdgeToEdgeHelper.applyInsets(topBar, applyTop = true)
-        EdgeToEdgeHelper.applyInsets(bottomNavigation, applyBottom = true)
         EdgeToEdgeHelper.applyInsets(serverList, applyBottom = true)
         EdgeToEdgeHelper.applyMargins(addServerButton, applyBottom = true)
 
-        bottomNavigation.setOnItemSelectedListener { item ->
-            Toast.makeText(this, item.title, Toast.LENGTH_SHORT).show()
-            true
+        if (intent.getBooleanExtra(EXTRA_AUTO_OPEN_CONNECT, false) && serverItems.isEmpty()) {
+            addServerButton.post { showConnectServerDialog() }
         }
     }
 
@@ -324,6 +320,10 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
                         updateEmptyState()
                         dialog.dismiss()
                         Toast.makeText(this, getString(R.string.login_success, authResult.userName), Toast.LENGTH_SHORT).show()
+                        if (intent.getBooleanExtra(EXTRA_RETURN_HOME_ON_SUCCESS, false)) {
+                            startActivity(Intent(this, HomeTabsActivity::class.java))
+                            finish()
+                        }
                     }.onFailure { error ->
                         loginHintText.text = error.message ?: getString(R.string.error_login_failed)
                     }
@@ -412,5 +412,10 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
 
     private fun persistServers() {
         sessionStore.saveServers(serverItems)
+    }
+
+    companion object {
+        const val EXTRA_AUTO_OPEN_CONNECT = "extra_auto_open_connect"
+        const val EXTRA_RETURN_HOME_ON_SUCCESS = "extra_return_home_on_success"
     }
 }
