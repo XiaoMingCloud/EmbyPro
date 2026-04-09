@@ -1,10 +1,10 @@
 package com.liujiaming.embypro
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
-import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 
 class SettingsActivity : AppCompatActivity() {
@@ -23,6 +23,14 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.settingsThemeEntry).setDebouncedClickListener {
             startActivity(Intent(this, ThemeSettingsActivity::class.java))
         }
+        findViewById<View>(R.id.settingsHomeDisplayEntry).setDebouncedClickListener {
+            startActivity(
+                Intent(this, HomeSettingsActivity::class.java)
+                    .putExtra(HomeSettingsActivity.EXTRA_BASE_URL, intent.getStringExtra(EXTRA_BASE_URL).orEmpty())
+                    .putExtra(HomeSettingsActivity.EXTRA_USER_ID, intent.getStringExtra(EXTRA_USER_ID).orEmpty())
+                    .putExtra(HomeSettingsActivity.EXTRA_ACCESS_TOKEN, intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty())
+            )
+        }
 
         currentThemeValueText.text = GlobalThemeManager.currentThemeLabel(this)
         EdgeToEdgeHelper.applyInsets(topBar, applyTop = true)
@@ -32,5 +40,11 @@ class SettingsActivity : AppCompatActivity() {
         super.onResume()
         GlobalThemeManager.apply(this)
         findViewById<TextView>(R.id.settingsThemeValueText).text = GlobalThemeManager.currentThemeLabel(this)
+    }
+
+    companion object {
+        const val EXTRA_BASE_URL = "extra_base_url"
+        const val EXTRA_USER_ID = "extra_user_id"
+        const val EXTRA_ACCESS_TOKEN = "extra_access_token"
     }
 }

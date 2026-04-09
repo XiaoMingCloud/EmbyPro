@@ -62,6 +62,10 @@
 
         <activity
             android:name=".HomeTabsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".SplashActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

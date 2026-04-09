@@ -136,14 +136,11 @@ class HomeTabsActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.more_actions_pending), Toast.LENGTH_SHORT).show()
         }
         findViewById<View>(R.id.mySettingsEntry).setDebouncedClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        }
-        findViewById<View>(R.id.myHomeSettingsEntry).setDebouncedClickListener {
             startActivity(
-                Intent(this, HomeSettingsActivity::class.java)
-                    .putExtra(HomeSettingsActivity.EXTRA_BASE_URL, baseUrl)
-                    .putExtra(HomeSettingsActivity.EXTRA_USER_ID, userId)
-                    .putExtra(HomeSettingsActivity.EXTRA_ACCESS_TOKEN, accessToken)
+                Intent(this, SettingsActivity::class.java)
+                    .putExtra(SettingsActivity.EXTRA_BASE_URL, baseUrl)
+                    .putExtra(SettingsActivity.EXTRA_USER_ID, userId)
+                    .putExtra(SettingsActivity.EXTRA_ACCESS_TOKEN, accessToken)
             )
         }
         findViewById<MaterialButton>(R.id.homeRetryButton).setDebouncedClickListener {

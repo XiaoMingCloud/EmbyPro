@@ -4,16 +4,16 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="center_vertical"
-    android:minHeight="140dp"
+    android:minHeight="114dp"
     android:orientation="horizontal"
     android:paddingStart="16dp"
-    android:paddingTop="14dp"
+    android:paddingTop="7dp"
     android:paddingEnd="16dp"
-    android:paddingBottom="14dp">
+    android:paddingBottom="7dp">
 
     <FrameLayout
         android:layout_width="136dp"
-        android:layout_height="92dp">
+        android:layout_height="82dp">
 
         <com.google.android.material.imageview.ShapeableImageView
             android:id="@+id/playbackHistoryPosterImage"
@@ -74,7 +74,7 @@
             android:id="@+id/playbackHistoryLibraryText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="6dp"
             android:maxLines="1"
             android:textColor="@color/text_secondary"
             android:textSize="13sp" />
@@ -83,7 +83,7 @@
             android:id="@+id/playbackHistoryTimeText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="2dp"
             android:maxLines="1"
             android:textColor="@color/text_secondary"
             android:textSize="13sp" />
