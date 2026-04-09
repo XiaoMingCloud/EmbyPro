@@ -45,19 +45,20 @@ class HomeLibraryFilterAdapter(
             excluded: Boolean,
             onToggleExcluded: (MediaLibraryUiModel, Boolean) -> Unit
         ) {
+            val included = !excluded
             titleText.text = item.title
             titleText.setTextColor(GlobalThemeManager.primaryTextColor(itemView.context))
             subtitleText.text = itemView.context.getString(
-                if (excluded) R.string.home_library_excluded else R.string.home_library_included
+                if (included) R.string.home_library_included else R.string.home_library_excluded
             )
             subtitleText.setTextColor(GlobalThemeManager.secondaryTextColor(itemView.context))
             toggleSwitch.setOnCheckedChangeListener(null)
-            toggleSwitch.isChecked = excluded
+            toggleSwitch.isChecked = included
             toggleSwitch.setOnCheckedChangeListener { _, isChecked ->
                 subtitleText.text = itemView.context.getString(
-                    if (isChecked) R.string.home_library_excluded else R.string.home_library_included
+                    if (isChecked) R.string.home_library_included else R.string.home_library_excluded
                 )
-                onToggleExcluded(item, isChecked)
+                onToggleExcluded(item, !isChecked)
             }
             itemView.setDebouncedClickListener {
                 toggleSwitch.isChecked = !toggleSwitch.isChecked
