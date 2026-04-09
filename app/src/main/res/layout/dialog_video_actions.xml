@@ -113,4 +113,18 @@
             android:textStyle="bold" />
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/videoActionDeleteRow"
+        style="@style/VideoActionRowStyle">
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_video_action_delete" />
+
+        <TextView
+            style="@style/VideoActionRowTextStyle"
+            android:text="@string/action_delete_video" />
+    </LinearLayout>
+
 </LinearLayout>

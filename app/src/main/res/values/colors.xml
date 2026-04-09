@@ -16,6 +16,9 @@
     <color name="fab_background">#FFE5DDFF</color>
     <color name="nav_inactive">#FF786F82</color>
     <color name="nav_active">#FF272336</color>
+    <color name="floating_nav_surface">#99FFFFFF</color>
+    <color name="floating_nav_indicator">#00000000</color>
+    <color name="floating_nav_stroke">#1FFFFFFF</color>
     <color name="dialog_background">#FFF6F3FB</color>
     <color name="dialog_button">#FF6A6FB2</color>
 </resources>

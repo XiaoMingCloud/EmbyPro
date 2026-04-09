@@ -413,6 +413,26 @@ class EmbyApiService(
         }
     }
 
+    fun deleteItem(
+        baseUrl: String,
+        accessToken: String,
+        itemId: String
+    ): Result<Unit> {
+        return runCatching {
+            val request = Request.Builder()
+                .url("$baseUrl/emby/Items/$itemId")
+                .header("X-Emby-Token", accessToken)
+                .delete()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("删除视频失败：${response.code}")
+                }
+            }
+        }
+    }
+
     fun updatePlaybackProgress(
         baseUrl: String,
         userId: String,
@@ -1299,7 +1319,7 @@ class EmbyApiService(
             append("&StartIndex=$startIndex")
             append("&Limit=$limit")
             append("&IncludeItemTypes=${encodeQueryValue(category.includeItemTypes)}")
-            append("&Fields=ImageTags,UserData,PrimaryImageAspectRatio")
+            append("&Fields=ImageTags,UserData,PrimaryImageAspectRatio,RunTimeTicks")
             append("&EnableImageTypes=Primary,Thumb,Backdrop&ImageTypeLimit=1")
             append("&EnableUserData=true")
             append("&SortBy=DatePlayed")
@@ -1320,7 +1340,7 @@ class EmbyApiService(
             append("&Limit=$limit")
             append("&Filters=IsFavorite")
             append("&IncludeItemTypes=Movie,Episode,Video,MusicVideo")
-            append("&Fields=ImageTags,UserData,PrimaryImageAspectRatio")
+            append("&Fields=ImageTags,UserData,PrimaryImageAspectRatio,RunTimeTicks")
             append("&EnableImageTypes=Primary,Thumb,Backdrop&ImageTypeLimit=1")
             append("&EnableUserData=true")
             append("&SortBy=SortName")

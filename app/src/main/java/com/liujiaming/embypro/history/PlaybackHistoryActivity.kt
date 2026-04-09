@@ -101,7 +101,7 @@ class PlaybackHistoryActivity : AppCompatActivity() {
                     adapter.toggleSelection(item.itemId)
                     updateSelectionUi()
                 } else {
-                    openVideoDetail(item)
+                    openVideoDirectly(item)
                 }
             },
             onItemLongClick = { item ->
@@ -213,20 +213,38 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         }
     }
 
-    private fun openVideoDetail(item: PlaybackHistoryItemUiModel) {
+    private fun openVideoDirectly(item: PlaybackHistoryItemUiModel) {
         val playlistIds = ArrayList(items.map { it.itemId })
         val playlistTitles = ArrayList(items.map { it.title })
         val playlistIndex = items.indexOfFirst { it.itemId == item.itemId }
-        startActivity(
-            Intent(this, VideoDetailActivity::class.java)
-                .putExtra(VideoDetailActivity.EXTRA_ITEM_ID, item.itemId)
-                .putExtra(VideoDetailActivity.EXTRA_BASE_URL, baseUrl)
-                .putExtra(VideoDetailActivity.EXTRA_USER_ID, userId)
-                .putExtra(VideoDetailActivity.EXTRA_ACCESS_TOKEN, accessToken)
-                .putStringArrayListExtra(VideoDetailActivity.EXTRA_PLAYLIST_ITEM_IDS, playlistIds)
-                .putStringArrayListExtra(VideoDetailActivity.EXTRA_PLAYLIST_ITEM_TITLES, playlistTitles)
-                .putExtra(VideoDetailActivity.EXTRA_PLAYLIST_INDEX, playlistIndex)
-        )
+        val preferredStartPositionMs = if (item.played) 0L else item.playbackPositionTicks / 10_000L
+
+        networkExecutor.execute {
+            val result = embyApiService.fetchVideoDetail(baseUrl, userId, accessToken, item.itemId)
+            runOnUiThread {
+                result.onSuccess { detail ->
+                    startActivity(
+                        Intent(this, PlayerActivity::class.java)
+                            .putExtra(PlayerActivity.EXTRA_PLAYBACK_URL, detail.playbackUrl)
+                            .putExtra(PlayerActivity.EXTRA_ACCESS_TOKEN, accessToken)
+                            .putExtra(PlayerActivity.EXTRA_TITLE, detail.title)
+                            .putExtra(PlayerActivity.EXTRA_BASE_URL, baseUrl)
+                            .putExtra(PlayerActivity.EXTRA_USER_ID, userId)
+                            .putExtra(PlayerActivity.EXTRA_ITEM_ID, item.itemId)
+                            .putExtra(PlayerActivity.EXTRA_START_POSITION_MS, preferredStartPositionMs)
+                            .putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_ITEM_IDS, playlistIds)
+                            .putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_ITEM_TITLES, playlistTitles)
+                            .putExtra(PlayerActivity.EXTRA_PLAYLIST_INDEX, playlistIndex)
+                    )
+                }.onFailure { error ->
+                    Toast.makeText(
+                        this,
+                        error.message ?: getString(R.string.player_error),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
     }
 
     private fun enterSelectionMode() {

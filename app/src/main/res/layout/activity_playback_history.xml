@@ -102,7 +102,8 @@
             android:id="@+id/playbackHistoryProgressBar"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:layout_gravity="center" />
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="8dp" />
 
         <TextView
             android:id="@+id/playbackHistoryEmptyText"

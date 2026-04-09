@@ -8,12 +8,14 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
+import android.view.WindowManager
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -272,6 +274,7 @@ class VideoDetailActivity : AppCompatActivity() {
             com.google.android.material.R.attr.colorOnSurfaceVariant,
             MaterialColors.getColor(sheetView, com.google.android.material.R.attr.colorOnSurface, Color.BLACK)
         )
+        val dialog = BottomSheetDialog(themedContext)
 
         sheetRoot.background = GradientDrawable().apply {
             val radius = 34f * resources.displayMetrics.density
@@ -291,6 +294,10 @@ class VideoDetailActivity : AppCompatActivity() {
         sheetView.findViewById<View>(R.id.videoActionSourceRow).setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.action_search_other_source), Toast.LENGTH_SHORT).show()
         }
+        sheetView.findViewById<View>(R.id.videoActionDeleteRow).setDebouncedClickListener {
+            dialog.dismiss()
+            showDeleteVideoConfirmDialog()
+        }
 
         EmbyImageLoader.load(
             imageView = posterImage,
@@ -305,7 +312,6 @@ class VideoDetailActivity : AppCompatActivity() {
             }
         )
 
-        val dialog = BottomSheetDialog(themedContext)
         dialog.setContentView(sheetView)
         dialog.show()
         dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)?.apply {
@@ -318,6 +324,55 @@ class VideoDetailActivity : AppCompatActivity() {
                 fillColor = android.content.res.ColorStateList.valueOf(Color.TRANSPARENT)
             }
             clipToOutline = true
+        }
+    }
+
+    private fun showDeleteVideoConfirmDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_clear_played_state, null)
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogTitle)
+            .text = getString(R.string.delete_video_confirm_title)
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogMessage)
+            .text = getString(R.string.delete_video_confirm_message)
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogConfirmButton)
+            .text = getString(R.string.action_delete_video)
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        dialog.window?.attributes = dialog.window?.attributes?.apply {
+            dimAmount = 0.22f
+        }
+
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogCancelButton)
+            .setDebouncedClickListener { dialog.dismiss() }
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogConfirmButton)
+            .setDebouncedClickListener {
+                dialog.dismiss()
+                deleteCurrentVideo()
+            }
+        dialog.show()
+    }
+
+    private fun deleteCurrentVideo() {
+        networkExecutor.execute {
+            val result = embyApiService.deleteItem(baseUrl, accessToken, itemId)
+            runOnUiThread {
+                result.onSuccess {
+                    Toast.makeText(this, getString(R.string.delete_video_success), Toast.LENGTH_SHORT).show()
+                    setResult(RESULT_OK)
+                    finish()
+                }.onFailure { error ->
+                    Toast.makeText(
+                        this,
+                        error.message ?: getString(R.string.delete_video_failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
         }
     }
 

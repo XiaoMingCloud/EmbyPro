@@ -138,6 +138,11 @@
     <string name="action_cast">投屏</string>
     <string name="action_external_player">外部播放器播放</string>
     <string name="action_search_other_source">搜索其他播放源</string>
+    <string name="action_delete_video">删除视频</string>
+    <string name="delete_video_confirm_title">删除视频</string>
+    <string name="delete_video_confirm_message">确定删除这个视频吗？删除后将从服务器媒体库中移除。</string>
+    <string name="delete_video_success">视频已删除</string>
+    <string name="delete_video_failed">删除视频失败</string>
     <string name="pro_badge">Pro</string>
     <string name="chapters">章节</string>
     <string name="studios">工作室</string>
@@ -148,6 +153,8 @@
     <string name="favorite_items_title">收藏夹</string>
     <string name="favorite_items_empty">还没有收藏内容</string>
     <string name="favorite_items_load_failed">加载收藏夹失败</string>
+    <string name="my_shortcut_pending_1">更多功能</string>
+    <string name="my_shortcut_pending_2">敬请期待</string>
     <string name="favorite_added">已加入收藏</string>
     <string name="favorite_removed">已取消收藏</string>
     <string name="favorite_update_failed">更新收藏状态失败</string>

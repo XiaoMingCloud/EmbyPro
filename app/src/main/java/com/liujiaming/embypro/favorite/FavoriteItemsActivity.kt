@@ -26,7 +26,6 @@ class FavoriteItemsActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var emptyText: TextView
     private lateinit var topBar: View
-    private lateinit var videoButton: MaterialButton
 
     private val items = mutableListOf<PlaybackHistoryItemUiModel>()
     private lateinit var adapter: PlaybackHistoryAdapter
@@ -55,16 +54,15 @@ class FavoriteItemsActivity : AppCompatActivity() {
         recyclerView = findViewById(R.id.favoriteItemsRecyclerView)
         progressBar = findViewById(R.id.favoriteItemsProgressBar)
         emptyText = findViewById(R.id.favoriteItemsEmptyText)
-        videoButton = findViewById(R.id.favoriteItemsVideoButton)
 
         findViewById<ImageButton>(R.id.favoriteItemsBackButton).setDebouncedClickListener { finish() }
-        videoButton.isChecked = true
 
         adapter = PlaybackHistoryAdapter(
             items = items,
             accessToken = accessToken,
-            onItemClick = { item -> openVideoDetail(item) },
-            onItemLongClick = { }
+            onItemClick = { item -> openVideoDirectly(item) },
+            onItemLongClick = { },
+            onFavoriteClick = { item -> removeFavorite(item) }
         )
         recyclerView.layoutManager = LinearLayoutManager(this)
         recyclerView.adapter = adapter
@@ -146,20 +144,67 @@ class FavoriteItemsActivity : AppCompatActivity() {
         }
     }
 
-    private fun openVideoDetail(item: PlaybackHistoryItemUiModel) {
+    private fun openVideoDirectly(item: PlaybackHistoryItemUiModel) {
         val playlistIds = ArrayList(items.map { it.itemId })
         val playlistTitles = ArrayList(items.map { it.title })
         val playlistIndex = items.indexOfFirst { it.itemId == item.itemId }
-        startActivity(
-            Intent(this, VideoDetailActivity::class.java)
-                .putExtra(VideoDetailActivity.EXTRA_ITEM_ID, item.itemId)
-                .putExtra(VideoDetailActivity.EXTRA_BASE_URL, baseUrl)
-                .putExtra(VideoDetailActivity.EXTRA_USER_ID, userId)
-                .putExtra(VideoDetailActivity.EXTRA_ACCESS_TOKEN, accessToken)
-                .putStringArrayListExtra(VideoDetailActivity.EXTRA_PLAYLIST_ITEM_IDS, playlistIds)
-                .putStringArrayListExtra(VideoDetailActivity.EXTRA_PLAYLIST_ITEM_TITLES, playlistTitles)
-                .putExtra(VideoDetailActivity.EXTRA_PLAYLIST_INDEX, playlistIndex)
-        )
+
+        networkExecutor.execute {
+            val result = embyApiService.fetchVideoDetail(baseUrl, userId, accessToken, item.itemId)
+            runOnUiThread {
+                result.onSuccess { detail ->
+                    startActivity(
+                        Intent(this, PlayerActivity::class.java)
+                            .putExtra(PlayerActivity.EXTRA_PLAYBACK_URL, detail.playbackUrl)
+                            .putExtra(PlayerActivity.EXTRA_ACCESS_TOKEN, accessToken)
+                            .putExtra(PlayerActivity.EXTRA_TITLE, detail.title)
+                            .putExtra(PlayerActivity.EXTRA_BASE_URL, baseUrl)
+                            .putExtra(PlayerActivity.EXTRA_USER_ID, userId)
+                            .putExtra(PlayerActivity.EXTRA_ITEM_ID, item.itemId)
+                            .putExtra(PlayerActivity.EXTRA_START_POSITION_MS, detail.playbackPositionTicks / 10_000L)
+                            .putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_ITEM_IDS, playlistIds)
+                            .putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_ITEM_TITLES, playlistTitles)
+                            .putExtra(PlayerActivity.EXTRA_PLAYLIST_INDEX, playlistIndex)
+                    )
+                }.onFailure { error ->
+                    Toast.makeText(
+                        this,
+                        error.message ?: getString(R.string.player_error),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun removeFavorite(item: PlaybackHistoryItemUiModel) {
+        networkExecutor.execute {
+            val result = embyApiService.setFavoriteState(
+                baseUrl = baseUrl,
+                userId = userId,
+                accessToken = accessToken,
+                itemId = item.itemId,
+                favorite = false
+            )
+            runOnUiThread {
+                result.onSuccess {
+                    val index = items.indexOfFirst { it.itemId == item.itemId }
+                    if (index >= 0) {
+                        items.removeAt(index)
+                        adapter.notifyItemRemoved(index)
+                    }
+                    emptyText.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
+                    recyclerView.visibility = if (items.isEmpty()) View.INVISIBLE else View.VISIBLE
+                    Toast.makeText(this, getString(R.string.favorite_removed), Toast.LENGTH_SHORT).show()
+                }.onFailure { error ->
+                    Toast.makeText(
+                        this,
+                        error.message ?: getString(R.string.favorite_update_failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
     }
 
     companion object {

@@ -80,6 +80,7 @@ class HomeTabsActivity : AppCompatActivity() {
         homeFeedRecyclerView = findViewById(R.id.homeFeedRecyclerView)
         mediaTabRecyclerView = findViewById(R.id.mediaTabRecyclerView)
         val topBar = findViewById<View>(R.id.homeTabsTopBar)
+        val bottomNavigationCard = findViewById<View>(R.id.homeTabsBottomNavigationCard)
         val bottomNavigation = findViewById<NavigationBarView>(R.id.homeTabsBottomNavigation)
 
         homeSearchCard.setDebouncedClickListener {
@@ -109,6 +110,12 @@ class HomeTabsActivity : AppCompatActivity() {
                     .putExtra(FavoriteItemsActivity.EXTRA_ACCESS_TOKEN, accessToken)
             )
         }
+        findViewById<View>(R.id.myPendingEntryOne).setDebouncedClickListener {
+            Toast.makeText(this, getString(R.string.more_actions_pending), Toast.LENGTH_SHORT).show()
+        }
+        findViewById<View>(R.id.myPendingEntryTwo).setDebouncedClickListener {
+            Toast.makeText(this, getString(R.string.more_actions_pending), Toast.LENGTH_SHORT).show()
+        }
         findViewById<View>(R.id.myHomeSettingsEntry).setDebouncedClickListener {
             startActivity(
                 Intent(this, HomeSettingsActivity::class.java)
@@ -122,7 +129,7 @@ class HomeTabsActivity : AppCompatActivity() {
         }
 
         EdgeToEdgeHelper.applyInsets(topBar, applyTop = true)
-        EdgeToEdgeHelper.applyInsets(bottomNavigation, applyBottom = true)
+        EdgeToEdgeHelper.applyInsets(bottomNavigationCard, applyBottom = true)
 
         homeFeedAdapter = MediaPosterAdapter(
             homeFeedItems,
