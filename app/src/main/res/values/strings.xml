@@ -145,6 +145,9 @@
     <string name="video_stream">视频</string>
     <string name="audio_stream">音频</string>
     <string name="favorite">收藏</string>
+    <string name="favorite_items_title">收藏夹</string>
+    <string name="favorite_items_empty">还没有收藏内容</string>
+    <string name="favorite_items_load_failed">加载收藏夹失败</string>
     <string name="favorite_added">已加入收藏</string>
     <string name="favorite_removed">已取消收藏</string>
     <string name="favorite_update_failed">更新收藏状态失败</string>

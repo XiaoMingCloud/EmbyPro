@@ -21,6 +21,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".FavoriteItemsActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".PlayerActivity"
             android:exported="false" />
 

@@ -55,10 +55,18 @@ data class PlaybackHistoryItemUiModel(
     val libraryName: String,
     val playedTimeLabel: String,
     val imageUrl: String?,
-    val itemType: String
+    val itemType: String,
+    val playbackPositionTicks: Long = 0L,
+    val runtimeTicks: Long = 0L,
+    val played: Boolean = false
 )
 
 data class PlaybackHistoryPageUiModel(
+    val items: List<PlaybackHistoryItemUiModel>,
+    val totalCount: Int
+)
+
+data class FavoriteItemsPageUiModel(
     val items: List<PlaybackHistoryItemUiModel>,
     val totalCount: Int
 )
@@ -642,6 +650,46 @@ class EmbyApiService(
         }
     }
 
+    fun fetchFavoriteItemsPage(
+        baseUrl: String,
+        userId: String,
+        accessToken: String,
+        startIndex: Int,
+        limit: Int
+    ): Result<FavoriteItemsPageUiModel> {
+        return runCatching {
+            val request = Request.Builder()
+                .url(buildFavoriteItemsUrl(baseUrl, userId, startIndex, limit))
+                .header("X-Emby-Token", accessToken)
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("读取收藏夹失败：${response.code}")
+                }
+
+                val json = JSONObject(response.body?.string().orEmpty())
+                val libraryTitleMap = runCatching {
+                    fetchViews(baseUrl, userId, accessToken).associate { it.id to it.title }
+                }.getOrDefault(emptyMap())
+                val libraryNameCache = mutableMapOf<String, String>()
+                val items = buildFavoriteItems(
+                    baseUrl = baseUrl,
+                    accessToken = accessToken,
+                    items = json.optJSONArray("Items"),
+                    libraryTitleMap = libraryTitleMap,
+                    libraryNameCache = libraryNameCache
+                )
+
+                FavoriteItemsPageUiModel(
+                    items = items,
+                    totalCount = json.optInt("TotalRecordCount", startIndex + items.size)
+                )
+            }
+        }
+    }
+
     private fun fetchResumeItems(baseUrl: String, userId: String, accessToken: String): List<MediaPosterUiModel> {
         val request = Request.Builder()
             .url(
@@ -742,7 +790,53 @@ class EmbyApiService(
                             maxWidth = 420,
                             maxHeight = 236
                         ),
-                        itemType = item.optString("Type")
+                        itemType = item.optString("Type"),
+                        playbackPositionTicks = playbackPositionTicks,
+                        runtimeTicks = item.optLong("RunTimeTicks"),
+                        played = played
+                    )
+                )
+            }
+        }
+    }
+
+    private fun buildFavoriteItems(
+        baseUrl: String,
+        accessToken: String,
+        items: JSONArray?,
+        libraryTitleMap: Map<String, String>,
+        libraryNameCache: MutableMap<String, String>
+    ): List<PlaybackHistoryItemUiModel> {
+        return buildList {
+            for (index in 0 until (items?.length() ?: 0)) {
+                val item = items?.optJSONObject(index) ?: continue
+                val itemId = item.optString("Id")
+                if (itemId.isBlank()) continue
+                val imageInfo = resolveImageInfo(item)
+                add(
+                    PlaybackHistoryItemUiModel(
+                        itemId = itemId,
+                        title = item.optString("Name", context.getString(R.string.untitled_media)),
+                        libraryName = resolveHistoryLibraryName(
+                            baseUrl = baseUrl,
+                            accessToken = accessToken,
+                            itemId = itemId,
+                            libraryTitleMap = libraryTitleMap,
+                            libraryNameCache = libraryNameCache
+                        ),
+                        playedTimeLabel = "",
+                        imageUrl = buildImageUrl(
+                            baseUrl = baseUrl,
+                            imageItemId = imageInfo.first,
+                            imageType = imageInfo.second,
+                            imageTag = imageInfo.third,
+                            maxWidth = 420,
+                            maxHeight = 236
+                        ),
+                        itemType = item.optString("Type"),
+                        playbackPositionTicks = 0L,
+                        runtimeTicks = item.optLong("RunTimeTicks"),
+                        played = false
                     )
                 )
             }
@@ -1210,6 +1304,27 @@ class EmbyApiService(
             append("&EnableUserData=true")
             append("&SortBy=DatePlayed")
             append("&SortOrder=Descending")
+        }
+    }
+
+    private fun buildFavoriteItemsUrl(
+        baseUrl: String,
+        userId: String,
+        startIndex: Int,
+        limit: Int
+    ): String {
+        return buildString {
+            append("$baseUrl/emby/Users/$userId/Items?")
+            append("Recursive=true")
+            append("&StartIndex=$startIndex")
+            append("&Limit=$limit")
+            append("&Filters=IsFavorite")
+            append("&IncludeItemTypes=Movie,Episode,Video,MusicVideo")
+            append("&Fields=ImageTags,UserData,PrimaryImageAspectRatio")
+            append("&EnableImageTypes=Primary,Thumb,Backdrop&ImageTypeLimit=1")
+            append("&EnableUserData=true")
+            append("&SortBy=SortName")
+            append("&SortOrder=Ascending")
         }
     }
 

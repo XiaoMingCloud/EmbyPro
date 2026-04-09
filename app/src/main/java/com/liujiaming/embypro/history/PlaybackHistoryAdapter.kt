@@ -97,6 +97,8 @@ class PlaybackHistoryAdapter(
             titleText.text = item.title
             libraryText.text = item.libraryName
             timeText.text = item.playedTimeLabel
+            timeText.visibility = if (item.playedTimeLabel.isBlank()) View.GONE else View.VISIBLE
+            libraryText.maxLines = if (item.playedTimeLabel.isBlank()) 2 else 1
             checkBox.visibility = if (selectionMode) View.VISIBLE else View.GONE
             checkBox.isChecked = checked
 

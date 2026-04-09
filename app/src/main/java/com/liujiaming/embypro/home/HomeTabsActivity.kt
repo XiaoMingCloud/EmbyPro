@@ -101,6 +101,14 @@ class HomeTabsActivity : AppCompatActivity() {
                     .putExtra(PlaybackHistoryActivity.EXTRA_ACCESS_TOKEN, accessToken)
             )
         }
+        findViewById<View>(R.id.myFavoriteItemsEntry).setDebouncedClickListener {
+            startActivity(
+                Intent(this, FavoriteItemsActivity::class.java)
+                    .putExtra(FavoriteItemsActivity.EXTRA_BASE_URL, baseUrl)
+                    .putExtra(FavoriteItemsActivity.EXTRA_USER_ID, userId)
+                    .putExtra(FavoriteItemsActivity.EXTRA_ACCESS_TOKEN, accessToken)
+            )
+        }
         findViewById<View>(R.id.myHomeSettingsEntry).setDebouncedClickListener {
             startActivity(
                 Intent(this, HomeSettingsActivity::class.java)
