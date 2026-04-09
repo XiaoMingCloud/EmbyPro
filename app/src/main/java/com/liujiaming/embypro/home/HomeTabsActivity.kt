@@ -3,10 +3,12 @@ package com.liujiaming.embypro
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.navigation.NavigationBarView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import java.util.concurrent.ExecutorService
@@ -16,11 +18,17 @@ class HomeTabsActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val embyApiService by lazy { EmbyApiService(this) }
     private val sessionStore by lazy { ServerSessionStore(this) }
+    private val homeSeenItemIds = linkedSetOf<String>()
+    private val homeLibraryOffsets = linkedMapOf<String, Int>()
+    private val homeLibraryTotals = linkedMapOf<String, Int>()
+    private val homeLibraryOrder = mutableListOf<MediaLibraryUiModel>()
 
     private lateinit var homeContainer: View
     private lateinit var mediaContainer: View
     private lateinit var myContainer: View
     private lateinit var homeSearchCard: View
+    private lateinit var loadFailedContainer: View
+    private lateinit var loadFailedText: TextView
     private lateinit var homeRefreshLayout: SwipeRefreshLayout
     private lateinit var homeFeedRecyclerView: RecyclerView
     private lateinit var mediaTabRecyclerView: RecyclerView
@@ -31,6 +39,7 @@ class HomeTabsActivity : AppCompatActivity() {
     private lateinit var baseUrl: String
     private lateinit var userId: String
     private lateinit var accessToken: String
+    private var isHomeLoading = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,6 +68,8 @@ class HomeTabsActivity : AppCompatActivity() {
         mediaContainer = findViewById(R.id.mediaTabContainer)
         myContainer = findViewById(R.id.myTabContainer)
         homeSearchCard = findViewById(R.id.homeSearchCard)
+        loadFailedContainer = findViewById(R.id.homeLoadFailedContainer)
+        loadFailedText = findViewById(R.id.homeLoadFailedText)
         homeRefreshLayout = findViewById(R.id.homeTabContainer)
         homeFeedRecyclerView = findViewById(R.id.homeFeedRecyclerView)
         mediaTabRecyclerView = findViewById(R.id.mediaTabRecyclerView)
@@ -76,6 +87,9 @@ class HomeTabsActivity : AppCompatActivity() {
         findViewById<View>(R.id.myServerListEntry).setOnClickListener {
             startActivity(Intent(this, MainActivity::class.java))
         }
+        findViewById<MaterialButton>(R.id.homeRetryButton).setOnClickListener {
+            connectAndLoadHome()
+        }
 
         EdgeToEdgeHelper.applyInsets(topBar, applyTop = true)
         EdgeToEdgeHelper.applyInsets(bottomNavigation, applyBottom = true)
@@ -88,7 +102,18 @@ class HomeTabsActivity : AppCompatActivity() {
         )
         homeFeedRecyclerView.layoutManager = GridLayoutManager(this, 2)
         homeFeedRecyclerView.adapter = homeFeedAdapter
-        homeRefreshLayout.setOnRefreshListener { loadHomeFeed() }
+        homeFeedRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                super.onScrolled(recyclerView, dx, dy)
+                if (dy <= 0 || isHomeLoading) return
+                val layoutManager = recyclerView.layoutManager as? GridLayoutManager ?: return
+                val lastVisible = layoutManager.findLastVisibleItemPosition()
+                if (lastVisible >= homeFeedItems.size - 6) {
+                    loadMoreHomeFeedItems()
+                }
+            }
+        })
+        homeRefreshLayout.setOnRefreshListener { refreshHomeFeed() }
         mediaTabRecyclerView.layoutManager = GridLayoutManager(this, 1)
 
         bottomNavigation.setOnItemSelectedListener { item ->
@@ -101,8 +126,7 @@ class HomeTabsActivity : AppCompatActivity() {
         }
         bottomNavigation.selectedItemId = R.id.navigation_home
 
-        loadHomeFeed()
-        loadMediaLibraries()
+        connectAndLoadHome()
     }
 
     override fun onDestroy() {
@@ -110,61 +134,140 @@ class HomeTabsActivity : AppCompatActivity() {
         networkExecutor.shutdownNow()
     }
 
-    private fun loadHomeFeed() {
+    private fun connectAndLoadHome() {
+        if (isHomeLoading) return
+        isHomeLoading = true
+        showLoadFailedState(false)
+        homeRefreshLayout.isRefreshing = true
         networkExecutor.execute {
             val result = runCatching {
-                val libraries = embyApiService.fetchMediaLibraries(baseUrl, userId, accessToken).getOrThrow()
-                libraries.flatMap { library ->
-                    embyApiService.fetchLibraryItemsPage(
-                        baseUrl = baseUrl,
-                        userId = userId,
-                        accessToken = accessToken,
-                        parentId = library.id,
-                        startIndex = 0,
-                        limit = 8,
-                        sortField = LibrarySortField.RANDOM,
-                        sortDescending = true
-                    ).items
-                }.filter { !it.isFolder && it.itemType != "BoxSet" && it.itemType != "Folder" }
-                    .shuffled()
+                embyApiService.fetchPublicServerInfo(baseUrl).getOrThrow()
+                val libraries = embyApiService.fetchMediaLibraries(baseUrl, userId, accessToken).getOrThrow().shuffled()
+                resetHomeFeedState(libraries)
+                libraries to fetchNextHomeFeedBatch()
             }
             runOnUiThread {
+                isHomeLoading = false
                 homeRefreshLayout.isRefreshing = false
-                result.onSuccess { homeData ->
+                result.onSuccess { (libraries, homeData) ->
+                    showLoadFailedState(false)
+                    bindMediaLibraries(libraries)
                     homeFeedItems.clear()
                     homeFeedItems.addAll(homeData)
                     homeFeedAdapter.notifyDataSetChanged()
-                }.onFailure { error ->
-                    Toast.makeText(
-                        this,
-                        error.message ?: getString(R.string.server_home_load_failed),
-                        Toast.LENGTH_SHORT
-                    ).show()
+                }.onFailure {
+                    showLoadFailedState(true)
                 }
             }
         }
     }
 
-    private fun loadMediaLibraries() {
+    private fun refreshHomeFeed() {
+        connectAndLoadHome()
+    }
+
+    private fun loadMoreHomeFeedItems() {
+        if (isHomeLoading || homeLibraryOrder.isEmpty()) return
+        isHomeLoading = true
         networkExecutor.execute {
-            val result = embyApiService.fetchMediaLibraries(baseUrl, userId, accessToken)
+            val result = runCatching { fetchNextHomeFeedBatch() }
             runOnUiThread {
-                result.onSuccess { libraries ->
-                    mediaTabRecyclerView.adapter = MediaLibraryGridAdapter(
-                        libraries,
-                        accessToken
-                    ) { library ->
-                        openLibrary(library)
+                isHomeLoading = false
+                result.onSuccess { newItems ->
+                    if (newItems.isNotEmpty()) {
+                        val start = homeFeedItems.size
+                        homeFeedItems.addAll(newItems)
+                        homeFeedAdapter.notifyItemRangeInserted(start, newItems.size)
                     }
                 }.onFailure { error ->
-                    Toast.makeText(
-                        this,
-                        error.message ?: getString(R.string.server_home_load_failed),
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    if (homeFeedItems.isEmpty()) {
+                        showLoadFailedState(true)
+                    } else {
+                        Toast.makeText(
+                            this,
+                            error.message ?: getString(R.string.server_home_load_failed),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             }
         }
+    }
+
+    private fun resetHomeFeedState(libraries: List<MediaLibraryUiModel>) {
+        homeSeenItemIds.clear()
+        homeLibraryOrder.clear()
+        homeLibraryOrder.addAll(libraries)
+        homeLibraryOffsets.clear()
+        homeLibraryTotals.clear()
+        libraries.forEach { library ->
+            homeLibraryOffsets[library.id] = 0
+            homeLibraryTotals[library.id] = Int.MAX_VALUE
+        }
+    }
+
+    private fun fetchNextHomeFeedBatch(): List<MediaPosterUiModel> {
+        if (homeLibraryOrder.isEmpty()) return emptyList()
+        val freshItems = mutableListOf<MediaPosterUiModel>()
+        val libraries = homeLibraryOrder.shuffled()
+        val maxAttempts = (libraries.size * 3).coerceAtLeast(3)
+        var attempts = 0
+
+        while (freshItems.size < HOME_BATCH_SIZE && attempts < maxAttempts) {
+            val library = libraries[attempts % libraries.size]
+            val offset = homeLibraryOffsets[library.id] ?: 0
+            val total = homeLibraryTotals[library.id] ?: Int.MAX_VALUE
+            if (offset >= total) {
+                attempts++
+                continue
+            }
+
+            val page = embyApiService.fetchLibraryItemsPage(
+                baseUrl = baseUrl,
+                userId = userId,
+                accessToken = accessToken,
+                parentId = library.id,
+                startIndex = offset,
+                limit = HOME_PAGE_SIZE,
+                sortField = LibrarySortField.RANDOM,
+                sortDescending = true
+            )
+            homeLibraryOffsets[library.id] = offset + HOME_PAGE_SIZE
+            homeLibraryTotals[library.id] = page.totalCount
+
+            page.items
+                .asSequence()
+                .filter { !it.isFolder && it.itemType != "BoxSet" && it.itemType != "Folder" }
+                .filter { it.id.isNotBlank() }
+                .filter { homeSeenItemIds.add(it.id) }
+                .take(HOME_BATCH_SIZE - freshItems.size)
+                .forEach { freshItems.add(it) }
+
+            attempts++
+            if (homeLibraryTotals.values.all { knownTotal ->
+                    knownTotal != Int.MAX_VALUE
+                } && homeLibraryOffsets.all { (libraryId, currentOffset) ->
+                    currentOffset >= (homeLibraryTotals[libraryId] ?: Int.MAX_VALUE)
+                }
+            ) {
+                break
+            }
+        }
+        return freshItems.shuffled()
+    }
+
+    private fun bindMediaLibraries(libraries: List<MediaLibraryUiModel>) {
+        mediaTabRecyclerView.adapter = MediaLibraryGridAdapter(
+            libraries,
+            accessToken
+        ) { library ->
+            openLibrary(library)
+        }
+    }
+
+    private fun showLoadFailedState(show: Boolean) {
+        loadFailedContainer.visibility = if (show) View.VISIBLE else View.GONE
+        loadFailedText.text = getString(R.string.home_load_failed_retry)
     }
 
     private fun showTab(tab: Tab) {
@@ -223,5 +326,10 @@ class HomeTabsActivity : AppCompatActivity() {
         HOME,
         MEDIA,
         MY
+    }
+
+    companion object {
+        private const val HOME_PAGE_SIZE = 12
+        private const val HOME_BATCH_SIZE = 18
     }
 }
