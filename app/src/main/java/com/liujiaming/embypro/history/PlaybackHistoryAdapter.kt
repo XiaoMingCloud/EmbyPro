@@ -104,8 +104,11 @@ class PlaybackHistoryAdapter(
             onFavoriteClick: ((PlaybackHistoryItemUiModel) -> Unit)?
         ) {
             titleText.text = item.title
+            titleText.setTextColor(GlobalThemeManager.primaryTextColor(itemView.context))
             libraryText.text = item.libraryName
+            libraryText.setTextColor(GlobalThemeManager.secondaryTextColor(itemView.context))
             timeText.text = item.playedTimeLabel
+            timeText.setTextColor(GlobalThemeManager.secondaryTextColor(itemView.context))
             timeText.visibility = if (item.playedTimeLabel.isBlank()) View.GONE else View.VISIBLE
             libraryText.maxLines = if (item.playedTimeLabel.isBlank()) 2 else 1
             checkBox.visibility = if (selectionMode) View.VISIBLE else View.GONE

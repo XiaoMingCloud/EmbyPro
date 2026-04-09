@@ -33,6 +33,14 @@
             android:exported="false" />
 
         <activity
+            android:name=".ThemeSettingsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".HomeSettingsActivity"
             android:exported="false" />
 

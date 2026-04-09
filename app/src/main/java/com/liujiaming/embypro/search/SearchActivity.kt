@@ -49,9 +49,10 @@ class SearchActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        EdgeToEdgeHelper.enable(this, lightSystemBars = true)
+        EdgeToEdgeHelper.enable(this, lightSystemBars = GlobalThemeStore(this).loadTheme().lightSystemBars)
         setContentView(R.layout.activity_search)
         supportActionBar?.hide()
+        GlobalThemeManager.apply(this)
 
         baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty()
         userId = intent.getStringExtra(EXTRA_USER_ID).orEmpty()

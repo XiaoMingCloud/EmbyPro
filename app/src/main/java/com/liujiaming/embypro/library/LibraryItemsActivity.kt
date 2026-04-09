@@ -47,8 +47,9 @@ class LibraryItemsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        EdgeToEdgeHelper.enable(this, lightSystemBars = true)
+        EdgeToEdgeHelper.enable(this, lightSystemBars = GlobalThemeStore(this).loadTheme().lightSystemBars)
         setContentView(R.layout.activity_library_items)
+        GlobalThemeManager.apply(this)
 
         supportActionBar?.hide()
 

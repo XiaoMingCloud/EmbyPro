@@ -49,6 +49,7 @@ class MediaLibraryGridAdapter(
                 }
             )
             titleText.text = item.title
+            titleText.setTextColor(GlobalThemeManager.primaryTextColor(itemView.context))
             itemView.setDebouncedClickListener { onLibraryClick(item) }
         }
     }

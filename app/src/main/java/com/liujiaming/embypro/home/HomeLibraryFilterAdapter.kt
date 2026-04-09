@@ -46,9 +46,11 @@ class HomeLibraryFilterAdapter(
             onToggleExcluded: (MediaLibraryUiModel, Boolean) -> Unit
         ) {
             titleText.text = item.title
+            titleText.setTextColor(GlobalThemeManager.primaryTextColor(itemView.context))
             subtitleText.text = itemView.context.getString(
                 if (excluded) R.string.home_library_excluded else R.string.home_library_included
             )
+            subtitleText.setTextColor(GlobalThemeManager.secondaryTextColor(itemView.context))
             toggleSwitch.setOnCheckedChangeListener(null)
             toggleSwitch.isChecked = excluded
             toggleSwitch.setOnCheckedChangeListener { _, isChecked ->

@@ -45,7 +45,9 @@ class MediaPosterAdapter(
                 onFailure = { applyPlaceholder(item) }
             )
             titleText.text = item.title
+            titleText.setTextColor(GlobalThemeManager.primaryTextColor(itemView.context))
             subtitleText?.text = item.subtitle
+            subtitleText?.setTextColor(GlobalThemeManager.secondaryTextColor(itemView.context))
             subtitleText?.visibility = if (item.subtitle.isBlank()) View.GONE else View.VISIBLE
             itemView.setDebouncedClickListener { onItemClick?.invoke(item) }
         }

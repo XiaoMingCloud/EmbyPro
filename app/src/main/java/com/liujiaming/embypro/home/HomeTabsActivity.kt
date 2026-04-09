@@ -76,9 +76,10 @@ class HomeTabsActivity : AppCompatActivity() {
         accessToken = activeServer.accessToken
         syncExcludedHomeLibraries()
 
-        EdgeToEdgeHelper.enable(this, lightSystemBars = true)
+        EdgeToEdgeHelper.enable(this, lightSystemBars = GlobalThemeStore(this).loadTheme().lightSystemBars)
         setContentView(R.layout.activity_home_tabs)
         supportActionBar?.hide()
+        GlobalThemeManager.apply(this)
 
         homeContainer = findViewById(R.id.homeTabContainer)
         mediaContainer = findViewById(R.id.mediaTabContainer)
@@ -134,6 +135,9 @@ class HomeTabsActivity : AppCompatActivity() {
         findViewById<View>(R.id.myPendingEntryTwo).setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.more_actions_pending), Toast.LENGTH_SHORT).show()
         }
+        findViewById<View>(R.id.mySettingsEntry).setDebouncedClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
         findViewById<View>(R.id.myHomeSettingsEntry).setDebouncedClickListener {
             startActivity(
                 Intent(this, HomeSettingsActivity::class.java)
@@ -182,6 +186,7 @@ class HomeTabsActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        GlobalThemeManager.apply(this)
         if (syncExcludedHomeLibraries() && !isHomeLoading) {
             connectAndLoadHome()
         }

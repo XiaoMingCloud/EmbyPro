@@ -21,4 +21,11 @@
     <color name="floating_nav_stroke">#1FFFFFFF</color>
     <color name="dialog_background">#FFF6F3FB</color>
     <color name="dialog_button">#FF6A6FB2</color>
+    <color name="theme_bg_light_green">#FFF1FAEF</color>
+    <color name="theme_bg_pink">#FFFFF0F6</color>
+    <color name="theme_bg_white">#FFFFFFFF</color>
+    <color name="theme_bg_black">#FF121212</color>
+    <color name="theme_bg_light_purple">#FFF4EEFF</color>
+    <color name="theme_bg_light_blue">#FFEEF6FF</color>
+    <color name="theme_bg_light_yellow">#FFF7F4FB</color>
 </resources>
