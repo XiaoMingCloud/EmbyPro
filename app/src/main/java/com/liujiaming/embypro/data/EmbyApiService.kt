@@ -291,7 +291,24 @@ class EmbyApiService(
 
     fun fetchMediaLibraries(baseUrl: String, userId: String, accessToken: String): Result<List<MediaLibraryUiModel>> {
         return runCatching {
-            fetchViews(baseUrl, userId, accessToken)
+            val cacheKey = "views::$baseUrl::$userId"
+            val cachedJson = localMediaCache.readJson(cacheKey, LIBRARY_CACHE_MAX_AGE_MS)
+            if (!cachedJson.isNullOrBlank()) {
+                return@runCatching parseLibraryItems(JSONArray(cachedJson))
+            }
+
+            try {
+                val views = fetchViews(baseUrl, userId, accessToken)
+                localMediaCache.writeJson(cacheKey, views.toLibraryJsonArray().toString())
+                views
+            } catch (error: Throwable) {
+                val staleJson = localMediaCache.readJsonAnyAge(cacheKey)
+                if (!staleJson.isNullOrBlank()) {
+                    parseLibraryItems(JSONArray(staleJson))
+                } else {
+                    throw error
+                }
+            }
         }
     }
 

@@ -47,7 +47,7 @@ class MediaPosterAdapter(
             titleText.text = item.title
             subtitleText?.text = item.subtitle
             subtitleText?.visibility = if (item.subtitle.isBlank()) View.GONE else View.VISIBLE
-            itemView.setOnClickListener { onItemClick?.invoke(item) }
+            itemView.setDebouncedClickListener { onItemClick?.invoke(item) }
         }
 
         private fun applyPlaceholder(item: MediaPosterUiModel) {

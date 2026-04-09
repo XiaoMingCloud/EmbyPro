@@ -110,17 +110,17 @@ class VideoDetailActivity : AppCompatActivity() {
         actionMoreButton = findViewById(R.id.videoActionMoreButton)
         val topBar = findViewById<ImageButton>(R.id.videoBackButton).parent as View
 
-        findViewById<ImageButton>(R.id.videoBackButton).setOnClickListener { finish() }
-        findViewById<ImageButton>(R.id.videoMoreButton).setOnClickListener {
+        findViewById<ImageButton>(R.id.videoBackButton).setDebouncedClickListener { finish() }
+        findViewById<ImageButton>(R.id.videoMoreButton).setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.more_actions_pending), Toast.LENGTH_SHORT).show()
         }
-        playButton.setOnClickListener {
+        playButton.setDebouncedClickListener {
             openPlayer()
         }
-        actionMoreButton.setOnClickListener {
+        actionMoreButton.setDebouncedClickListener {
             showVideoActionsSheet()
         }
-        favoriteButton.setOnClickListener { toggleFavorite() }
+        favoriteButton.setDebouncedClickListener { toggleFavorite() }
 
         EdgeToEdgeHelper.applyInsets(topBar, applyTop = true)
         EdgeToEdgeHelper.applyInsets(rootView, applyBottom = true)
@@ -279,16 +279,16 @@ class VideoDetailActivity : AppCompatActivity() {
             setColor(surfaceColor)
         }
         actionTitle.text = detail.title
-        sheetView.findViewById<View>(R.id.videoActionReplayRow).setOnClickListener {
+        sheetView.findViewById<View>(R.id.videoActionReplayRow).setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.action_replay_from_start), Toast.LENGTH_SHORT).show()
         }
-        sheetView.findViewById<View>(R.id.videoActionCastRow).setOnClickListener {
+        sheetView.findViewById<View>(R.id.videoActionCastRow).setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.action_cast), Toast.LENGTH_SHORT).show()
         }
-        sheetView.findViewById<View>(R.id.videoActionExternalRow).setOnClickListener {
+        sheetView.findViewById<View>(R.id.videoActionExternalRow).setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.action_external_player), Toast.LENGTH_SHORT).show()
         }
-        sheetView.findViewById<View>(R.id.videoActionSourceRow).setOnClickListener {
+        sheetView.findViewById<View>(R.id.videoActionSourceRow).setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.action_search_other_source), Toast.LENGTH_SHORT).show()
         }
 

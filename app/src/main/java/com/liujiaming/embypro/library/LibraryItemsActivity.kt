@@ -66,7 +66,7 @@ class LibraryItemsActivity : AppCompatActivity() {
             return
         }
 
-        findViewById<ImageButton>(R.id.libraryBackButton).setOnClickListener { finish() }
+        findViewById<ImageButton>(R.id.libraryBackButton).setDebouncedClickListener { finish() }
         findViewById<TextView>(R.id.libraryTitleText).text = libraryName
         countText = findViewById(R.id.libraryCountText)
         filterValueText = findViewById(R.id.libraryFilterValueText)
@@ -107,9 +107,9 @@ class LibraryItemsActivity : AppCompatActivity() {
         bindTab(findViewById(R.id.tabCollections), LibraryBrowseMode.COLLECTIONS)
         bindTab(findViewById(R.id.tabFolders), LibraryBrowseMode.FOLDERS)
 
-        sortSelector.setOnClickListener { showSortMenu() }
+        sortSelector.setDebouncedClickListener { showSortMenu() }
 
-        filterButton.setOnClickListener {
+        filterButton.setDebouncedClickListener {
             when (currentMode) {
                 LibraryBrowseMode.GENRES -> ensureFilterOptions { showValuePicker(it.genres, true) }
                 LibraryBrowseMode.TAGS -> ensureFilterOptions { showValuePicker(it.tags, false) }
@@ -167,7 +167,7 @@ class LibraryItemsActivity : AppCompatActivity() {
 
     private fun bindTab(chip: Chip, mode: LibraryBrowseMode, checked: Boolean = false) {
         chip.isChecked = checked
-        chip.setOnClickListener {
+        chip.setDebouncedClickListener {
             switchMode(mode)
         }
     }

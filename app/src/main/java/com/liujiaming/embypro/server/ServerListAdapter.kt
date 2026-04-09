@@ -96,11 +96,11 @@ class ServerListAdapter(
             nameText.text = item.name
             userText.text = item.username
             statusText.text = item.status
-            itemView.setOnClickListener {
+            itemView.setDebouncedClickListener {
                 actionListener.onOpen(item)
             }
 
-            menuButton.setOnClickListener { anchor ->
+            menuButton.setDebouncedClickListener { anchor ->
                 val popupMenu = PopupMenu(anchor.context, anchor)
                 popupMenu.menuInflater.inflate(R.menu.server_item_menu, popupMenu.menu)
                 popupMenu.setOnMenuItemClickListener { menuItem ->

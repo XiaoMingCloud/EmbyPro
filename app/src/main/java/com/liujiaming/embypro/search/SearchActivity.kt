@@ -73,12 +73,12 @@ class SearchActivity : AppCompatActivity() {
         historyChipGroup = findViewById(R.id.searchHistoryChipGroup)
         clearAllHistoryText = findViewById(R.id.searchHistoryClearAllText)
 
-        findViewById<ImageButton>(R.id.searchBackButton).setOnClickListener { finish() }
-        clearButton.setOnClickListener {
+        findViewById<ImageButton>(R.id.searchBackButton).setDebouncedClickListener { finish() }
+        clearButton.setDebouncedClickListener {
             searchInput.setText("")
             updateEmptyState()
         }
-        clearAllHistoryText.setOnClickListener {
+        clearAllHistoryText.setDebouncedClickListener {
             searchHistoryStore.clearAll()
             renderHistory()
             updateEmptyState()
@@ -223,7 +223,7 @@ class SearchActivity : AppCompatActivity() {
             chipBackgroundColor = getColorStateList(R.color.chip_background_color)
             setTextColor(getColor(R.color.text_primary))
             closeIconTint = getColorStateList(R.color.search_history_close_color)
-            setOnClickListener {
+            setDebouncedClickListener {
                 searchInput.setText(query)
                 searchInput.setSelection(query.length)
                 submitSearch()

@@ -52,11 +52,11 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
         serverList.adapter = serverListAdapter
         updateEmptyState()
 
-        addServerButton.setOnClickListener {
+        addServerButton.setDebouncedClickListener {
             showConnectServerDialog()
         }
 
-        moreButton.setOnClickListener {
+        moreButton.setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.more_actions_pending), Toast.LENGTH_SHORT).show()
         }
 
@@ -109,11 +109,11 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
 
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
-        saveButton.setOnClickListener {
+        saveButton.setDebouncedClickListener {
             val newPassword = passwordInput.text?.toString().orEmpty()
             if (newPassword.isBlank()) {
                 passwordInput.error = getString(R.string.error_password_empty)
-                return@setOnClickListener
+                return@setDebouncedClickListener
             }
 
             updateServer(
@@ -148,7 +148,7 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
 
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
-        saveButton.setOnClickListener {
+        saveButton.setDebouncedClickListener {
             val updatedName = nameInput.text?.toString()?.trim().orEmpty()
             val updatedAddress = addressInput.text?.toString()?.trim().orEmpty()
             val updatedPort = portInput.text?.toString()?.trim().orEmpty()
@@ -156,15 +156,15 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
 
             if (updatedName.isBlank()) {
                 nameInput.error = getString(R.string.error_server_name_required)
-                return@setOnClickListener
+                return@setDebouncedClickListener
             }
             if (updatedAddress.isBlank()) {
                 addressInput.error = getString(R.string.error_server_address_required)
-                return@setOnClickListener
+                return@setDebouncedClickListener
             }
             if (updatedUsername.isBlank()) {
                 usernameInput.error = getString(R.string.error_username_required)
-                return@setOnClickListener
+                return@setDebouncedClickListener
             }
 
             updateServer(
@@ -211,13 +211,13 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
 
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
-        connectButton.setOnClickListener {
+        connectButton.setDebouncedClickListener {
             val address = addressInput.text?.toString()?.trim().orEmpty()
             val port = portInput.text?.toString()?.trim().orEmpty()
 
             if (address.isBlank()) {
                 addressInput.error = getString(R.string.error_server_address_required)
-                return@setOnClickListener
+                return@setDebouncedClickListener
             }
 
             setButtonLoading(connectButton, true, R.string.connect_server)
@@ -269,18 +269,18 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
 
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
-        loginButton.setOnClickListener {
+        loginButton.setDebouncedClickListener {
             val username = usernameInput.text?.toString()?.trim().orEmpty()
             val password = passwordInput.text?.toString().orEmpty()
 
             if (username.isBlank()) {
                 usernameInput.error = getString(R.string.error_username_required)
-                return@setOnClickListener
+                return@setDebouncedClickListener
             }
 
             if (password.isBlank()) {
                 passwordInput.error = getString(R.string.error_password_required)
-                return@setOnClickListener
+                return@setDebouncedClickListener
             }
 
             setButtonLoading(loginButton, true, R.string.login_server)

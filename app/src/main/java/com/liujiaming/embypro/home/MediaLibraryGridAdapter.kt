@@ -49,7 +49,7 @@ class MediaLibraryGridAdapter(
                 }
             )
             titleText.text = item.title
-            itemView.setOnClickListener { onLibraryClick(item) }
+            itemView.setDebouncedClickListener { onLibraryClick(item) }
         }
     }
 }

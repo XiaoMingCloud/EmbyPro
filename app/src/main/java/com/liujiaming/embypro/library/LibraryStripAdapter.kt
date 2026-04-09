@@ -43,7 +43,7 @@ class LibraryStripAdapter(
                 onFailure = { applyPlaceholder(item) }
             )
             titleText.text = item.title
-            itemView.setOnClickListener { onLibraryClick(item) }
+            itemView.setDebouncedClickListener { onLibraryClick(item) }
         }
 
         private fun applyPlaceholder(item: MediaLibraryUiModel) {

@@ -137,15 +137,15 @@ class PlayerActivity : AppCompatActivity() {
         playerView.setShowRewindButton(false)
         playPauseButton.setImageResource(R.drawable.exo_styled_controls_play)
         playPauseButton.imageTintList = null
-        playPauseButton.setOnClickListener {
+        playPauseButton.setDebouncedClickListener {
             player?.play()
             playerView.hideController()
         }
         updatePlayPauseButtonLayout()
 
         titleText.text = title
-        findViewById<ImageButton>(R.id.playerBackButton).setOnClickListener { finish() }
-        moreButton.setOnClickListener { showPlayerMenu() }
+        findViewById<ImageButton>(R.id.playerBackButton).setDebouncedClickListener { finish() }
+        moreButton.setDebouncedClickListener { showPlayerMenu() }
 
         playerView.setOnTouchListener { _, event -> handleTouch(event) }
         playerView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyVideoRotation() }

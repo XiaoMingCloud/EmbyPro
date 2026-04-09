@@ -25,6 +25,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".HomeSettingsActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".VideoDetailActivity"
             android:exported="false" />
 

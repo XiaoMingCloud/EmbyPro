@@ -66,11 +66,11 @@ class ServerHomeActivity : AppCompatActivity() {
         val bottomNavigation = findViewById<NavigationBarView>(R.id.serverBottomNavigation)
 
         findViewById<TextView>(R.id.serverHomeTitle).text = serverName
-        findViewById<ImageButton>(R.id.serverBackButton).setOnClickListener { finish() }
-        findViewById<ImageButton>(R.id.serverSettingsButton).setOnClickListener {
+        findViewById<ImageButton>(R.id.serverBackButton).setDebouncedClickListener { finish() }
+        findViewById<ImageButton>(R.id.serverSettingsButton).setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.server_settings_pending), Toast.LENGTH_SHORT).show()
         }
-        findViewById<ImageButton>(R.id.serverCastButton).setOnClickListener {
+        findViewById<ImageButton>(R.id.serverCastButton).setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.server_cast_pending), Toast.LENGTH_SHORT).show()
         }
 
@@ -157,7 +157,7 @@ class ServerHomeActivity : AppCompatActivity() {
             val recyclerView = sectionView.findViewById<RecyclerView>(R.id.librarySectionRecyclerView)
 
             titleText.text = library.title
-            titleText.setOnClickListener { openLibrary(library) }
+            titleText.setDebouncedClickListener { openLibrary(library) }
 
             bindHorizontalList(
                 recyclerView = recyclerView,

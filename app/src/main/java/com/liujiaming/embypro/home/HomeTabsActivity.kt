@@ -17,6 +17,7 @@ import java.util.concurrent.Executors
 class HomeTabsActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val embyApiService by lazy { EmbyApiService(this) }
+    private val homeLibraryFilterStore by lazy { HomeLibraryFilterStore(this) }
     private val sessionStore by lazy { ServerSessionStore(this) }
     private val homeSeenItemIds = linkedSetOf<String>()
     private val homeLibraryOffsets = linkedMapOf<String, Int>()
@@ -39,7 +40,11 @@ class HomeTabsActivity : AppCompatActivity() {
     private lateinit var baseUrl: String
     private lateinit var userId: String
     private lateinit var accessToken: String
+    private var excludedHomeLibraryIds: Set<String> = emptySet()
+    private var excludedHomeLibrarySignature = ""
     private var isHomeLoading = false
+    private var currentTab = Tab.HOME
+    private var isHomeLoadFailed = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,6 +64,7 @@ class HomeTabsActivity : AppCompatActivity() {
         baseUrl = embyApiService.buildBaseUrl(activeServer.address, activeServer.port)
         userId = activeServer.userId
         accessToken = activeServer.accessToken
+        syncExcludedHomeLibraries()
 
         EdgeToEdgeHelper.enable(this, lightSystemBars = true)
         setContentView(R.layout.activity_home_tabs)
@@ -76,7 +82,7 @@ class HomeTabsActivity : AppCompatActivity() {
         val topBar = findViewById<View>(R.id.homeTabsTopBar)
         val bottomNavigation = findViewById<NavigationBarView>(R.id.homeTabsBottomNavigation)
 
-        homeSearchCard.setOnClickListener {
+        homeSearchCard.setDebouncedClickListener {
             startActivity(
                 Intent(this, SearchActivity::class.java)
                     .putExtra(SearchActivity.EXTRA_BASE_URL, baseUrl)
@@ -84,10 +90,18 @@ class HomeTabsActivity : AppCompatActivity() {
                     .putExtra(SearchActivity.EXTRA_ACCESS_TOKEN, accessToken)
             )
         }
-        findViewById<View>(R.id.myServerListEntry).setOnClickListener {
+        findViewById<View>(R.id.myServerListEntry).setDebouncedClickListener {
             startActivity(Intent(this, MainActivity::class.java))
         }
-        findViewById<MaterialButton>(R.id.homeRetryButton).setOnClickListener {
+        findViewById<View>(R.id.myHomeSettingsEntry).setDebouncedClickListener {
+            startActivity(
+                Intent(this, HomeSettingsActivity::class.java)
+                    .putExtra(HomeSettingsActivity.EXTRA_BASE_URL, baseUrl)
+                    .putExtra(HomeSettingsActivity.EXTRA_USER_ID, userId)
+                    .putExtra(HomeSettingsActivity.EXTRA_ACCESS_TOKEN, accessToken)
+            )
+        }
+        findViewById<MaterialButton>(R.id.homeRetryButton).setDebouncedClickListener {
             connectAndLoadHome()
         }
 
@@ -127,6 +141,14 @@ class HomeTabsActivity : AppCompatActivity() {
         bottomNavigation.selectedItemId = R.id.navigation_home
 
         connectAndLoadHome()
+        loadMediaLibraries()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (syncExcludedHomeLibraries() && !isHomeLoading) {
+            connectAndLoadHome()
+        }
     }
 
     override fun onDestroy() {
@@ -137,26 +159,31 @@ class HomeTabsActivity : AppCompatActivity() {
     private fun connectAndLoadHome() {
         if (isHomeLoading) return
         isHomeLoading = true
-        showLoadFailedState(false)
+        isHomeLoadFailed = false
+        updateHomeLoadFailedVisibility()
         homeRefreshLayout.isRefreshing = true
         networkExecutor.execute {
             val result = runCatching {
                 embyApiService.fetchPublicServerInfo(baseUrl).getOrThrow()
-                val libraries = embyApiService.fetchMediaLibraries(baseUrl, userId, accessToken).getOrThrow().shuffled()
+                val libraries = embyApiService.fetchMediaLibraries(baseUrl, userId, accessToken)
+                    .getOrThrow()
+                    .filterNot { excludedHomeLibraryIds.contains(it.id) }
+                    .shuffled()
                 resetHomeFeedState(libraries)
-                libraries to fetchNextHomeFeedBatch()
+                fetchNextHomeFeedBatch()
             }
             runOnUiThread {
                 isHomeLoading = false
                 homeRefreshLayout.isRefreshing = false
-                result.onSuccess { (libraries, homeData) ->
-                    showLoadFailedState(false)
-                    bindMediaLibraries(libraries)
+                result.onSuccess { homeData ->
+                    isHomeLoadFailed = false
+                    updateHomeLoadFailedVisibility()
                     homeFeedItems.clear()
                     homeFeedItems.addAll(homeData)
                     homeFeedAdapter.notifyDataSetChanged()
                 }.onFailure {
-                    showLoadFailedState(true)
+                    isHomeLoadFailed = true
+                    updateHomeLoadFailedVisibility()
                 }
             }
         }
@@ -181,7 +208,8 @@ class HomeTabsActivity : AppCompatActivity() {
                     }
                 }.onFailure { error ->
                     if (homeFeedItems.isEmpty()) {
-                        showLoadFailedState(true)
+                        isHomeLoadFailed = true
+                        updateHomeLoadFailedVisibility()
                     } else {
                         Toast.makeText(
                             this,
@@ -265,16 +293,44 @@ class HomeTabsActivity : AppCompatActivity() {
         }
     }
 
-    private fun showLoadFailedState(show: Boolean) {
-        loadFailedContainer.visibility = if (show) View.VISIBLE else View.GONE
+    private fun loadMediaLibraries() {
+        networkExecutor.execute {
+            val result = embyApiService.fetchMediaLibraries(baseUrl, userId, accessToken)
+            runOnUiThread {
+                result.onSuccess { libraries ->
+                    bindMediaLibraries(libraries)
+                }.onFailure { error ->
+                    Toast.makeText(
+                        this,
+                        error.message ?: getString(R.string.server_home_load_failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun updateHomeLoadFailedVisibility() {
+        loadFailedContainer.visibility = if (currentTab == Tab.HOME && isHomeLoadFailed) View.VISIBLE else View.GONE
         loadFailedText.text = getString(R.string.home_load_failed_retry)
     }
 
+    private fun syncExcludedHomeLibraries(): Boolean {
+        val latest = homeLibraryFilterStore.loadExcludedLibraryIds(baseUrl, userId)
+        val latestSignature = latest.toList().sorted().joinToString("|")
+        val changed = latestSignature != excludedHomeLibrarySignature
+        excludedHomeLibraryIds = latest
+        excludedHomeLibrarySignature = latestSignature
+        return changed
+    }
+
     private fun showTab(tab: Tab) {
+        currentTab = tab
         homeContainer.visibility = if (tab == Tab.HOME) View.VISIBLE else View.GONE
         mediaContainer.visibility = if (tab == Tab.MEDIA) View.VISIBLE else View.GONE
         myContainer.visibility = if (tab == Tab.MY) View.VISIBLE else View.GONE
         homeSearchCard.visibility = if (tab == Tab.HOME) View.VISIBLE else View.GONE
+        updateHomeLoadFailedVisibility()
     }
 
     private fun openLibrary(library: MediaLibraryUiModel) {
