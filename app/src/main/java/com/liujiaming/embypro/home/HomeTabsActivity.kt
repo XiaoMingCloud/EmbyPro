@@ -1,15 +1,16 @@
 package com.liujiaming.embypro
 
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.View
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.navigation.NavigationBarView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -35,6 +36,15 @@ class HomeTabsActivity : AppCompatActivity() {
     private lateinit var mediaTabRecyclerView: RecyclerView
     private val homeFeedItems = mutableListOf<MediaPosterUiModel>()
     private lateinit var homeFeedAdapter: MediaPosterAdapter
+    private lateinit var navigationHomeItem: View
+    private lateinit var navigationMediaItem: View
+    private lateinit var navigationMyItem: View
+    private lateinit var navigationHomeIcon: ImageView
+    private lateinit var navigationMediaIcon: ImageView
+    private lateinit var navigationMyIcon: ImageView
+    private lateinit var navigationHomeText: TextView
+    private lateinit var navigationMediaText: TextView
+    private lateinit var navigationMyText: TextView
 
     private lateinit var activeServer: ServerUiModel
     private lateinit var baseUrl: String
@@ -81,7 +91,15 @@ class HomeTabsActivity : AppCompatActivity() {
         mediaTabRecyclerView = findViewById(R.id.mediaTabRecyclerView)
         val topBar = findViewById<View>(R.id.homeTabsTopBar)
         val bottomNavigationCard = findViewById<View>(R.id.homeTabsBottomNavigationCard)
-        val bottomNavigation = findViewById<NavigationBarView>(R.id.homeTabsBottomNavigation)
+        navigationHomeItem = findViewById(R.id.navigationHomeItem)
+        navigationMediaItem = findViewById(R.id.navigationMediaItem)
+        navigationMyItem = findViewById(R.id.navigationMyItem)
+        navigationHomeIcon = findViewById(R.id.navigationHomeIcon)
+        navigationMediaIcon = findViewById(R.id.navigationMediaIcon)
+        navigationMyIcon = findViewById(R.id.navigationMyIcon)
+        navigationHomeText = findViewById(R.id.navigationHomeText)
+        navigationMediaText = findViewById(R.id.navigationMediaText)
+        navigationMyText = findViewById(R.id.navigationMyText)
 
         homeSearchCard.setDebouncedClickListener {
             startActivity(
@@ -153,15 +171,10 @@ class HomeTabsActivity : AppCompatActivity() {
         homeRefreshLayout.setOnRefreshListener { refreshHomeFeed() }
         mediaTabRecyclerView.layoutManager = GridLayoutManager(this, 1)
 
-        bottomNavigation.setOnItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.navigation_home -> showTab(Tab.HOME)
-                R.id.navigation_media -> showTab(Tab.MEDIA)
-                R.id.navigation_my -> showTab(Tab.MY)
-            }
-            true
-        }
-        bottomNavigation.selectedItemId = R.id.navigation_home
+        navigationHomeItem.setDebouncedClickListener { showTab(Tab.HOME) }
+        navigationMediaItem.setDebouncedClickListener { showTab(Tab.MEDIA) }
+        navigationMyItem.setDebouncedClickListener { showTab(Tab.MY) }
+        showTab(Tab.HOME)
 
         connectAndLoadHome()
         loadMediaLibraries()
@@ -353,7 +366,30 @@ class HomeTabsActivity : AppCompatActivity() {
         mediaContainer.visibility = if (tab == Tab.MEDIA) View.VISIBLE else View.GONE
         myContainer.visibility = if (tab == Tab.MY) View.VISIBLE else View.GONE
         homeSearchCard.visibility = if (tab == Tab.HOME) View.VISIBLE else View.GONE
+        updateNavigationSelection(tab)
         updateHomeLoadFailedVisibility()
+    }
+
+    private fun updateNavigationSelection(tab: Tab) {
+        val activeColor = getColor(R.color.nav_active)
+        val inactiveColor = getColor(R.color.nav_inactive)
+        applyNavigationState(navigationHomeIcon, navigationHomeText, tab == Tab.HOME, activeColor, inactiveColor)
+        applyNavigationState(navigationMediaIcon, navigationMediaText, tab == Tab.MEDIA, activeColor, inactiveColor)
+        applyNavigationState(navigationMyIcon, navigationMyText, tab == Tab.MY, activeColor, inactiveColor)
+    }
+
+    private fun applyNavigationState(
+        iconView: ImageView,
+        textView: TextView,
+        selected: Boolean,
+        activeColor: Int,
+        inactiveColor: Int
+    ) {
+        val targetColor = if (selected) activeColor else inactiveColor
+        iconView.imageTintList = ColorStateList.valueOf(targetColor)
+        textView.setTextColor(targetColor)
+        textView.alpha = if (selected) 1f else 0.92f
+        iconView.alpha = if (selected) 1f else 0.88f
     }
 
     private fun openLibrary(library: MediaLibraryUiModel) {
