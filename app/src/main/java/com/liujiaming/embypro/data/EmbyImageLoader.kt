@@ -8,12 +8,11 @@ import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
 import android.widget.ImageView
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.Executors
 
 object EmbyImageLoader {
-    private val client = OkHttpClient()
+    private val client = NetworkClientProvider.client
     private val memoryCache = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 1024 / 8).toInt()) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024
     }

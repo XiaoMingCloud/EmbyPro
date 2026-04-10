@@ -5,7 +5,6 @@ import android.provider.Settings
 import android.util.Base64
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
@@ -135,7 +134,7 @@ data class VideoDetailUiModel(
 class EmbyApiService(
     private val context: Context
 ) {
-    private val client = OkHttpClient()
+    private val client = NetworkClientProvider.client
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val localMediaCache = LocalMediaCache(context.applicationContext)
 
