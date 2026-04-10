@@ -11,13 +11,22 @@ import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 @androidx.annotation.OptIn(UnstableApi::class)
 object PlayerCache {
+    data class PrefetchedPlayback(
+        val itemId: String,
+        val playbackUrl: String,
+        val playbackPositionMs: Long,
+        val title: String
+    )
+
     @Volatile
     private var cache: SimpleCache? = null
     private val prefetchExecutor = Executors.newSingleThreadExecutor()
+    private val prefetchedPlaybackMap = ConcurrentHashMap<String, PrefetchedPlayback>()
 
     fun get(context: Context): SimpleCache {
         return cache ?: synchronized(this) {
@@ -27,6 +36,7 @@ object PlayerCache {
 
     fun markPlayed(context: Context, itemId: String) {
         prefs(context).edit().remove(itemId).apply()
+        prefetchedPlaybackMap.remove(itemId)
     }
 
     fun cleanupExpiredPrefetch(context: Context, protectedItemIds: Set<String> = emptySet()) {
@@ -46,9 +56,20 @@ object PlayerCache {
             if (now - timestamp >= PREFETCH_EXPIRE_MS) {
                 runCatching { get(context).removeResource(url) }
                 editor.remove(itemId)
+                prefetchedPlaybackMap.remove(itemId)
             }
         }
         editor.apply()
+    }
+
+    fun savePrefetchedPlayback(playback: PrefetchedPlayback) {
+        if (playback.itemId.isBlank() || playback.playbackUrl.isBlank()) return
+        prefetchedPlaybackMap[playback.itemId] = playback
+    }
+
+    fun takePrefetchedPlayback(itemId: String): PrefetchedPlayback? {
+        if (itemId.isBlank()) return null
+        return prefetchedPlaybackMap[itemId]
     }
 
     fun prefetchVideos(context: Context, accessToken: String, videos: List<Pair<String, String>>) {

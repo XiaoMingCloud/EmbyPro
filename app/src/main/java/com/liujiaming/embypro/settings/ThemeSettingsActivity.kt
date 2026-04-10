@@ -41,4 +41,10 @@ class ThemeSettingsActivity : AppCompatActivity() {
         EdgeToEdgeHelper.applyInsets(topBar, applyTop = true)
         EdgeToEdgeHelper.applyInsets(recyclerView, applyBottom = true)
     }
+
+    override fun onResume() {
+        super.onResume()
+        GlobalThemeManager.apply(this)
+        adapter.notifyDataSetChanged()
+    }
 }

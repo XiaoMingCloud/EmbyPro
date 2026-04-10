@@ -60,6 +60,12 @@ class HomeSettingsActivity : AppCompatActivity() {
         loadLibraries()
     }
 
+    override fun onResume() {
+        super.onResume()
+        GlobalThemeManager.apply(this)
+        adapter.notifyDataSetChanged()
+    }
+
     private fun loadLibraries() {
         networkExecutor.execute {
             val result = embyApiService.fetchMediaLibraries(baseUrl, userId, accessToken)

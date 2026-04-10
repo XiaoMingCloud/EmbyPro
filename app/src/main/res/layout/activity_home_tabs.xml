@@ -25,6 +25,7 @@
                 android:id="@+id/homeSearchCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:translationY="-1mm"
                 app:cardBackgroundColor="@color/card_background"
                 app:cardCornerRadius="24dp"
                 app:cardElevation="0dp"

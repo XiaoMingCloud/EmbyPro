@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.widget.SwitchCompat
+import com.google.android.material.card.MaterialCardView
 import androidx.recyclerview.widget.RecyclerView
 
 class HomeLibraryFilterAdapter(
@@ -36,6 +37,7 @@ class HomeLibraryFilterAdapter(
     }
 
     class HomeLibraryFilterViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val cardView: MaterialCardView = itemView as MaterialCardView
         private val titleText: TextView = itemView.findViewById(R.id.homeLibraryFilterTitle)
         private val subtitleText: TextView = itemView.findViewById(R.id.homeLibraryFilterSubtitle)
         private val toggleSwitch: SwitchCompat = itemView.findViewById(R.id.homeLibraryFilterSwitch)
@@ -46,6 +48,8 @@ class HomeLibraryFilterAdapter(
             onToggleExcluded: (MediaLibraryUiModel, Boolean) -> Unit
         ) {
             val included = !excluded
+            cardView.setCardBackgroundColor(GlobalThemeManager.cardBackgroundColor(itemView.context))
+            cardView.strokeColor = GlobalThemeManager.cardStrokeColor(itemView.context)
             titleText.text = item.title
             titleText.setTextColor(GlobalThemeManager.primaryTextColor(itemView.context))
             subtitleText.text = itemView.context.getString(

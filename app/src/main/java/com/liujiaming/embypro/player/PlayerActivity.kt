@@ -11,6 +11,8 @@ import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Rational
 import android.view.MotionEvent
 import android.view.View
@@ -54,6 +56,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var playPauseButton: ImageButton
     private lateinit var centerTimeText: TextView
     private lateinit var topBar: View
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private var player: ExoPlayer? = null
     private lateinit var playbackUrl: String
@@ -74,6 +77,7 @@ class PlayerActivity : AppCompatActivity() {
     private var playlistIndex = -1
     private var isSwitchingItem = false
     private var isContinuousPlayEnabled = false
+    private var pendingLoadingVisible = false
 
     private lateinit var audioManager: AudioManager
     private var currentBrightness = 0.5f
@@ -180,6 +184,7 @@ class PlayerActivity : AppCompatActivity() {
         if (activeInstance === this) {
             activeInstance = null
         }
+        mainHandler.removeCallbacks(showLoadingRunnable)
         releasePlayer()
     }
 
@@ -252,7 +257,7 @@ class PlayerActivity : AppCompatActivity() {
 
         exoPlayer.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                loadingView.visibility = if (playbackState == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
+                updateLoadingVisibility(playbackState == Player.STATE_BUFFERING)
                 if (playbackState == Player.STATE_READY && exoPlayer.playWhenReady) {
                     playerView.hideController()
                 } else if (playbackState == Player.STATE_ENDED) {
@@ -415,7 +420,7 @@ class PlayerActivity : AppCompatActivity() {
 
                 when (adjustingMode) {
                     AdjustMode.SEEK -> adjustSeek(dx / playerView.width)
-                    AdjustMode.SWITCH_ITEM -> previewSwitchItem(dy)
+                    AdjustMode.SWITCH_ITEM -> previewSwitchItem()
                     AdjustMode.LONG_PRESS_SEEK -> Unit
                     AdjustMode.BRIGHTNESS -> adjustBrightness(-dy / playerView.height)
                     AdjustMode.VOLUME -> adjustVolume(-dy / playerView.height)
@@ -465,13 +470,8 @@ class PlayerActivity : AppCompatActivity() {
         showGestureLabel(getString(R.string.volume_label, (target * 100) / max))
     }
 
-    private fun previewSwitchItem(dy: Float) {
-        val threshold = playerView.height * 0.12f
-        if (dy <= -threshold) {
-            showGestureLabel(getString(R.string.next_video_hint), 400)
-        } else if (dy >= threshold) {
-            showGestureLabel(getString(R.string.previous_video_hint), 400)
-        }
+    private fun previewSwitchItem() {
+        Unit
     }
 
     private fun completeSwitchItem(totalDy: Float) {
@@ -560,8 +560,24 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         isSwitchingItem = true
-        loadingView.visibility = View.VISIBLE
         val targetItemId = playlistItemIds[targetIndex]
+        val prefetchedPlayback = PlayerCache.takePrefetchedPlayback(targetItemId)
+        if (prefetchedPlayback != null) {
+            isSwitchingItem = false
+            playlistIndex = targetIndex
+            itemId = prefetchedPlayback.itemId
+            playbackUrl = prefetchedPlayback.playbackUrl
+            title = prefetchedPlayback.title.ifBlank {
+                playlistItemTitles.getOrNull(targetIndex).orEmpty()
+            }
+            titleText.text = title
+            playbackPosition = prefetchedPlayback.playbackPositionMs
+            playWhenReady = true
+            swapToMedia(prefetchedPlayback.playbackUrl)
+            PlayerCache.markPlayed(this, itemId)
+            prefetchUpcomingVideosIfNeeded()
+            return
+        }
         networkExecutor.execute {
             val result = embyApiService.fetchVideoDetail(baseUrl, userId, accessToken, targetItemId)
             runOnUiThread {
@@ -578,7 +594,7 @@ class PlayerActivity : AppCompatActivity() {
                     PlayerCache.markPlayed(this, itemId)
                     prefetchUpcomingVideosIfNeeded()
                 }.onFailure { error ->
-                    loadingView.visibility = View.GONE
+                    updateLoadingVisibility(false, immediate = true)
                     Toast.makeText(
                         this,
                         error.message ?: getString(R.string.player_error),
@@ -609,7 +625,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun swapToMedia(url: String) {
         if (url.isBlank()) {
-            loadingView.visibility = View.GONE
+            updateLoadingVisibility(false, immediate = true)
             Toast.makeText(this, getString(R.string.playback_url_missing), Toast.LENGTH_SHORT).show()
             return
         }
@@ -628,6 +644,26 @@ class PlayerActivity : AppCompatActivity() {
         syncPlaybackControls()
     }
 
+    private fun updateLoadingVisibility(show: Boolean, immediate: Boolean = false) {
+        if (!show) {
+            pendingLoadingVisible = false
+            mainHandler.removeCallbacks(showLoadingRunnable)
+            loadingView.visibility = View.GONE
+            return
+        }
+
+        if (immediate) {
+            pendingLoadingVisible = false
+            mainHandler.removeCallbacks(showLoadingRunnable)
+            loadingView.visibility = View.VISIBLE
+            return
+        }
+
+        if (loadingView.visibility == View.VISIBLE || pendingLoadingVisible) return
+        pendingLoadingVisible = true
+        mainHandler.postDelayed(showLoadingRunnable, LOADING_VISIBILITY_DELAY_MS)
+    }
+
     private fun prefetchUpcomingVideosIfNeeded() {
         if (!isContinuousPlayEnabled) return
         if (playlistItemIds.isEmpty() || playlistIndex !in playlistItemIds.indices) return
@@ -643,6 +679,16 @@ class PlayerActivity : AppCompatActivity() {
                 val detail = embyApiService.fetchVideoDetail(baseUrl, userId, accessToken, nextItemId).getOrNull()
                 val url = detail?.playbackUrl.orEmpty()
                 if (url.isNotBlank()) {
+                    PlayerCache.savePrefetchedPlayback(
+                        PlayerCache.PrefetchedPlayback(
+                            itemId = nextItemId,
+                            playbackUrl = url,
+                            playbackPositionMs = detail?.playbackPositionTicks?.div(10_000L) ?: 0L,
+                            title = detail?.title.orEmpty().ifBlank {
+                                playlistItemTitles.getOrNull(playlistItemIds.indexOf(nextItemId)).orEmpty()
+                            }
+                        )
+                    )
                     preloadTargets += nextItemId to url
                 }
             }
@@ -833,6 +879,12 @@ class PlayerActivity : AppCompatActivity() {
     private val hideGestureRunnable = Runnable { gestureText.visibility = View.GONE }
     private val longPressStartRunnable = Runnable { startLongPressSeek() }
     private val longPressSeekRunnable = Runnable { performLongPressSeekTick() }
+    private val showLoadingRunnable = Runnable {
+        pendingLoadingVisible = false
+        if (player?.playbackState == Player.STATE_BUFFERING) {
+            loadingView.visibility = View.VISIBLE
+        }
+    }
     private val centerTimeTicker = object : Runnable {
         override fun run() {
             updateCenterTimeText()
@@ -867,6 +919,7 @@ class PlayerActivity : AppCompatActivity() {
         private const val STATE_PLAYLIST_INDEX = "state_playlist_index"
         private const val LONG_PRESS_SEEK_MS = 8_000L
         private const val LONG_PRESS_REPEAT_MS = 350L
+        private const val LOADING_VISIBILITY_DELAY_MS = 180L
 
         @Volatile
         private var activeInstance: PlayerActivity? = null

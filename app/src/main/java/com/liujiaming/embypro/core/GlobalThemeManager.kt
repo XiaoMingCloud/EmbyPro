@@ -24,6 +24,14 @@ object GlobalThemeManager {
         return resolveSecondaryTextColor(GlobalThemeStore(context).loadTheme())
     }
 
+    fun cardBackgroundColor(context: Context): Int {
+        return resolveCardBackgroundColor(GlobalThemeStore(context).loadTheme())
+    }
+
+    fun cardStrokeColor(context: Context): Int {
+        return resolveCardStrokeColor(GlobalThemeStore(context).loadTheme())
+    }
+
     fun apply(activity: Activity) {
         val option = GlobalThemeStore(activity).loadTheme()
         val content = activity.findViewById<ViewGroup>(android.R.id.content) ?: return

@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import android.content.res.ColorStateList
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
@@ -40,15 +41,18 @@ class ThemeOptionAdapter(
 
         fun bind(item: GlobalThemeOption, selected: Boolean) {
             val context = itemView.context
+            card.setCardBackgroundColor(GlobalThemeManager.cardBackgroundColor(context))
             swatch.backgroundTintList = ContextCompat.getColorStateList(context, item.backgroundRes)
             title.text = context.getString(item.labelRes)
             title.setTextColor(GlobalThemeManager.primaryTextColor(context))
             check.visibility = if (selected) View.VISIBLE else View.INVISIBLE
+            check.imageTintList = ColorStateList.valueOf(GlobalThemeManager.primaryTextColor(context))
             card.strokeWidth = if (selected) 2 else 1
-            card.strokeColor = ContextCompat.getColor(
-                context,
-                if (selected) R.color.text_accent else R.color.card_stroke
-            )
+            card.strokeColor = if (selected) {
+                GlobalThemeManager.primaryTextColor(context)
+            } else {
+                GlobalThemeManager.cardStrokeColor(context)
+            }
             card.setDebouncedClickListener { onThemeSelected(item) }
         }
     }
