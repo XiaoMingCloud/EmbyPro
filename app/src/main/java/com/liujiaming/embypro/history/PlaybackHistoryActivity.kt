@@ -223,6 +223,7 @@ class PlaybackHistoryActivity : AppCompatActivity() {
                             .putExtra(PlayerActivity.EXTRA_PLAYBACK_URL, detail.playbackUrl)
                             .putExtra(PlayerActivity.EXTRA_ACCESS_TOKEN, accessToken)
                             .putExtra(PlayerActivity.EXTRA_TITLE, detail.title)
+                            .putExtra(PlayerActivity.EXTRA_COVER_IMAGE_URL, detail.heroImageUrl)
                             .putExtra(PlayerActivity.EXTRA_BASE_URL, baseUrl)
                             .putExtra(PlayerActivity.EXTRA_USER_ID, userId)
                             .putExtra(PlayerActivity.EXTRA_ITEM_ID, item.itemId)

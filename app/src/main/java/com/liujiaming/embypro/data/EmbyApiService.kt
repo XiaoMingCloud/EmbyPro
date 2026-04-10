@@ -140,9 +140,8 @@ class EmbyApiService(
 
     fun buildBaseUrl(address: String, port: String): String {
         val trimmedAddress = address.trim().removeSuffix("/")
-        val normalizedAddress = if (
-            trimmedAddress.startsWith("http://") || trimmedAddress.startsWith("https://")
-        ) {
+        val hasScheme = trimmedAddress.contains(Regex("^https?://", RegexOption.IGNORE_CASE))
+        val normalizedAddress = if (hasScheme) {
             trimmedAddress
         } else {
             "https://$trimmedAddress"

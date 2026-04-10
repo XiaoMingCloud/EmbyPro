@@ -3,6 +3,8 @@ package com.liujiaming.embypro
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
 import android.app.RemoteAction
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -17,10 +19,11 @@ import android.util.Rational
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageButton
-import android.widget.ProgressBar
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -49,7 +52,8 @@ class PlayerActivity : AppCompatActivity() {
     private val embyApiService by lazy { EmbyApiService(this) }
 
     private lateinit var playerView: PlayerView
-    private lateinit var loadingView: ProgressBar
+    private lateinit var coverImageView: ImageView
+    private lateinit var progressTimeBar: View
     private lateinit var gestureText: TextView
     private lateinit var titleText: TextView
     private lateinit var moreButton: ImageButton
@@ -62,6 +66,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var playbackUrl: String
     private lateinit var accessToken: String
     private lateinit var title: String
+    private var coverImageUrl: String? = null
     private lateinit var baseUrl: String
     private lateinit var userId: String
     private lateinit var itemId: String
@@ -78,6 +83,8 @@ class PlayerActivity : AppCompatActivity() {
     private var isSwitchingItem = false
     private var isContinuousPlayEnabled = false
     private var pendingLoadingVisible = false
+    private var loadingAnimator: AnimatorSet? = null
+    private var hasRenderedFirstFrame = false
 
     private lateinit var audioManager: AudioManager
     private var currentBrightness = 0.5f
@@ -102,6 +109,7 @@ class PlayerActivity : AppCompatActivity() {
         playbackUrl = intent.getStringExtra(EXTRA_PLAYBACK_URL).orEmpty()
         accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty()
         title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
+        coverImageUrl = intent.getStringExtra(EXTRA_COVER_IMAGE_URL)
         baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty()
         userId = intent.getStringExtra(EXTRA_USER_ID).orEmpty()
         itemId = intent.getStringExtra(EXTRA_ITEM_ID).orEmpty()
@@ -129,13 +137,14 @@ class PlayerActivity : AppCompatActivity() {
         currentBrightness = window.attributes.screenBrightness.takeIf { it >= 0f } ?: 0.5f
 
         playerView = findViewById(R.id.playerView)
-        loadingView = findViewById(R.id.playerLoading)
+        coverImageView = findViewById(R.id.playerCoverImage)
         gestureText = findViewById(R.id.playerGestureText)
         titleText = findViewById(R.id.playerTitleText)
         moreButton = findViewById(R.id.playerMoreButton)
         playPauseButton = playerView.findViewById(androidx.media3.ui.R.id.exo_play_pause)
+        progressTimeBar = playerView.findViewById(androidx.media3.ui.R.id.exo_progress)
         centerTimeText = playerView.findViewById(R.id.playerCenterTimeText)
-        topBar = findViewById<ImageButton>(R.id.playerBackButton).parent as View
+        topBar = findViewById(R.id.playerTopBar)
 
         playerView.controllerShowTimeoutMs = 1800
         playerView.controllerHideOnTouch = true
@@ -147,12 +156,23 @@ class PlayerActivity : AppCompatActivity() {
         playPauseButton.setImageResource(R.drawable.exo_styled_controls_play)
         playPauseButton.imageTintList = null
         playPauseButton.setDebouncedClickListener {
-            player?.play()
-            playerView.hideController()
+            val currentPlayer = player ?: return@setDebouncedClickListener
+            if (currentPlayer.isPlaying || (currentPlayer.playbackState == Player.STATE_BUFFERING && currentPlayer.playWhenReady)) {
+                currentPlayer.pause()
+                reportPlaybackProgress(currentPlayer.currentPosition)
+                playerView.showController()
+            } else {
+                currentPlayer.play()
+                if (currentPlayer.playbackState != Player.STATE_BUFFERING) {
+                    playerView.hideController()
+                }
+            }
+            syncPlaybackControls()
         }
         updatePlayPauseButtonLayout()
 
         titleText.text = title
+        bindCoverImage()
         findViewById<ImageButton>(R.id.playerBackButton).setDebouncedClickListener { finish() }
         moreButton.setDebouncedClickListener { showPlayerMenu() }
 
@@ -201,7 +221,7 @@ class PlayerActivity : AppCompatActivity() {
         if (isInPictureInPictureMode) {
             playerView.hideController()
             topBar.visibility = View.GONE
-            loadingView.visibility = View.GONE
+            stopLoadingAnimation()
             gestureText.visibility = View.GONE
             updatePictureInPictureParams()
         } else {
@@ -252,8 +272,9 @@ class PlayerActivity : AppCompatActivity() {
             .build()
 
         playerView.player = exoPlayer
-        playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
+        playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
         player = exoPlayer
+        hasRenderedFirstFrame = false
 
         exoPlayer.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -277,6 +298,12 @@ class PlayerActivity : AppCompatActivity() {
                     playerView.hideController()
                 }
                 updatePictureInPictureParams()
+            }
+
+            override fun onRenderedFirstFrame() {
+                hasRenderedFirstFrame = true
+                hideCoverImage()
+                syncPlaybackControls()
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -648,18 +675,18 @@ class PlayerActivity : AppCompatActivity() {
         if (!show) {
             pendingLoadingVisible = false
             mainHandler.removeCallbacks(showLoadingRunnable)
-            loadingView.visibility = View.GONE
+            stopLoadingAnimation()
             return
         }
 
         if (immediate) {
             pendingLoadingVisible = false
             mainHandler.removeCallbacks(showLoadingRunnable)
-            loadingView.visibility = View.VISIBLE
+            startLoadingAnimation()
             return
         }
 
-        if (loadingView.visibility == View.VISIBLE || pendingLoadingVisible) return
+        if (loadingAnimator?.isRunning == true || pendingLoadingVisible) return
         pendingLoadingVisible = true
         mainHandler.postDelayed(showLoadingRunnable, LOADING_VISIBILITY_DELAY_MS)
     }
@@ -729,9 +756,22 @@ class PlayerActivity : AppCompatActivity() {
     private fun syncPlaybackControls() {
         val currentPlayer = player ?: return
         applyImmersivePlayback(currentPlayer.isPlaying)
+        if (!hasRenderedFirstFrame) {
+            playPauseButton.visibility = View.INVISIBLE
+            centerTimeText.visibility = View.INVISIBLE
+            centerTimeText.removeCallbacks(centerTimeTicker)
+            return
+        }
+        val isBufferingWhilePlaying = currentPlayer.playbackState == Player.STATE_BUFFERING && currentPlayer.playWhenReady
         val shouldShowResumeButton = !currentPlayer.isPlaying &&
-            currentPlayer.playbackState != Player.STATE_BUFFERING &&
+            !isBufferingWhilePlaying &&
             currentPlayer.playbackState != Player.STATE_ENDED
+        if (isBufferingWhilePlaying) {
+            playPauseButton.visibility = View.INVISIBLE
+            centerTimeText.visibility = View.INVISIBLE
+            centerTimeText.removeCallbacks(centerTimeTicker)
+            return
+        }
         if (shouldShowResumeButton) {
             playPauseButton.setImageResource(R.drawable.exo_styled_controls_play)
             playPauseButton.imageTintList = null
@@ -748,9 +788,69 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    private fun startLoadingAnimation() {
+        if (loadingAnimator?.isRunning == true) return
+        progressTimeBar.alpha = 0.56f
+        progressTimeBar.scaleY = 0.92f
+        val alphaAnimator = ObjectAnimator.ofFloat(progressTimeBar, View.ALPHA, 0.52f, 1f).apply {
+            duration = 760L
+            repeatCount = ObjectAnimator.INFINITE
+            repeatMode = ObjectAnimator.REVERSE
+        }
+        val scaleAnimator = ObjectAnimator.ofFloat(progressTimeBar, View.SCALE_Y, 0.9f, 1.08f).apply {
+            duration = 760L
+            repeatCount = ObjectAnimator.INFINITE
+            repeatMode = ObjectAnimator.REVERSE
+        }
+        loadingAnimator = AnimatorSet().apply {
+            playTogether(alphaAnimator, scaleAnimator)
+            start()
+        }
+    }
+
+    private fun stopLoadingAnimation() {
+        loadingAnimator?.cancel()
+        loadingAnimator = null
+        progressTimeBar.alpha = 1f
+        progressTimeBar.scaleY = 1f
+    }
+
+    private fun bindCoverImage() {
+        val url = coverImageUrl.orEmpty()
+        if (url.isBlank()) {
+            coverImageView.visibility = View.GONE
+            return
+        }
+        coverImageView.alpha = 1f
+        coverImageView.visibility = View.VISIBLE
+        EmbyImageLoader.load(
+            imageView = coverImageView,
+            url = url,
+            token = accessToken,
+            onFailure = {
+                coverImageView.setBackgroundColor(getColor(android.R.color.black))
+                coverImageView.visibility = View.VISIBLE
+            }
+        )
+    }
+
+    private fun hideCoverImage() {
+        if (coverImageView.visibility != View.VISIBLE) return
+        coverImageView.animate()
+            .alpha(0f)
+            .setDuration(180L)
+            .withEndAction {
+                coverImageView.visibility = View.GONE
+                coverImageView.alpha = 1f
+            }
+            .start()
+    }
+
     private fun updatePlayPauseButtonLayout() {
-        val params = playPauseButton.layoutParams as? FrameLayout.LayoutParams ?: return
-        params.gravity = android.view.Gravity.CENTER
+        val params = playPauseButton.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+        if (params is FrameLayout.LayoutParams) {
+            params.gravity = android.view.Gravity.CENTER
+        }
         params.marginStart = 0
         params.bottomMargin = 0
         playPauseButton.layoutParams = params
@@ -761,11 +861,7 @@ class PlayerActivity : AppCompatActivity() {
         topBar.visibility = if (isPlaying) View.GONE else View.VISIBLE
         val controller = WindowCompat.getInsetsController(window, window.decorView) ?: return
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        if (isPlaying) {
-            controller.hide(WindowInsetsCompat.Type.systemBars())
-        } else {
-            controller.show(WindowInsetsCompat.Type.systemBars())
-        }
+        controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 
     private fun reportPlaybackProgress(positionMs: Long) {
@@ -882,7 +978,7 @@ class PlayerActivity : AppCompatActivity() {
     private val showLoadingRunnable = Runnable {
         pendingLoadingVisible = false
         if (player?.playbackState == Player.STATE_BUFFERING) {
-            loadingView.visibility = View.VISIBLE
+            startLoadingAnimation()
         }
     }
     private val centerTimeTicker = object : Runnable {
@@ -899,6 +995,7 @@ class PlayerActivity : AppCompatActivity() {
         const val EXTRA_PLAYBACK_URL = "extra_playback_url"
         const val EXTRA_ACCESS_TOKEN = "extra_access_token"
         const val EXTRA_TITLE = "extra_title"
+        const val EXTRA_COVER_IMAGE_URL = "extra_cover_image_url"
         const val EXTRA_BASE_URL = "extra_base_url"
         const val EXTRA_USER_ID = "extra_user_id"
         const val EXTRA_ITEM_ID = "extra_item_id"

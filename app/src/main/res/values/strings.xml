@@ -18,7 +18,7 @@
     <string name="connect_server">连接</string>
     <string name="server_address">服务器地址</string>
     <string name="server_port">端口</string>
-    <string name="connect_server_hint">例：https://emby.hills.com</string>
+    <string name="connect_server_hint">例：emby.hills.com 或 https://emby.hills.com</string>
     <string name="login_server_title">登录服务器</string>
     <string name="login_server">登录</string>
     <string name="username">用户名</string>
