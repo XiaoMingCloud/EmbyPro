@@ -15,10 +15,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
 class PlaybackHistoryActivity : AppCompatActivity() {
-    private val networkExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val networkExecutor: ExecutorService = AppExecutors.io
     private val embyApiService by lazy { EmbyApiService(this) }
 
     private lateinit var baseUrl: String
@@ -132,11 +131,6 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         updateCategorySelection()
         updateSelectionUi()
         loadFirstPage()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        networkExecutor.shutdownNow()
     }
 
     private fun switchCategory(category: PlaybackHistoryCategory) {

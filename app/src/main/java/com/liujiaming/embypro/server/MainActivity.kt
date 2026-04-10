@@ -17,7 +17,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity(), ServerActionListener {
 
@@ -25,7 +24,7 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
     private lateinit var serverListAdapter: ServerListAdapter
     private lateinit var serverList: RecyclerView
     private lateinit var emptyStateText: TextView
-    private val networkExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val networkExecutor: ExecutorService = AppExecutors.io
     private val embyApiService by lazy { EmbyApiService(this) }
     private val sessionStore by lazy { ServerSessionStore(this) }
     private var pendingAvatarServerId: Long? = null
@@ -68,11 +67,6 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
         if (intent.getBooleanExtra(EXTRA_AUTO_OPEN_CONNECT, false) && serverItems.isEmpty()) {
             addServerButton.post { showConnectServerDialog() }
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        networkExecutor.shutdownNow()
     }
 
     override fun onOpen(server: ServerUiModel) {

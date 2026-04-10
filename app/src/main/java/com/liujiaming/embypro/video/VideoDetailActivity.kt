@@ -26,10 +26,9 @@ import com.google.android.material.color.MaterialColors
 import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.android.material.shape.ShapeAppearanceModel
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
 class VideoDetailActivity : AppCompatActivity() {
-    private val networkExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val networkExecutor: ExecutorService = AppExecutors.io
     private val embyApiService by lazy { EmbyApiService(this) }
     private val playerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode != RESULT_OK) return@registerForActivityResult
@@ -131,11 +130,6 @@ class VideoDetailActivity : AppCompatActivity() {
         setupHeroStretch()
 
         loadVideoDetail()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        networkExecutor.shutdownNow()
     }
 
     private fun loadVideoDetail() {

@@ -631,13 +631,10 @@ class EmbyApiService(
                 val libraryTitleMap = runCatching {
                     fetchViews(baseUrl, userId, accessToken).associate { it.id to it.title }
                 }.getOrDefault(emptyMap())
-                val libraryNameCache = mutableMapOf<String, String>()
                 val items = buildPlaybackHistoryItems(
                     baseUrl = baseUrl,
-                    accessToken = accessToken,
                     items = json.optJSONArray("Items"),
-                    libraryTitleMap = libraryTitleMap,
-                    libraryNameCache = libraryNameCache
+                    libraryTitleMap = libraryTitleMap
                 )
 
                 PlaybackHistoryPageUiModel(
@@ -692,13 +689,10 @@ class EmbyApiService(
                 val libraryTitleMap = runCatching {
                     fetchViews(baseUrl, userId, accessToken).associate { it.id to it.title }
                 }.getOrDefault(emptyMap())
-                val libraryNameCache = mutableMapOf<String, String>()
                 val items = buildFavoriteItems(
                     baseUrl = baseUrl,
-                    accessToken = accessToken,
                     items = json.optJSONArray("Items"),
-                    libraryTitleMap = libraryTitleMap,
-                    libraryNameCache = libraryNameCache
+                    libraryTitleMap = libraryTitleMap
                 )
 
                 FavoriteItemsPageUiModel(
@@ -771,10 +765,8 @@ class EmbyApiService(
 
     private fun buildPlaybackHistoryItems(
         baseUrl: String,
-        accessToken: String,
         items: JSONArray?,
-        libraryTitleMap: Map<String, String>,
-        libraryNameCache: MutableMap<String, String>
+        libraryTitleMap: Map<String, String>
     ): List<PlaybackHistoryItemUiModel> {
         return buildList {
             for (index in 0 until (items?.length() ?: 0)) {
@@ -793,13 +785,7 @@ class EmbyApiService(
                     PlaybackHistoryItemUiModel(
                         itemId = itemId,
                         title = item.optString("Name", context.getString(R.string.untitled_media)),
-                        libraryName = resolveHistoryLibraryName(
-                            baseUrl = baseUrl,
-                            accessToken = accessToken,
-                            itemId = itemId,
-                            libraryTitleMap = libraryTitleMap,
-                            libraryNameCache = libraryNameCache
-                        ),
+                        libraryName = resolveLibraryNameFromItem(item, libraryTitleMap),
                         playedTimeLabel = formatPlaybackHistoryTime(lastPlayedDate),
                         imageUrl = buildImageUrl(
                             baseUrl = baseUrl,
@@ -821,10 +807,8 @@ class EmbyApiService(
 
     private fun buildFavoriteItems(
         baseUrl: String,
-        accessToken: String,
         items: JSONArray?,
-        libraryTitleMap: Map<String, String>,
-        libraryNameCache: MutableMap<String, String>
+        libraryTitleMap: Map<String, String>
     ): List<PlaybackHistoryItemUiModel> {
         return buildList {
             for (index in 0 until (items?.length() ?: 0)) {
@@ -836,13 +820,7 @@ class EmbyApiService(
                     PlaybackHistoryItemUiModel(
                         itemId = itemId,
                         title = item.optString("Name", context.getString(R.string.untitled_media)),
-                        libraryName = resolveHistoryLibraryName(
-                            baseUrl = baseUrl,
-                            accessToken = accessToken,
-                            itemId = itemId,
-                            libraryTitleMap = libraryTitleMap,
-                            libraryNameCache = libraryNameCache
-                        ),
+                        libraryName = resolveLibraryNameFromItem(item, libraryTitleMap),
                         playedTimeLabel = "",
                         imageUrl = buildImageUrl(
                             baseUrl = baseUrl,
@@ -1318,7 +1296,7 @@ class EmbyApiService(
             append("&StartIndex=$startIndex")
             append("&Limit=$limit")
             append("&IncludeItemTypes=${encodeQueryValue(category.includeItemTypes)}")
-            append("&Fields=ImageTags,UserData,PrimaryImageAspectRatio,RunTimeTicks")
+            append("&Fields=ImageTags,UserData,PrimaryImageAspectRatio,RunTimeTicks,ParentId,SeriesName")
             append("&EnableImageTypes=Primary,Thumb,Backdrop&ImageTypeLimit=1")
             append("&EnableUserData=true")
             append("&SortBy=DatePlayed")
@@ -1339,7 +1317,7 @@ class EmbyApiService(
             append("&Limit=$limit")
             append("&Filters=IsFavorite")
             append("&IncludeItemTypes=Movie,Episode,Video,MusicVideo")
-            append("&Fields=ImageTags,UserData,PrimaryImageAspectRatio,RunTimeTicks")
+            append("&Fields=ImageTags,UserData,PrimaryImageAspectRatio,RunTimeTicks,ParentId,SeriesName")
             append("&EnableImageTypes=Primary,Thumb,Backdrop&ImageTypeLimit=1")
             append("&EnableUserData=true")
             append("&SortBy=SortName")
@@ -1347,68 +1325,15 @@ class EmbyApiService(
         }
     }
 
-    private fun resolveHistoryLibraryName(
-        baseUrl: String,
-        accessToken: String,
-        itemId: String,
-        libraryTitleMap: Map<String, String>,
-        libraryNameCache: MutableMap<String, String>
+    private fun resolveLibraryNameFromItem(
+        item: JSONObject,
+        libraryTitleMap: Map<String, String>
     ): String {
-        libraryNameCache[itemId]?.let { return it }
-        if (itemId.isBlank()) return context.getString(R.string.media_library)
-
-        return runCatching {
-            val request = Request.Builder()
-                .url("$baseUrl/emby/Items/$itemId/Ancestors")
-                .header("X-Emby-Token", accessToken)
-                .get()
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IllegalStateException("读取媒体库祖先信息失败：${response.code}")
-                }
-
-                val raw = response.body?.string().orEmpty()
-                val ancestors = if (raw.trim().startsWith("[")) JSONArray(raw) else {
-                    JSONObject(raw).optJSONArray("Items") ?: JSONArray()
-                }
-
-                val parsedAncestors = buildList {
-                    for (index in 0 until ancestors.length()) {
-                        val ancestor = ancestors.optJSONObject(index) ?: continue
-                        val ancestorId = ancestor.optString("Id")
-                        val ancestorName = ancestor.optString("Name")
-                        val ancestorType = ancestor.optString("Type")
-                        if (ancestorId.isNotBlank() && ancestorName.isNotBlank()) {
-                            add(Triple(ancestorId, ancestorName, ancestorType))
-                        }
-                    }
-                }
-
-                val matchedName = parsedAncestors.firstNotNullOfOrNull { (ancestorId, ancestorName, _) ->
-                    libraryTitleMap[ancestorId] ?: ancestorName.takeIf {
-                        ancestorId in libraryTitleMap.keys
-                    }
-                }
-
-                matchedName
-                    ?: parsedAncestors.firstOrNull { (_, ancestorName, ancestorType) ->
-                        ancestorType in HISTORY_LIBRARY_ANCESTOR_TYPES && !isSystemAncestorName(ancestorName)
-                    }?.second
-                    ?: parsedAncestors.firstOrNull { (_, ancestorName, _) ->
-                        !isSystemAncestorName(ancestorName)
-                    }?.second
-                    ?: context.getString(R.string.media_library)
-            }
-        }.getOrDefault(context.getString(R.string.media_library)).also {
-            libraryNameCache[itemId] = it
-        }
-    }
-
-    private fun isSystemAncestorName(name: String): Boolean {
-        val normalized = name.trim().lowercase(Locale.getDefault())
-        return normalized.isBlank() || normalized == "root"
+        val parentId = item.optString("ParentId")
+        val seriesName = item.optString("SeriesName")
+        return libraryTitleMap[parentId]
+            ?: seriesName.takeIf { it.isNotBlank() }
+            ?: context.getString(R.string.media_library)
     }
 
     private fun formatPlaybackHistoryTime(lastPlayedDate: String): String {
@@ -1619,6 +1544,5 @@ class EmbyApiService(
         private const val HOME_CACHE_MAX_AGE_MS = 15L * 60L * 1000L
         private const val LIBRARY_CACHE_MAX_AGE_MS = 15L * 60L * 1000L
         private const val FILTER_CACHE_MAX_AGE_MS = 30L * 60L * 1000L
-        private val HISTORY_LIBRARY_ANCESTOR_TYPES = setOf("CollectionFolder", "UserView", "Channel")
     }
 }

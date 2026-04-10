@@ -13,7 +13,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.navigation.NavigationBarView
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
 data class MediaPosterUiModel(
     val id: String,
@@ -34,7 +33,7 @@ data class MediaLibraryUiModel(
 )
 
 class ServerHomeActivity : AppCompatActivity() {
-    private val networkExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val networkExecutor: ExecutorService = AppExecutors.io
     private val embyApiService by lazy { EmbyApiService(this) }
 
     private lateinit var continueWatchingRecyclerView: RecyclerView
@@ -99,11 +98,6 @@ class ServerHomeActivity : AppCompatActivity() {
         }
 
         loadServerHome()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        networkExecutor.shutdownNow()
     }
 
     private fun loadServerHome() {

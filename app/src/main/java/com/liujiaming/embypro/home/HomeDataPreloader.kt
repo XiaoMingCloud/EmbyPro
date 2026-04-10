@@ -1,7 +1,6 @@
 package com.liujiaming.embypro
 
 import android.content.Context
-import java.util.concurrent.Executors
 import java.util.concurrent.Future
 
 data class PreloadedHomeData(
@@ -18,7 +17,7 @@ data class PreloadedHomeData(
 )
 
 object HomeDataPreloader {
-    private val executor = Executors.newSingleThreadExecutor()
+    private val executor = AppExecutors.io
     private val lock = Any()
 
     private var activeRequest: HomePreloadRequest? = null

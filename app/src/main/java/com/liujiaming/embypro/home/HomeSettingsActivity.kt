@@ -9,10 +9,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
 class HomeSettingsActivity : AppCompatActivity() {
-    private val networkExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val networkExecutor: ExecutorService = AppExecutors.io
     private val embyApiService by lazy { EmbyApiService(this) }
     private val filterStore by lazy { HomeLibraryFilterStore(this) }
 
@@ -59,11 +58,6 @@ class HomeSettingsActivity : AppCompatActivity() {
         EdgeToEdgeHelper.applyInsets(topBar, applyTop = true)
         EdgeToEdgeHelper.applyInsets(recyclerView, applyBottom = true)
         loadLibraries()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        networkExecutor.shutdownNow()
     }
 
     private fun loadLibraries() {

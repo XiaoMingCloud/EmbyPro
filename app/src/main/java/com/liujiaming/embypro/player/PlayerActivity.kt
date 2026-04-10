@@ -39,12 +39,11 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 import kotlin.math.abs
 
 @androidx.annotation.OptIn(UnstableApi::class)
 class PlayerActivity : AppCompatActivity() {
-    private val networkExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val networkExecutor: ExecutorService = AppExecutors.io
     private val embyApiService by lazy { EmbyApiService(this) }
 
     private lateinit var playerView: PlayerView
@@ -182,7 +181,6 @@ class PlayerActivity : AppCompatActivity() {
             activeInstance = null
         }
         releasePlayer()
-        networkExecutor.shutdownNow()
     }
 
     override fun onUserLeaveHint() {

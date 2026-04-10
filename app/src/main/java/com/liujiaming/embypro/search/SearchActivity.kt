@@ -19,10 +19,9 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
 class SearchActivity : AppCompatActivity() {
-    private val networkExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val networkExecutor: ExecutorService = AppExecutors.io
     private val embyApiService by lazy { EmbyApiService(this) }
     private val searchHistoryStore by lazy { SearchHistoryStore(this) }
     private val loadedItems = mutableListOf<MediaPosterUiModel>()
@@ -133,11 +132,6 @@ class SearchActivity : AppCompatActivity() {
         EdgeToEdgeHelper.applyInsets(recyclerView, applyBottom = true)
         renderHistory()
         updateEmptyState()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        networkExecutor.shutdownNow()
     }
 
     private fun submitSearch() {

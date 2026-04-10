@@ -13,10 +13,9 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
 class HomeTabsActivity : AppCompatActivity() {
-    private val networkExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val networkExecutor: ExecutorService = AppExecutors.io
     private val embyApiService by lazy { EmbyApiService(this) }
     private val homeLibraryFilterStore by lazy { HomeLibraryFilterStore(this) }
     private val sessionStore by lazy { ServerSessionStore(this) }
@@ -186,11 +185,6 @@ class HomeTabsActivity : AppCompatActivity() {
         if (syncExcludedHomeLibraries() && !isHomeLoading) {
             connectAndLoadHome()
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        networkExecutor.shutdownNow()
     }
 
     private fun connectAndLoadHome(preferPreloadedData: Boolean = false) {
