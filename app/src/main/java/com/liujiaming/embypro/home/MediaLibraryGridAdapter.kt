@@ -34,23 +34,25 @@ class MediaLibraryGridAdapter(
             accessToken: String?,
             onLibraryClick: (MediaLibraryUiModel) -> Unit
         ) {
-            val placeholder = LibraryVisualHelper.buildPlaceholder(itemView, item.style.fillColor, 14f)
-            coverImage.setImageResource(item.style.iconRes)
-            coverImage.background = placeholder
-            coverImage.setColorFilter(android.graphics.Color.WHITE)
+            applyPlaceholder()
             EmbyImageLoader.load(
                 imageView = coverImage,
                 url = item.imageUrl,
                 token = accessToken,
                 onFailure = {
-                    coverImage.setImageResource(item.style.iconRes)
-                    coverImage.background = placeholder
-                    coverImage.setColorFilter(android.graphics.Color.WHITE)
+                    applyPlaceholder()
                 }
             )
             titleText.text = item.title
             titleText.setTextColor(GlobalThemeManager.primaryTextColor(itemView.context))
             itemView.setDebouncedClickListener { onLibraryClick(item) }
+        }
+
+        private fun applyPlaceholder() {
+            AppIconPlaceholder.apply(
+                imageView = coverImage,
+                cornerRadiusDp = 14f
+            )
         }
     }
 }

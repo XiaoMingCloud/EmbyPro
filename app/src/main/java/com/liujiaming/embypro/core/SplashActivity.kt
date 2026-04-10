@@ -14,6 +14,9 @@ import androidx.appcompat.app.AppCompatActivity
 class SplashActivity : AppCompatActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var hasNavigated = false
+    private val sessionStore by lazy { ServerSessionStore(this) }
+    private val embyApiService by lazy { EmbyApiService(this) }
+    private val homeLibraryFilterStore by lazy { HomeLibraryFilterStore(this) }
 
     private val navigateRunnable = Runnable {
         if (isFinishing || isDestroyed || hasNavigated) return@Runnable
@@ -29,6 +32,8 @@ class SplashActivity : AppCompatActivity() {
         setContentView(R.layout.activity_splash)
         supportActionBar?.hide()
         GlobalThemeManager.apply(this)
+
+        preloadHomeData()
 
         val iconView = findViewById<ImageView>(R.id.splashIconView)
         playIconAnimation(iconView)
@@ -55,6 +60,21 @@ class SplashActivity : AppCompatActivity() {
             playTogether(alpha, scaleX, scaleY)
             start()
         }
+    }
+
+    private fun preloadHomeData() {
+        val activeServer = sessionStore.loadServers().firstOrNull() ?: return
+        if (activeServer.userId.isBlank() || activeServer.accessToken.isBlank()) return
+
+        val baseUrl = embyApiService.buildBaseUrl(activeServer.address, activeServer.port)
+        val excludedLibraryIds = homeLibraryFilterStore.loadExcludedLibraryIds(baseUrl, activeServer.userId)
+        HomeDataPreloader.preload(
+            context = this,
+            baseUrl = baseUrl,
+            userId = activeServer.userId,
+            accessToken = activeServer.accessToken,
+            excludedLibraryIds = excludedLibraryIds
+        )
     }
 
     companion object {

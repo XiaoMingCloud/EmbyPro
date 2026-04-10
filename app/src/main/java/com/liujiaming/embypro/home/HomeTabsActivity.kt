@@ -177,8 +177,7 @@ class HomeTabsActivity : AppCompatActivity() {
         navigationMyItem.setDebouncedClickListener { showTab(Tab.MY) }
         showTab(Tab.HOME)
 
-        connectAndLoadHome()
-        loadMediaLibraries()
+        connectAndLoadHome(preferPreloadedData = true)
     }
 
     override fun onResume() {
@@ -194,21 +193,24 @@ class HomeTabsActivity : AppCompatActivity() {
         networkExecutor.shutdownNow()
     }
 
-    private fun connectAndLoadHome() {
+    private fun connectAndLoadHome(preferPreloadedData: Boolean = false) {
         if (isHomeLoading) return
         isHomeLoading = true
         isHomeLoadFailed = false
         updateHomeLoadFailedVisibility()
         homeRefreshLayout.isRefreshing = true
+        val preloadTask = if (preferPreloadedData) {
+            HomeDataPreloader.takeTask(baseUrl, userId, accessToken, excludedHomeLibraryIds)
+        } else {
+            null
+        }
         networkExecutor.execute {
             val result = runCatching {
-                embyApiService.fetchPublicServerInfo(baseUrl).getOrThrow()
-                val libraries = embyApiService.fetchMediaLibraries(baseUrl, userId, accessToken)
-                    .getOrThrow()
-                    .filterNot { excludedHomeLibraryIds.contains(it.id) }
-                    .shuffled()
-                resetHomeFeedState(libraries)
-                fetchNextHomeFeedBatch()
+                val preloadedData = preloadTask?.get()
+                    ?.getOrNull()
+                    ?.takeIf { it.matches(baseUrl, userId, accessToken, excludedHomeLibrarySignature) }
+
+                preloadedData ?: loadFreshHomeData()
             }
             runOnUiThread {
                 isHomeLoading = false
@@ -216,9 +218,7 @@ class HomeTabsActivity : AppCompatActivity() {
                 result.onSuccess { homeData ->
                     isHomeLoadFailed = false
                     updateHomeLoadFailedVisibility()
-                    homeFeedItems.clear()
-                    homeFeedItems.addAll(homeData)
-                    homeFeedAdapter.notifyDataSetChanged()
+                    applyHomeData(homeData)
                 }.onFailure {
                     isHomeLoadFailed = true
                     updateHomeLoadFailedVisibility()
@@ -270,6 +270,45 @@ class HomeTabsActivity : AppCompatActivity() {
             homeLibraryOffsets[library.id] = 0
             homeLibraryTotals[library.id] = Int.MAX_VALUE
         }
+    }
+
+    private fun loadFreshHomeData(): PreloadedHomeData {
+        embyApiService.fetchPublicServerInfo(baseUrl).getOrThrow()
+        val allLibraries = embyApiService.fetchMediaLibraries(baseUrl, userId, accessToken).getOrThrow()
+        val homeLibraries = allLibraries
+            .filterNot { excludedHomeLibraryIds.contains(it.id) }
+            .shuffled()
+        resetHomeFeedState(homeLibraries)
+        val homeFeed = fetchNextHomeFeedBatch()
+        return PreloadedHomeData(
+            baseUrl = baseUrl,
+            userId = userId,
+            accessToken = accessToken,
+            excludedLibrarySignature = excludedHomeLibrarySignature,
+            homeFeedItems = homeFeed,
+            mediaLibraries = allLibraries,
+            homeLibraryOrder = homeLibraryOrder.toList(),
+            homeLibraryOffsets = homeLibraryOffsets.toMap(),
+            homeLibraryTotals = homeLibraryTotals.toMap(),
+            homeSeenItemIds = homeSeenItemIds.toSet()
+        )
+    }
+
+    private fun applyHomeData(homeData: PreloadedHomeData) {
+        homeSeenItemIds.clear()
+        homeSeenItemIds.addAll(homeData.homeSeenItemIds)
+        homeLibraryOrder.clear()
+        homeLibraryOrder.addAll(homeData.homeLibraryOrder)
+        homeLibraryOffsets.clear()
+        homeLibraryOffsets.putAll(homeData.homeLibraryOffsets)
+        homeLibraryTotals.clear()
+        homeLibraryTotals.putAll(homeData.homeLibraryTotals)
+
+        homeFeedItems.clear()
+        homeFeedItems.addAll(homeData.homeFeedItems)
+        homeFeedAdapter.notifyDataSetChanged()
+
+        bindMediaLibraries(homeData.mediaLibraries)
     }
 
     private fun fetchNextHomeFeedBatch(): List<MediaPosterUiModel> {
@@ -328,23 +367,6 @@ class HomeTabsActivity : AppCompatActivity() {
             accessToken
         ) { library ->
             openLibrary(library)
-        }
-    }
-
-    private fun loadMediaLibraries() {
-        networkExecutor.execute {
-            val result = embyApiService.fetchMediaLibraries(baseUrl, userId, accessToken)
-            runOnUiThread {
-                result.onSuccess { libraries ->
-                    bindMediaLibraries(libraries)
-                }.onFailure { error ->
-                    Toast.makeText(
-                        this,
-                        error.message ?: getString(R.string.server_home_load_failed),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
         }
     }
 
@@ -449,4 +471,16 @@ class HomeTabsActivity : AppCompatActivity() {
         private const val HOME_PAGE_SIZE = 12
         private const val HOME_BATCH_SIZE = 18
     }
+}
+
+private fun PreloadedHomeData.matches(
+    baseUrl: String,
+    userId: String,
+    accessToken: String,
+    excludedLibrarySignature: String
+): Boolean {
+    return this.baseUrl == baseUrl &&
+        this.userId == userId &&
+        this.accessToken == accessToken &&
+        this.excludedLibrarySignature == excludedLibrarySignature
 }

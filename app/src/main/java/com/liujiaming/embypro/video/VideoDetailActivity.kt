@@ -304,11 +304,11 @@ class VideoDetailActivity : AppCompatActivity() {
             url = detail.heroImageUrl,
             token = accessToken,
             onFailure = {
-                posterImage.setImageDrawable(null)
-                posterImage.background = GradientDrawable().apply {
-                    cornerRadius = 18f * resources.displayMetrics.density
-                    setColor(adjustAlpha(onSurfaceVariant, 0.12f))
-                }
+                AppIconPlaceholder.apply(
+                    imageView = posterImage,
+                    cornerRadiusDp = 18f,
+                    backgroundColor = adjustAlpha(onSurfaceVariant, 0.12f)
+                )
             }
         )
 

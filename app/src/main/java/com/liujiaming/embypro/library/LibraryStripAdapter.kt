@@ -1,6 +1,5 @@
 ﻿package com.liujiaming.embypro
 
-import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -35,23 +34,22 @@ class LibraryStripAdapter(
             accessToken: String?,
             onLibraryClick: (MediaLibraryUiModel) -> Unit
         ) {
-            applyPlaceholder(item)
+            applyPlaceholder()
             EmbyImageLoader.load(
                 imageView = coverImage,
                 url = item.imageUrl,
                 token = accessToken,
-                onFailure = { applyPlaceholder(item) }
+                onFailure = { applyPlaceholder() }
             )
             titleText.text = item.title
             itemView.setDebouncedClickListener { onLibraryClick(item) }
         }
 
-        private fun applyPlaceholder(item: MediaLibraryUiModel) {
-            val background = LibraryVisualHelper.buildPlaceholder(itemView, item.style.fillColor, 10f)
-
-            coverImage.background = background
-            coverImage.setImageResource(item.style.iconRes)
-            coverImage.setColorFilter(Color.WHITE)
+        private fun applyPlaceholder() {
+            AppIconPlaceholder.apply(
+                imageView = coverImage,
+                cornerRadiusDp = 10f
+            )
         }
     }
 }

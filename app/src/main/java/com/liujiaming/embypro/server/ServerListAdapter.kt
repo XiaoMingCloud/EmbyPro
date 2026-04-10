@@ -1,8 +1,6 @@
 ﻿package com.liujiaming.embypro
 
-import android.content.Context
 import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -92,7 +90,7 @@ class ServerListAdapter(
         private val menuButton: ImageButton = itemView.findViewById(R.id.serverMenuButton)
 
         fun bind(item: ServerUiModel, actionListener: ServerActionListener) {
-            bindServerIcon(itemView.context, item)
+            bindServerIcon(item)
             nameText.text = item.name
             userText.text = item.username
             statusText.text = item.status
@@ -117,17 +115,15 @@ class ServerListAdapter(
             }
         }
 
-        private fun bindServerIcon(context: Context, item: ServerUiModel) {
-            val placeholder = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = context.resources.displayMetrics.density * 12
-                setColor(Color.parseColor(item.iconStyle.fillColor))
-            }
+        private fun bindServerIcon(item: ServerUiModel) {
+            val placeholderColor = Color.parseColor(item.iconStyle.fillColor)
 
             coverImage.tag = null
-            coverImage.background = placeholder
-            coverImage.setImageDrawable(null)
-            coverImage.clearColorFilter()
+            AppIconPlaceholder.apply(
+                imageView = coverImage,
+                cornerRadiusDp = 12f,
+                backgroundColor = placeholderColor
+            )
 
             val imageSource = item.customAvatarUri.ifBlank { item.avatarUrl }
             if (imageSource.isBlank()) {
@@ -139,8 +135,11 @@ class ServerListAdapter(
                 url = imageSource,
                 token = item.accessToken,
                 onFailure = {
-                    coverImage.background = placeholder
-                    coverImage.setImageDrawable(null)
+                    AppIconPlaceholder.apply(
+                        imageView = coverImage,
+                        cornerRadiusDp = 12f,
+                        backgroundColor = placeholderColor
+                    )
                 }
             )
         }

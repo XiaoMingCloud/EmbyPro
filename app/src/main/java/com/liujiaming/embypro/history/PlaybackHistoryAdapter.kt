@@ -133,8 +133,10 @@ class PlaybackHistoryAdapter(
         }
 
         private fun applyPlaceholder() {
-            posterImage.setImageResource(R.drawable.ic_launcher_foreground)
-            posterImage.clearColorFilter()
+            AppIconPlaceholder.apply(
+                imageView = posterImage,
+                cornerRadiusDp = 14f
+            )
         }
 
         private fun bindPlaybackProgress(item: PlaybackHistoryItemUiModel) {
