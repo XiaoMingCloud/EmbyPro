@@ -28,6 +28,7 @@ class HomeTabsActivity : AppCompatActivity() {
 
     private lateinit var homeContainer: View
     private lateinit var mediaContainer: View
+    private lateinit var musicContainer: View
     private lateinit var myContainer: View
     private lateinit var homeSearchCard: View
     private lateinit var homePrimaryCategoryBar: View
@@ -54,6 +55,7 @@ class HomeTabsActivity : AppCompatActivity() {
     private lateinit var navigationMyText: TextView
 
     private lateinit var connection: ServerConnection
+    private lateinit var musicLibraryScreenController: MusicLibraryScreenController
     private var excludedHomeLibraryIds: Set<String> = emptySet()
     private var excludedHomeLibrarySignature = ""
     private var isHomeLoading = false
@@ -91,6 +93,7 @@ class HomeTabsActivity : AppCompatActivity() {
 
         homeContainer = findViewById(R.id.homeTabContainer)
         mediaContainer = findViewById(R.id.mediaTabContainer)
+        musicContainer = findViewById(R.id.musicTabContainer)
         myContainer = findViewById(R.id.myTabContainer)
         homeSearchCard = findViewById(R.id.homeSearchCard)
         homePrimaryCategoryBar = findViewById(R.id.homePrimaryCategoryBar)
@@ -115,6 +118,12 @@ class HomeTabsActivity : AppCompatActivity() {
         navigationMediaText = findViewById(R.id.navigationMediaText)
         navigationMusicText = findViewById(R.id.navigationMusicText)
         navigationMyText = findViewById(R.id.navigationMyText)
+        musicLibraryScreenController = MusicLibraryScreenController(
+            activity = this,
+            root = musicContainer,
+            connection = connection,
+            embeddedWithBottomNav = true
+        )
 
         homeSearchCard.setDebouncedClickListener {
             AppNavigator.openSearch(this, connection)
@@ -183,12 +192,22 @@ class HomeTabsActivity : AppCompatActivity() {
         navigationHomeItem.setDebouncedClickListener { showTab(Tab.HOME) }
         navigationMediaItem.setDebouncedClickListener { showTab(Tab.MEDIA) }
         navigationMusicItem.setDebouncedClickListener {
-            AppNavigator.openMusicLibrary(this, connection)
+            showTab(Tab.MUSIC)
         }
         navigationMyItem.setDebouncedClickListener { showTab(Tab.MY) }
         showTab(Tab.HOME)
 
         connectAndLoadHome(preferPreloadedData = true)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        musicLibraryScreenController.onStart()
+    }
+
+    override fun onStop() {
+        musicLibraryScreenController.onStop()
+        super.onStop()
     }
 
     override fun onResume() {
@@ -336,6 +355,7 @@ class HomeTabsActivity : AppCompatActivity() {
         currentTab = tab
         homeContainer.visibility = if (tab == Tab.HOME) View.VISIBLE else View.GONE
         mediaContainer.visibility = if (tab == Tab.MEDIA) View.VISIBLE else View.GONE
+        musicContainer.visibility = if (tab == Tab.MUSIC) View.VISIBLE else View.GONE
         myContainer.visibility = if (tab == Tab.MY) View.VISIBLE else View.GONE
         homeSearchCard.visibility = if (tab == Tab.HOME) View.VISIBLE else View.GONE
         homePrimaryCategoryBar.visibility = if (tab == Tab.HOME) View.VISIBLE else View.GONE
@@ -388,7 +408,7 @@ class HomeTabsActivity : AppCompatActivity() {
         val inactiveColor = getColor(R.color.nav_inactive)
         applyNavigationState(navigationHomeIcon, navigationHomeText, tab == Tab.HOME, activeColor, inactiveColor)
         applyNavigationState(navigationMediaIcon, navigationMediaText, tab == Tab.MEDIA, activeColor, inactiveColor)
-        applyNavigationState(navigationMusicIcon, navigationMusicText, false, activeColor, inactiveColor)
+        applyNavigationState(navigationMusicIcon, navigationMusicText, tab == Tab.MUSIC, activeColor, inactiveColor)
         applyNavigationState(navigationMyIcon, navigationMyText, tab == Tab.MY, activeColor, inactiveColor)
     }
 
@@ -409,6 +429,7 @@ class HomeTabsActivity : AppCompatActivity() {
     private enum class Tab {
         HOME,
         MEDIA,
+        MUSIC,
         MY
     }
 

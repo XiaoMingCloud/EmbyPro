@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <dimen name="home_bottom_nav_clearance">108dp</dimen>
+    <dimen name="music_page_side_padding">18dp</dimen>
+    <dimen name="music_page_top_spacing">14dp</dimen>
+    <dimen name="music_page_card_radius">22dp</dimen>
+    <dimen name="music_page_card_padding">18dp</dimen>
 </resources>
