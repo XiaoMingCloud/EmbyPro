@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <size android:height="1dp" />
+    <gradient
+        android:angle="0"
+        android:centerColor="@color/music_library_divider"
+        android:endColor="#00FFFFFF"
+        android:startColor="#00FFFFFF" />
+</shape>

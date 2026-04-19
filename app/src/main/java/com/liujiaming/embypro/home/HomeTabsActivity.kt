@@ -28,6 +28,9 @@ class HomeTabsActivity : AppCompatActivity() {
     private lateinit var mediaContainer: View
     private lateinit var myContainer: View
     private lateinit var homeSearchCard: View
+    private lateinit var homePrimaryCategoryBar: View
+    private lateinit var homeCategoryVideoTab: TextView
+    private lateinit var homeCategoryAudioTab: TextView
     private lateinit var loadFailedContainer: View
     private lateinit var loadFailedText: TextView
     private lateinit var homeRefreshLayout: SwipeRefreshLayout
@@ -37,12 +40,15 @@ class HomeTabsActivity : AppCompatActivity() {
     private lateinit var homeFeedAdapter: MediaPosterAdapter
     private lateinit var navigationHomeItem: View
     private lateinit var navigationMediaItem: View
+    private lateinit var navigationMusicItem: View
     private lateinit var navigationMyItem: View
     private lateinit var navigationHomeIcon: ImageView
     private lateinit var navigationMediaIcon: ImageView
+    private lateinit var navigationMusicIcon: ImageView
     private lateinit var navigationMyIcon: ImageView
     private lateinit var navigationHomeText: TextView
     private lateinit var navigationMediaText: TextView
+    private lateinit var navigationMusicText: TextView
     private lateinit var navigationMyText: TextView
 
     private lateinit var activeServer: ServerUiModel
@@ -54,6 +60,7 @@ class HomeTabsActivity : AppCompatActivity() {
     private var isHomeLoading = false
     private var currentTab = Tab.HOME
     private var isHomeLoadFailed = false
+    private var currentPrimaryCategory = PrimaryCategory.VIDEO
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,6 +91,9 @@ class HomeTabsActivity : AppCompatActivity() {
         mediaContainer = findViewById(R.id.mediaTabContainer)
         myContainer = findViewById(R.id.myTabContainer)
         homeSearchCard = findViewById(R.id.homeSearchCard)
+        homePrimaryCategoryBar = findViewById(R.id.homePrimaryCategoryBar)
+        homeCategoryVideoTab = findViewById(R.id.homeCategoryVideoTab)
+        homeCategoryAudioTab = findViewById(R.id.homeCategoryAudioTab)
         loadFailedContainer = findViewById(R.id.homeLoadFailedContainer)
         loadFailedText = findViewById(R.id.homeLoadFailedText)
         homeRefreshLayout = findViewById(R.id.homeTabContainer)
@@ -93,12 +103,15 @@ class HomeTabsActivity : AppCompatActivity() {
         val bottomNavigationCard = findViewById<View>(R.id.homeTabsBottomNavigationCard)
         navigationHomeItem = findViewById(R.id.navigationHomeItem)
         navigationMediaItem = findViewById(R.id.navigationMediaItem)
+        navigationMusicItem = findViewById(R.id.navigationMusicItem)
         navigationMyItem = findViewById(R.id.navigationMyItem)
         navigationHomeIcon = findViewById(R.id.navigationHomeIcon)
         navigationMediaIcon = findViewById(R.id.navigationMediaIcon)
+        navigationMusicIcon = findViewById(R.id.navigationMusicIcon)
         navigationMyIcon = findViewById(R.id.navigationMyIcon)
         navigationHomeText = findViewById(R.id.navigationHomeText)
         navigationMediaText = findViewById(R.id.navigationMediaText)
+        navigationMusicText = findViewById(R.id.navigationMusicText)
         navigationMyText = findViewById(R.id.navigationMyText)
 
         homeSearchCard.setDebouncedClickListener {
@@ -108,6 +121,12 @@ class HomeTabsActivity : AppCompatActivity() {
                     .putExtra(SearchActivity.EXTRA_USER_ID, userId)
                     .putExtra(SearchActivity.EXTRA_ACCESS_TOKEN, accessToken)
             )
+        }
+        homeCategoryVideoTab.setDebouncedClickListener {
+            updatePrimaryCategorySelection(PrimaryCategory.VIDEO)
+        }
+        homeCategoryAudioTab.setDebouncedClickListener {
+            updatePrimaryCategorySelection(PrimaryCategory.AUDIO)
         }
         findViewById<View>(R.id.myServerListEntry).setDebouncedClickListener {
             startActivity(Intent(this, MainActivity::class.java))
@@ -170,9 +189,16 @@ class HomeTabsActivity : AppCompatActivity() {
         })
         homeRefreshLayout.setOnRefreshListener { refreshHomeFeed() }
         mediaTabRecyclerView.layoutManager = GridLayoutManager(this, 1)
+        updatePrimaryCategorySelection(PrimaryCategory.VIDEO)
 
         navigationHomeItem.setDebouncedClickListener { showTab(Tab.HOME) }
         navigationMediaItem.setDebouncedClickListener { showTab(Tab.MEDIA) }
+        navigationMusicItem.setDebouncedClickListener {
+            startActivity(
+                Intent(this, LibraryItemsActivity::class.java)
+                    .putExtra(LibraryItemsActivity.EXTRA_LIBRARY_NAME, getString(R.string.music_library_name))
+            )
+        }
         navigationMyItem.setDebouncedClickListener { showTab(Tab.MY) }
         showTab(Tab.HOME)
 
@@ -384,8 +410,49 @@ class HomeTabsActivity : AppCompatActivity() {
         mediaContainer.visibility = if (tab == Tab.MEDIA) View.VISIBLE else View.GONE
         myContainer.visibility = if (tab == Tab.MY) View.VISIBLE else View.GONE
         homeSearchCard.visibility = if (tab == Tab.HOME) View.VISIBLE else View.GONE
+        homePrimaryCategoryBar.visibility = if (tab == Tab.HOME) View.VISIBLE else View.GONE
         updateNavigationSelection(tab)
         updateHomeLoadFailedVisibility()
+    }
+
+    private fun updatePrimaryCategorySelection(category: PrimaryCategory) {
+        currentPrimaryCategory = category
+        applyPrimaryCategoryTabState(
+            textView = homeCategoryVideoTab,
+            selected = category == PrimaryCategory.VIDEO,
+            selectedBackground = R.drawable.bg_home_primary_tab_video,
+            selectedTextColor = getColor(R.color.home_primary_tab_video_text)
+        )
+        applyPrimaryCategoryTabState(
+            textView = homeCategoryAudioTab,
+            selected = category == PrimaryCategory.AUDIO,
+            selectedBackground = R.drawable.bg_home_primary_tab_audio,
+            selectedTextColor = getColor(R.color.home_primary_tab_audio_text)
+        )
+    }
+
+    private fun applyPrimaryCategoryTabState(
+        textView: TextView,
+        selected: Boolean,
+        selectedBackground: Int,
+        selectedTextColor: Int
+    ) {
+        textView.isSelected = selected
+        textView.setBackgroundResource(
+            if (selected) {
+                selectedBackground
+            } else {
+                R.drawable.bg_home_secondary_tab
+            }
+        )
+        textView.setTextColor(
+            if (selected) {
+                selectedTextColor
+            } else {
+                getColor(R.color.home_primary_tab_unselected_text)
+            }
+        )
+        textView.alpha = if (selected) 1f else 0.92f
     }
 
     private fun updateNavigationSelection(tab: Tab) {
@@ -393,6 +460,7 @@ class HomeTabsActivity : AppCompatActivity() {
         val inactiveColor = getColor(R.color.nav_inactive)
         applyNavigationState(navigationHomeIcon, navigationHomeText, tab == Tab.HOME, activeColor, inactiveColor)
         applyNavigationState(navigationMediaIcon, navigationMediaText, tab == Tab.MEDIA, activeColor, inactiveColor)
+        applyNavigationState(navigationMusicIcon, navigationMusicText, false, activeColor, inactiveColor)
         applyNavigationState(navigationMyIcon, navigationMyText, tab == Tab.MY, activeColor, inactiveColor)
     }
 
@@ -460,6 +528,11 @@ class HomeTabsActivity : AppCompatActivity() {
         HOME,
         MEDIA,
         MY
+    }
+
+    private enum class PrimaryCategory {
+        VIDEO,
+        AUDIO
     }
 
     companion object {

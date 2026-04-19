@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <gradient
+        android:centerColor="@color/music_library_cover_glow"
+        android:endColor="@android:color/transparent"
+        android:gradientRadius="78dp"
+        android:startColor="#4048E6BE"
+        android:type="radial" />
+</shape>

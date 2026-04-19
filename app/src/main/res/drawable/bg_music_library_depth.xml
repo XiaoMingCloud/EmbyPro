@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="90"
+                android:endColor="@color/music_library_depth_end"
+                android:startColor="@android:color/transparent" />
+        </shape>
+    </item>
+
+    <item
+        android:gravity="top|center_horizontal"
+        android:height="420dp"
+        android:top="90dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:centerColor="#0E95C6EA"
+                android:endColor="@android:color/transparent"
+                android:gradientRadius="300dp"
+                android:startColor="@color/music_library_depth_start"
+                android:type="radial" />
+        </shape>
+    </item>
+</layer-list>

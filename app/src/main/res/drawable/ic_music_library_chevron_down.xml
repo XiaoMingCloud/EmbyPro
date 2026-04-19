@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@color/music_library_icon"
+        android:pathData="M7.41,7.84L12,12.42L16.59,7.84L18,9.25L12,15.25L6,9.25L7.41,7.84ZM7.41,14.84L12,19.42L16.59,14.84L18,16.25L12,22.25L6,16.25L7.41,14.84Z" />
+</vector>
