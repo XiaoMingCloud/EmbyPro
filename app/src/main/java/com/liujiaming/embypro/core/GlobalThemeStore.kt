@@ -36,8 +36,21 @@ class GlobalThemeStore(context: Context) {
         preferences.edit().putString(KEY_THEME, option.key).apply()
     }
 
+    fun loadBackgroundImageUri(): String? {
+        return preferences.getString(KEY_BACKGROUND_IMAGE_URI, null)
+    }
+
+    fun saveBackgroundImageUri(uri: String) {
+        preferences.edit().putString(KEY_BACKGROUND_IMAGE_URI, uri).apply()
+    }
+
+    fun clearBackgroundImageUri() {
+        preferences.edit().remove(KEY_BACKGROUND_IMAGE_URI).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "global_theme_preferences"
         private const val KEY_THEME = "selected_theme"
+        private const val KEY_BACKGROUND_IMAGE_URI = "background_image_uri"
     }
 }

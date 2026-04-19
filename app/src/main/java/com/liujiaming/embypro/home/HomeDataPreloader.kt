@@ -7,6 +7,7 @@ data class PreloadedHomeData(
     val baseUrl: String,
     val userId: String,
     val accessToken: String,
+    val primaryCategoryKey: String,
     val excludedLibrarySignature: String,
     val homeFeedItems: List<MediaPosterUiModel>,
     val mediaLibraries: List<MediaLibraryUiModel>,
@@ -28,7 +29,8 @@ object HomeDataPreloader {
         baseUrl: String,
         userId: String,
         accessToken: String,
-        excludedLibraryIds: Set<String>
+        excludedLibraryIds: Set<String>,
+        primaryCategoryKey: String
     ) {
         if (baseUrl.isBlank() || userId.isBlank() || accessToken.isBlank()) return
 
@@ -36,6 +38,7 @@ object HomeDataPreloader {
             baseUrl = baseUrl,
             userId = userId,
             accessToken = accessToken,
+            primaryCategoryKey = primaryCategoryKey,
             excludedLibrarySignature = buildExcludedSignature(excludedLibraryIds)
         )
 
@@ -61,12 +64,14 @@ object HomeDataPreloader {
         baseUrl: String,
         userId: String,
         accessToken: String,
-        excludedLibraryIds: Set<String>
+        excludedLibraryIds: Set<String>,
+        primaryCategoryKey: String
     ): Future<Result<PreloadedHomeData>>? {
         val expectedRequest = HomePreloadRequest(
             baseUrl = baseUrl,
             userId = userId,
             accessToken = accessToken,
+            primaryCategoryKey = primaryCategoryKey,
             excludedLibrarySignature = buildExcludedSignature(excludedLibraryIds)
         )
 
@@ -90,8 +95,10 @@ object HomeDataPreloader {
                 userId = request.userId,
                 accessToken = request.accessToken
             ),
-            excludedLibraryIds = excludedLibraryIds
+            excludedLibraryIds = excludedLibraryIds,
+            primaryCategoryKey = request.primaryCategoryKey
         ).getOrThrow().copy(
+            primaryCategoryKey = request.primaryCategoryKey,
             excludedLibrarySignature = request.excludedLibrarySignature
         )
     }
@@ -106,6 +113,7 @@ object HomeDataPreloader {
         val baseUrl: String,
         val userId: String,
         val accessToken: String,
+        val primaryCategoryKey: String,
         val excludedLibrarySignature: String
     )
 }

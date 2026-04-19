@@ -34,9 +34,10 @@ class MusicLibraryActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        EdgeToEdgeHelper.enable(this, lightSystemBars = false)
+        EdgeToEdgeHelper.enable(this, lightSystemBars = GlobalThemeStore(this).loadTheme().lightSystemBars)
         setContentView(R.layout.activity_music_library)
         supportActionBar?.hide()
+        GlobalThemeManager.apply(this)
 
         connection = requireServerConnection(sessionStore, serverRepository) ?: return
 

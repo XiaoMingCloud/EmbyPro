@@ -8,13 +8,16 @@ class HomeFeedRepository(context: Context) {
 
     fun buildHomeData(
         connection: ServerConnection,
-        excludedLibraryIds: Set<String>
+        excludedLibraryIds: Set<String>,
+        primaryCategoryKey: String
     ): Result<PreloadedHomeData> {
         return runCatching {
             serverRepository.fetchPublicServerInfo(connection.baseUrl).getOrThrow()
 
             val allLibraries = mediaRepository.fetchMediaLibraries(connection).getOrThrow()
+            val categoryLibraries = filterLibrariesByCategory(allLibraries, primaryCategoryKey)
             val homeLibraries = allLibraries
+                .filter { library -> categoryLibraries.any { it.id == library.id } }
                 .filterNot { excludedLibraryIds.contains(it.id) }
                 .shuffled()
 
@@ -38,9 +41,10 @@ class HomeFeedRepository(context: Context) {
                 baseUrl = connection.baseUrl,
                 userId = connection.userId,
                 accessToken = connection.accessToken,
+                primaryCategoryKey = primaryCategoryKey,
                 excludedLibrarySignature = buildExcludedSignature(excludedLibraryIds),
                 homeFeedItems = homeFeedItems,
-                mediaLibraries = allLibraries,
+                mediaLibraries = categoryLibraries,
                 homeLibraryOrder = homeLibraries,
                 homeLibraryOffsets = offsets.toMap(),
                 homeLibraryTotals = totals.toMap(),
@@ -109,6 +113,18 @@ class HomeFeedRepository(context: Context) {
         return excludedLibraryIds.toList()
             .sorted()
             .joinToString("|")
+    }
+
+    private fun filterLibrariesByCategory(
+        libraries: List<MediaLibraryUiModel>,
+        primaryCategoryKey: String
+    ): List<MediaLibraryUiModel> {
+        val isAudio = primaryCategoryKey.equals("audio", ignoreCase = true)
+        return if (isAudio) {
+            libraries.filter { it.collectionType.equals("music", ignoreCase = true) }
+        } else {
+            libraries.filterNot { it.collectionType.equals("music", ignoreCase = true) }
+        }
     }
 
     companion object {

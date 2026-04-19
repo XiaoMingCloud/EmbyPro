@@ -153,6 +153,10 @@
     <string name="theme_light_blue">淡蓝色</string>
     <string name="theme_light_yellow">淡黄色</string>
     <string name="settings_home_display_subtitle">管理首页随机展示的媒体库范围</string>
+    <string name="settings_background_image_title">全局背景图片</string>
+    <string name="settings_background_image_none">未设置，点击选择本地图片（长按可清除）</string>
+    <string name="settings_background_image_selected">已设置本地背景（长按可清除）</string>
+    <string name="settings_background_image_cleared">已清除全局背景图片</string>
     <string name="home_settings_subtitle">排除某个媒体库后，它的内容将不会出现在首页随机流里，但仍然可以正常搜索。</string>
     <string name="home_settings_empty">暂时没有可配置的媒体库。</string>
     <string name="home_settings_load_failed">加载媒体库列表失败</string>

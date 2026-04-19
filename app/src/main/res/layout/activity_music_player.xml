@@ -3,14 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/music_library_background">
-
-    <View
-        android:layout_width="540dp"
-        android:layout_height="540dp"
-        android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="-72dp"
-        android:background="@drawable/bg_music_library_glow_cyan" />
+    android:background="@android:color/transparent">
 
     <LinearLayout
         android:layout_width="match_parent"

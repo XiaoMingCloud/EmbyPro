@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.drawable.Drawable
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -33,17 +34,40 @@ object GlobalThemeManager {
     }
 
     fun apply(activity: Activity) {
-        val option = GlobalThemeStore(activity).loadTheme()
+        val themeStore = GlobalThemeStore(activity)
+        val option = themeStore.loadTheme()
         val content = activity.findViewById<ViewGroup>(android.R.id.content) ?: return
         val root = content.getChildAt(0) ?: return
         val backgroundColor = activity.getColor(option.backgroundRes)
-        root.setBackgroundColor(backgroundColor)
-        content.setBackgroundColor(backgroundColor)
+        val backgroundDrawable = resolveBackgroundDrawable(activity, themeStore, backgroundColor)
+        root.background = backgroundDrawable
+        content.background = backgroundDrawable.constantState?.newDrawable()?.mutate() ?: backgroundDrawable
         WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
             isAppearanceLightStatusBars = option.lightSystemBars
             isAppearanceLightNavigationBars = option.lightSystemBars
         }
         applyForegroundColors(root, option)
+    }
+
+    private fun resolveBackgroundDrawable(
+        activity: Activity,
+        themeStore: GlobalThemeStore,
+        fallbackColor: Int
+    ): Drawable {
+        val backgroundUri = themeStore.loadBackgroundImageUri()
+        if (backgroundUri.isNullOrBlank()) {
+            return android.graphics.drawable.ColorDrawable(fallbackColor)
+        }
+
+        return runCatching {
+            activity.contentResolver.openInputStream(android.net.Uri.parse(backgroundUri)).use { stream ->
+                Drawable.createFromStream(stream, backgroundUri)
+                    ?: android.graphics.drawable.ColorDrawable(fallbackColor)
+            }
+        }.getOrElse {
+            themeStore.clearBackgroundImageUri()
+            android.graphics.drawable.ColorDrawable(fallbackColor)
+        }
     }
 
     fun currentThemeLabel(activity: Activity): String {
@@ -93,21 +117,17 @@ object GlobalThemeManager {
 
     private fun resolveCardBackgroundColor(option: GlobalThemeOption): Int {
         return if (option == GlobalThemeOption.BLACK) {
-            Color.parseColor("#FF1C1C1E")
+            Color.parseColor("#33FFFFFF")
         } else {
-            ColorUtils.blendARGB(
-                GlobalThemeStoreColorCache.colorFor(option),
-                Color.WHITE,
-                0.56f
-            )
+            ColorUtils.setAlphaComponent(Color.WHITE, 0x66)
         }
     }
 
     private fun resolveCardStrokeColor(option: GlobalThemeOption): Int {
         return if (option == GlobalThemeOption.BLACK) {
-            Color.parseColor("#2AFFFFFF")
+            Color.parseColor("#66FFFFFF")
         } else {
-            Color.parseColor("#1F1B1B1F")
+            Color.parseColor("#99FFFFFF")
         }
     }
 

@@ -3,6 +3,8 @@ package com.liujiaming.embypro
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.os.Bundle
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
@@ -62,6 +64,7 @@ class HomeTabsActivity : AppCompatActivity() {
     private var currentTab = Tab.HOME
     private var isHomeLoadFailed = false
     private var currentPrimaryCategory = PrimaryCategory.VIDEO
+    private lateinit var primaryCategoryGestureDetector: GestureDetector
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -127,6 +130,34 @@ class HomeTabsActivity : AppCompatActivity() {
 
         homeSearchCard.setDebouncedClickListener {
             AppNavigator.openSearch(this, connection)
+        }
+        primaryCategoryGestureDetector = GestureDetector(
+            this,
+            object : GestureDetector.SimpleOnGestureListener() {
+                override fun onDown(e: MotionEvent): Boolean = true
+
+                override fun onFling(
+                    e1: MotionEvent,
+                    e2: MotionEvent,
+                    velocityX: Float,
+                    velocityY: Float
+                ): Boolean {
+                    val deltaX = e2.x - e1.x
+                    val deltaY = e2.y - e1.y
+                    if (kotlin.math.abs(deltaX) < 60f || kotlin.math.abs(deltaX) <= kotlin.math.abs(deltaY)) {
+                        return false
+                    }
+                    if (deltaX > 0f) {
+                        updatePrimaryCategorySelection(PrimaryCategory.VIDEO)
+                    } else {
+                        updatePrimaryCategorySelection(PrimaryCategory.AUDIO)
+                    }
+                    return true
+                }
+            }
+        )
+        homePrimaryCategoryBar.setOnTouchListener { _, event ->
+            primaryCategoryGestureDetector.onTouchEvent(event)
         }
         homeCategoryVideoTab.setDebouncedClickListener {
             updatePrimaryCategorySelection(PrimaryCategory.VIDEO)
@@ -218,18 +249,27 @@ class HomeTabsActivity : AppCompatActivity() {
         }
     }
 
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (currentTab == Tab.HOME) {
+            primaryCategoryGestureDetector.onTouchEvent(ev)
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     private fun connectAndLoadHome(preferPreloadedData: Boolean = false) {
         if (isHomeLoading) return
         isHomeLoading = true
         isHomeLoadFailed = false
         updateHomeLoadFailedVisibility()
         homeRefreshLayout.isRefreshing = true
+        preloadCurrentCategoryData()
         val preloadTask = if (preferPreloadedData) {
             HomeDataPreloader.takeTask(
                 connection.baseUrl,
                 connection.userId,
                 connection.accessToken,
-                excludedHomeLibraryIds
+                excludedHomeLibraryIds,
+                currentPrimaryCategory.key
             )
         } else {
             null
@@ -243,7 +283,8 @@ class HomeTabsActivity : AppCompatActivity() {
                             connection.baseUrl,
                             connection.userId,
                             connection.accessToken,
-                            excludedHomeLibrarySignature
+                            excludedHomeLibrarySignature,
+                            currentPrimaryCategory.key
                         )
                     }
 
@@ -306,9 +347,16 @@ class HomeTabsActivity : AppCompatActivity() {
     }
 
     private fun loadFreshHomeData(): PreloadedHomeData {
-        return homeFeedRepository.buildHomeData(connection, excludedHomeLibraryIds)
+        return homeFeedRepository.buildHomeData(
+            connection = connection,
+            excludedLibraryIds = excludedHomeLibraryIds,
+            primaryCategoryKey = currentPrimaryCategory.key
+        )
             .getOrThrow()
-            .copy(excludedLibrarySignature = excludedHomeLibrarySignature)
+            .copy(
+                excludedLibrarySignature = excludedHomeLibrarySignature,
+                primaryCategoryKey = currentPrimaryCategory.key
+            )
     }
 
     private fun applyHomeData(homeData: PreloadedHomeData) {
@@ -364,6 +412,7 @@ class HomeTabsActivity : AppCompatActivity() {
     }
 
     private fun updatePrimaryCategorySelection(category: PrimaryCategory) {
+        val changed = currentPrimaryCategory != category
         currentPrimaryCategory = category
         applyPrimaryCategoryTabState(
             textView = homeCategoryVideoTab,
@@ -376,6 +425,20 @@ class HomeTabsActivity : AppCompatActivity() {
             selected = category == PrimaryCategory.AUDIO,
             selectedBackground = R.drawable.bg_home_primary_tab_audio,
             selectedTextColor = getColor(R.color.home_primary_tab_audio_text)
+        )
+        if (changed && currentTab == Tab.HOME && !isHomeLoading) {
+            connectAndLoadHome(preferPreloadedData = true)
+        }
+    }
+
+    private fun preloadCurrentCategoryData() {
+        HomeDataPreloader.preload(
+            context = this,
+            baseUrl = connection.baseUrl,
+            userId = connection.userId,
+            accessToken = connection.accessToken,
+            excludedLibraryIds = excludedHomeLibraryIds,
+            primaryCategoryKey = currentPrimaryCategory.key
         )
     }
 
@@ -435,7 +498,10 @@ class HomeTabsActivity : AppCompatActivity() {
 
     private enum class PrimaryCategory {
         VIDEO,
-        AUDIO
+        AUDIO;
+
+        val key: String
+            get() = name.lowercase()
     }
 }
 
@@ -443,10 +509,12 @@ private fun PreloadedHomeData.matches(
     baseUrl: String,
     userId: String,
     accessToken: String,
-    excludedLibrarySignature: String
+    excludedLibrarySignature: String,
+    primaryCategoryKey: String
 ): Boolean {
     return this.baseUrl == baseUrl &&
         this.userId == userId &&
         this.accessToken == accessToken &&
-        this.excludedLibrarySignature == excludedLibrarySignature
+        this.excludedLibrarySignature == excludedLibrarySignature &&
+        this.primaryCategoryKey == primaryCategoryKey
 }

@@ -73,7 +73,8 @@ class SplashActivity : AppCompatActivity() {
             baseUrl = baseUrl,
             userId = activeServer.userId,
             accessToken = activeServer.accessToken,
-            excludedLibraryIds = excludedLibraryIds
+            excludedLibraryIds = excludedLibraryIds,
+            primaryCategoryKey = "video"
         )
     }
 
