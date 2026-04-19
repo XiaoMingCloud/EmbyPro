@@ -1,6 +1,5 @@
 package com.liujiaming.embypro
 
-import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.ImageButton
@@ -13,11 +12,10 @@ import androidx.recyclerview.widget.RecyclerView
 
 class MusicListActivity : AppCompatActivity() {
     private val sessionStore by lazy { ServerSessionStore(this) }
-    private val embyApiService by lazy { EmbyApiService(this) }
+    private val musicRepository by lazy { MusicRepository(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
 
-    private lateinit var baseUrl: String
-    private lateinit var userId: String
-    private lateinit var accessToken: String
+    private lateinit var connection: ServerConnection
     private lateinit var browseType: MusicBrowseType
 
     private var containerId: String? = null
@@ -48,7 +46,7 @@ class MusicListActivity : AppCompatActivity() {
         setContentView(R.layout.activity_music_list)
         supportActionBar?.hide()
 
-        resolveSessionParams()
+        connection = requireServerConnection(sessionStore, serverRepository) ?: return
         browseType = MusicBrowseType.valueOf(
             intent.getStringExtra(EXTRA_BROWSE_TYPE).orEmpty().ifBlank { MusicBrowseType.SONGS.name }
         )
@@ -69,10 +67,16 @@ class MusicListActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.musicListBackButton).setDebouncedClickListener { finish() }
         partitionRow.setDebouncedClickListener { showLibraryPicker() }
         findViewById<View>(R.id.musicListRetryButton).setDebouncedClickListener {
-            MusicLibraryRepository.connect(this, baseUrl, userId, accessToken, forceRefresh = true)
+            MusicLibraryRepository.connect(
+                this,
+                connection.baseUrl,
+                connection.userId,
+                connection.accessToken,
+                forceRefresh = true
+            )
         }
 
-        adapter = MusicListAdapter(items, accessToken) { entry ->
+        adapter = MusicListAdapter(items, connection.accessToken) { entry ->
             if (entry.kind == MusicEntryKind.SONG) {
                 openPlayer(entry)
             } else {
@@ -89,25 +93,12 @@ class MusicListActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         MusicLibraryRepository.subscribe(stateListener)
-        MusicLibraryRepository.connect(this, baseUrl, userId, accessToken)
+        MusicLibraryRepository.connect(this, connection.baseUrl, connection.userId, connection.accessToken)
     }
 
     override fun onStop() {
         MusicLibraryRepository.unsubscribe(stateListener)
         super.onStop()
-    }
-
-    private fun resolveSessionParams() {
-        baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty()
-        userId = intent.getStringExtra(EXTRA_USER_ID).orEmpty()
-        accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty()
-
-        if (baseUrl.isNotBlank() && userId.isNotBlank() && accessToken.isNotBlank()) return
-
-        val activeServer = sessionStore.loadServers().firstOrNull() ?: return
-        baseUrl = baseUrl.ifBlank { embyApiService.buildBaseUrl(activeServer.address, activeServer.port) }
-        userId = userId.ifBlank { activeServer.userId }
-        accessToken = accessToken.ifBlank { activeServer.accessToken }
     }
 
     private fun renderLibraryState(state: MusicLibraryState) {
@@ -145,10 +136,8 @@ class MusicListActivity : AppCompatActivity() {
         showLoading()
 
         AppExecutors.io.execute {
-            val result = embyApiService.fetchMusicBrowsePage(
-                baseUrl = baseUrl,
-                userId = userId,
-                accessToken = accessToken,
+            val result = musicRepository.fetchMusicBrowsePage(
+                connection = connection,
                 libraryId = libraryId,
                 browseType = browseType,
                 containerId = containerId,
@@ -173,14 +162,12 @@ class MusicListActivity : AppCompatActivity() {
     }
 
     private fun openNestedList(entry: MusicListEntryUiModel) {
-        startActivity(
-            Intent(this, MusicListActivity::class.java)
-                .putExtra(EXTRA_BROWSE_TYPE, entry.browseType.name)
-                .putExtra(EXTRA_CONTAINER_ID, entry.id)
-                .putExtra(EXTRA_CONTAINER_TITLE, entry.title)
-                .putExtra(EXTRA_BASE_URL, baseUrl)
-                .putExtra(EXTRA_USER_ID, userId)
-                .putExtra(EXTRA_ACCESS_TOKEN, accessToken)
+        AppNavigator.openMusicList(
+            activity = this,
+            connection = connection,
+            browseType = entry.browseType,
+            containerId = entry.id,
+            containerTitle = entry.title
         )
     }
 
@@ -189,30 +176,16 @@ class MusicListActivity : AppCompatActivity() {
         val currentIndex = queue.indexOfFirst { it.id == entry.id }
         if (currentIndex < 0) return
 
-        startActivity(
-            Intent(this, MusicPlayerActivity::class.java)
-                .putExtra(MusicPlayerActivity.EXTRA_BASE_URL, baseUrl)
-                .putExtra(MusicPlayerActivity.EXTRA_USER_ID, userId)
-                .putExtra(MusicPlayerActivity.EXTRA_ACCESS_TOKEN, accessToken)
-                .putExtra(MusicPlayerActivity.EXTRA_LIBRARY_ID, lastLibraryId)
-                .putExtra(MusicPlayerActivity.EXTRA_QUEUE_TITLE, pageTitleView.text.toString())
-                .putStringArrayListExtra(
-                    MusicPlayerActivity.EXTRA_QUEUE_IDS,
-                    ArrayList(queue.map { it.id })
-                )
-                .putStringArrayListExtra(
-                    MusicPlayerActivity.EXTRA_QUEUE_TITLES,
-                    ArrayList(queue.map { it.title })
-                )
-                .putStringArrayListExtra(
-                    MusicPlayerActivity.EXTRA_QUEUE_SUBTITLES,
-                    ArrayList(queue.map { it.subtitle })
-                )
-                .putStringArrayListExtra(
-                    MusicPlayerActivity.EXTRA_QUEUE_IMAGES,
-                    ArrayList(queue.map { it.imageUrl.orEmpty() })
-                )
-                .putExtra(MusicPlayerActivity.EXTRA_QUEUE_INDEX, currentIndex)
+        AppNavigator.openMusicPlayer(
+            activity = this,
+            connection = connection,
+            libraryId = lastLibraryId,
+            queueTitle = pageTitleView.text.toString(),
+            queueIds = ArrayList(queue.map { it.id }),
+            queueTitles = ArrayList(queue.map { it.title }),
+            queueSubtitles = ArrayList(queue.map { it.subtitle }),
+            queueImages = ArrayList(queue.map { it.imageUrl.orEmpty() }),
+            queueIndex = currentIndex
         )
     }
 
@@ -261,13 +234,9 @@ class MusicListActivity : AppCompatActivity() {
         emptyContainer.visibility = View.GONE
         errorContainer.visibility = View.GONE
     }
-
     companion object {
         const val EXTRA_BROWSE_TYPE = "extra_browse_type"
         const val EXTRA_CONTAINER_ID = "extra_container_id"
         const val EXTRA_CONTAINER_TITLE = "extra_container_title"
-        const val EXTRA_BASE_URL = "extra_base_url"
-        const val EXTRA_USER_ID = "extra_user_id"
-        const val EXTRA_ACCESS_TOKEN = "extra_access_token"
     }
 }

@@ -12,12 +12,12 @@ import java.util.concurrent.ExecutorService
 
 class HomeSettingsActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
-    private val embyApiService by lazy { EmbyApiService(this) }
-    private val filterStore by lazy { HomeLibraryFilterStore(this) }
+    private val mediaRepository by lazy { MediaRepository(this) }
+    private val preferenceStore by lazy { AppPreferenceStore(this) }
+    private val sessionStore by lazy { ServerSessionStore(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
 
-    private lateinit var baseUrl: String
-    private lateinit var userId: String
-    private lateinit var accessToken: String
+    private lateinit var connection: ServerConnection
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var emptyText: TextView
@@ -32,17 +32,9 @@ class HomeSettingsActivity : AppCompatActivity() {
         supportActionBar?.hide()
         GlobalThemeManager.apply(this)
 
-        baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty()
-        userId = intent.getStringExtra(EXTRA_USER_ID).orEmpty()
-        accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty()
+        connection = requireServerConnection(sessionStore, serverRepository) ?: return
 
-        if (baseUrl.isBlank() || userId.isBlank() || accessToken.isBlank()) {
-            Toast.makeText(this, getString(R.string.server_data_missing), Toast.LENGTH_SHORT).show()
-            finish()
-            return
-        }
-
-        excludedIds.addAll(filterStore.loadExcludedLibraryIds(baseUrl, userId))
+        excludedIds.addAll(preferenceStore.loadExcludedHomeLibraryIds(connection.baseUrl, connection.userId))
         val topBar = findViewById<View>(R.id.homeSettingsTopBar)
         recyclerView = findViewById(R.id.homeSettingsRecyclerView)
         emptyText = findViewById(R.id.homeSettingsEmptyText)
@@ -50,7 +42,7 @@ class HomeSettingsActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.homeSettingsBackButton).setDebouncedClickListener { finish() }
         recyclerView.layoutManager = LinearLayoutManager(this)
         adapter = HomeLibraryFilterAdapter(libraries, excludedIds) { library, excluded ->
-            filterStore.setExcluded(baseUrl, userId, library.id, excluded)
+            preferenceStore.setHomeLibraryExcluded(connection.baseUrl, connection.userId, library.id, excluded)
             adapter.updateExcluded(library.id, excluded)
         }
         recyclerView.adapter = adapter
@@ -68,7 +60,7 @@ class HomeSettingsActivity : AppCompatActivity() {
 
     private fun loadLibraries() {
         networkExecutor.execute {
-            val result = embyApiService.fetchMediaLibraries(baseUrl, userId, accessToken)
+            val result = mediaRepository.fetchMediaLibraries(connection)
             runOnUiThread {
                 result.onSuccess { items ->
                     libraries.clear()
@@ -83,11 +75,5 @@ class HomeSettingsActivity : AppCompatActivity() {
                 }
             }
         }
-    }
-
-    companion object {
-        const val EXTRA_BASE_URL = "extra_base_url"
-        const val EXTRA_USER_ID = "extra_user_id"
-        const val EXTRA_ACCESS_TOKEN = "extra_access_token"
     }
 }

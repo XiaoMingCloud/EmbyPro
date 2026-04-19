@@ -9,6 +9,9 @@ import androidx.appcompat.app.AppCompatActivity
 
 class SettingsActivity : AppCompatActivity() {
     private lateinit var topBar: View
+    private val sessionStore by lazy { ServerSessionStore(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
+    private lateinit var connection: ServerConnection
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -16,6 +19,7 @@ class SettingsActivity : AppCompatActivity() {
         setContentView(R.layout.activity_settings)
         supportActionBar?.hide()
         GlobalThemeManager.apply(this)
+        connection = requireServerConnection(sessionStore, serverRepository) ?: return
 
         topBar = findViewById(R.id.settingsTopBar)
         val currentThemeValueText = findViewById<TextView>(R.id.settingsThemeValueText)
@@ -24,20 +28,10 @@ class SettingsActivity : AppCompatActivity() {
             startActivity(Intent(this, ThemeSettingsActivity::class.java))
         }
         findViewById<View>(R.id.settingsMusicEntry).setDebouncedClickListener {
-            startActivity(
-                Intent(this, MusicSettingsActivity::class.java)
-                    .putExtra(MusicSettingsActivity.EXTRA_BASE_URL, intent.getStringExtra(EXTRA_BASE_URL).orEmpty())
-                    .putExtra(MusicSettingsActivity.EXTRA_USER_ID, intent.getStringExtra(EXTRA_USER_ID).orEmpty())
-                    .putExtra(MusicSettingsActivity.EXTRA_ACCESS_TOKEN, intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty())
-            )
+            AppNavigator.openMusicSettings(this, connection)
         }
         findViewById<View>(R.id.settingsHomeDisplayEntry).setDebouncedClickListener {
-            startActivity(
-                Intent(this, HomeSettingsActivity::class.java)
-                    .putExtra(HomeSettingsActivity.EXTRA_BASE_URL, intent.getStringExtra(EXTRA_BASE_URL).orEmpty())
-                    .putExtra(HomeSettingsActivity.EXTRA_USER_ID, intent.getStringExtra(EXTRA_USER_ID).orEmpty())
-                    .putExtra(HomeSettingsActivity.EXTRA_ACCESS_TOKEN, intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty())
-            )
+            AppNavigator.openHomeSettings(this, connection)
         }
 
         currentThemeValueText.text = GlobalThemeManager.currentThemeLabel(this)
@@ -48,11 +42,5 @@ class SettingsActivity : AppCompatActivity() {
         super.onResume()
         GlobalThemeManager.apply(this)
         findViewById<TextView>(R.id.settingsThemeValueText).text = GlobalThemeManager.currentThemeLabel(this)
-    }
-
-    companion object {
-        const val EXTRA_BASE_URL = "extra_base_url"
-        const val EXTRA_USER_ID = "extra_user_id"
-        const val EXTRA_ACCESS_TOKEN = "extra_access_token"
     }
 }

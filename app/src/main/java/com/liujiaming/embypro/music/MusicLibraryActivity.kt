@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 
 class MusicLibraryActivity : AppCompatActivity() {
     private val sessionStore by lazy { ServerSessionStore(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
 
     private lateinit var scrollView: View
     private lateinit var loadingContainer: View
@@ -25,9 +26,7 @@ class MusicLibraryActivity : AppCompatActivity() {
     private lateinit var artistsStatsText: TextView
     private lateinit var partitionRow: View
 
-    private lateinit var baseUrl: String
-    private lateinit var userId: String
-    private lateinit var accessToken: String
+    private lateinit var connection: ServerConnection
 
     private val stateListener = MusicLibraryStateListener { state ->
         renderState(state)
@@ -39,7 +38,7 @@ class MusicLibraryActivity : AppCompatActivity() {
         setContentView(R.layout.activity_music_library)
         supportActionBar?.hide()
 
-        resolveSessionParams()
+        connection = requireServerConnection(sessionStore, serverRepository) ?: return
 
         scrollView = findViewById(R.id.musicLibraryScrollView)
         loadingContainer = findViewById(R.id.musicLibraryLoadingContainer)
@@ -64,7 +63,13 @@ class MusicLibraryActivity : AppCompatActivity() {
         findViewById<View>(R.id.musicLibraryArtistsEntry).setDebouncedClickListener { openList(MusicBrowseType.ARTISTS) }
         findViewById<View>(R.id.musicLibraryFoldersEntry).setDebouncedClickListener { openList(MusicBrowseType.FOLDERS) }
         findViewById<View>(R.id.musicLibraryRetryButton).setDebouncedClickListener {
-            MusicLibraryRepository.connect(this, baseUrl, userId, accessToken, forceRefresh = true)
+            MusicLibraryRepository.connect(
+                this,
+                connection.baseUrl,
+                connection.userId,
+                connection.accessToken,
+                forceRefresh = true
+            )
         }
 
         EdgeToEdgeHelper.applyInsets(scrollView, applyTop = true, applyBottom = true)
@@ -74,26 +79,12 @@ class MusicLibraryActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         MusicLibraryRepository.subscribe(stateListener)
-        MusicLibraryRepository.connect(this, baseUrl, userId, accessToken)
+        MusicLibraryRepository.connect(this, connection.baseUrl, connection.userId, connection.accessToken)
     }
 
     override fun onStop() {
         MusicLibraryRepository.unsubscribe(stateListener)
         super.onStop()
-    }
-
-    private fun resolveSessionParams() {
-        baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty()
-        userId = intent.getStringExtra(EXTRA_USER_ID).orEmpty()
-        accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty()
-
-        if (baseUrl.isNotBlank() && userId.isNotBlank() && accessToken.isNotBlank()) return
-
-        val activeServer = sessionStore.loadServers().firstOrNull() ?: return
-        val embyApiService = EmbyApiService(this)
-        baseUrl = baseUrl.ifBlank { embyApiService.buildBaseUrl(activeServer.address, activeServer.port) }
-        userId = userId.ifBlank { activeServer.userId }
-        accessToken = accessToken.ifBlank { activeServer.accessToken }
     }
 
     private fun renderState(state: MusicLibraryState) {
@@ -150,13 +141,7 @@ class MusicLibraryActivity : AppCompatActivity() {
     }
 
     private fun openList(browseType: MusicBrowseType) {
-        startActivity(
-            Intent(this, MusicListActivity::class.java)
-                .putExtra(MusicListActivity.EXTRA_BROWSE_TYPE, browseType.name)
-                .putExtra(EXTRA_BASE_URL, baseUrl)
-                .putExtra(EXTRA_USER_ID, userId)
-                .putExtra(EXTRA_ACCESS_TOKEN, accessToken)
-        )
+        AppNavigator.openMusicList(this, connection, browseType)
     }
 
     private fun showLibraryPicker() {
@@ -203,11 +188,5 @@ class MusicLibraryActivity : AppCompatActivity() {
         loadingContainer.visibility = View.GONE
         emptyContainer.visibility = View.GONE
         errorContainer.visibility = View.GONE
-    }
-
-    companion object {
-        const val EXTRA_BASE_URL = "extra_base_url"
-        const val EXTRA_USER_ID = "extra_user_id"
-        const val EXTRA_ACCESS_TOKEN = "extra_access_token"
     }
 }

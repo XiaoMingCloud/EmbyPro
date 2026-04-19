@@ -15,8 +15,8 @@ class SplashActivity : AppCompatActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var hasNavigated = false
     private val sessionStore by lazy { ServerSessionStore(this) }
-    private val embyApiService by lazy { EmbyApiService(this) }
-    private val homeLibraryFilterStore by lazy { HomeLibraryFilterStore(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
+    private val preferenceStore by lazy { AppPreferenceStore(this) }
 
     private val navigateRunnable = Runnable {
         if (isFinishing || isDestroyed || hasNavigated) return@Runnable
@@ -63,11 +63,11 @@ class SplashActivity : AppCompatActivity() {
     }
 
     private fun preloadHomeData() {
-        val activeServer = sessionStore.loadServers().firstOrNull() ?: return
+        val activeServer = sessionStore.loadCurrentServer() ?: return
         if (activeServer.userId.isBlank() || activeServer.accessToken.isBlank()) return
 
-        val baseUrl = embyApiService.buildBaseUrl(activeServer.address, activeServer.port)
-        val excludedLibraryIds = homeLibraryFilterStore.loadExcludedLibraryIds(baseUrl, activeServer.userId)
+        val baseUrl = serverRepository.buildBaseUrl(activeServer.address, activeServer.port)
+        val excludedLibraryIds = preferenceStore.loadExcludedHomeLibraryIds(baseUrl, activeServer.userId)
         HomeDataPreloader.preload(
             context = this,
             baseUrl = baseUrl,

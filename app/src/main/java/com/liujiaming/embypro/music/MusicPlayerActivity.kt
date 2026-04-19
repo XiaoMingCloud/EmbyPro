@@ -18,7 +18,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 
 class MusicPlayerActivity : AppCompatActivity() {
-    private val embyApiService by lazy { EmbyApiService(this) }
+    private val musicRepository by lazy { MusicRepository(this) }
+    private val sessionStore by lazy { ServerSessionStore(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private lateinit var coverImageView: ImageView
@@ -33,9 +35,7 @@ class MusicPlayerActivity : AppCompatActivity() {
     private lateinit var seekBar: SeekBar
     private lateinit var loadingIndicator: ProgressBar
 
-    private lateinit var baseUrl: String
-    private lateinit var userId: String
-    private lateinit var accessToken: String
+    private lateinit var connection: ServerConnection
     private var libraryId: String? = null
     private var queueTitle: String = ""
     private var queueIds: ArrayList<String> = arrayListOf()
@@ -63,9 +63,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         setContentView(R.layout.activity_music_player)
         supportActionBar?.hide()
 
-        baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty()
-        userId = intent.getStringExtra(EXTRA_USER_ID).orEmpty()
-        accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty()
+        connection = requireServerConnection(sessionStore, serverRepository) ?: return
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID)
         queueTitle = intent.getStringExtra(EXTRA_QUEUE_TITLE).orEmpty()
         queueIds = intent.getStringArrayListExtra(EXTRA_QUEUE_IDS) ?: arrayListOf()
@@ -74,7 +72,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         queueImages = intent.getStringArrayListExtra(EXTRA_QUEUE_IMAGES) ?: arrayListOf()
         currentIndex = intent.getIntExtra(EXTRA_QUEUE_INDEX, 0).coerceIn(0, (queueIds.lastIndex).coerceAtLeast(0))
 
-        if (baseUrl.isBlank() || userId.isBlank() || accessToken.isBlank() || queueIds.isEmpty()) {
+        if (queueIds.isEmpty()) {
             Toast.makeText(this, getString(R.string.server_data_missing), Toast.LENGTH_SHORT).show()
             finish()
             return
@@ -134,7 +132,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         if (player != null) return
 
         val httpFactory = DefaultHttpDataSource.Factory().apply {
-            setDefaultRequestProperties(mapOf("X-Emby-Token" to accessToken))
+            setDefaultRequestProperties(mapOf("X-Emby-Token" to connection.accessToken))
         }
 
         val exoPlayer = ExoPlayer.Builder(this)
@@ -196,12 +194,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         loadingIndicator.visibility = android.view.View.VISIBLE
 
         AppExecutors.io.execute {
-            val result = embyApiService.fetchAudioPlayback(
-                baseUrl = baseUrl,
-                userId = userId,
-                accessToken = accessToken,
-                itemId = queueIds[index]
-            )
+            val result = musicRepository.fetchAudioPlayback(connection, queueIds[index])
             runOnUiThread {
                 result.onSuccess { playback ->
                     currentPlaybackItemId = playback.itemId
@@ -245,7 +238,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         EmbyImageLoader.load(
             imageView = coverImageView,
             url = url,
-            token = accessToken,
+            token = connection.accessToken,
             onFailure = {
                 AppIconPlaceholder.apply(coverImageView, cornerRadiusDp = 24f)
             }
@@ -284,13 +277,7 @@ class MusicPlayerActivity : AppCompatActivity() {
     private fun reportPlaybackProgress(positionMs: Long) {
         if (currentPlaybackItemId.isBlank()) return
         AppExecutors.io.execute {
-            embyApiService.updatePlaybackProgress(
-                baseUrl = baseUrl,
-                userId = userId,
-                accessToken = accessToken,
-                itemId = currentPlaybackItemId,
-                playbackPositionMs = positionMs
-            )
+            musicRepository.updatePlaybackProgress(connection, currentPlaybackItemId, positionMs)
         }
     }
 
@@ -314,9 +301,6 @@ class MusicPlayerActivity : AppCompatActivity() {
     }
 
     companion object {
-        const val EXTRA_BASE_URL = "extra_base_url"
-        const val EXTRA_USER_ID = "extra_user_id"
-        const val EXTRA_ACCESS_TOKEN = "extra_access_token"
         const val EXTRA_LIBRARY_ID = "extra_library_id"
         const val EXTRA_QUEUE_TITLE = "extra_queue_title"
         const val EXTRA_QUEUE_IDS = "extra_queue_ids"

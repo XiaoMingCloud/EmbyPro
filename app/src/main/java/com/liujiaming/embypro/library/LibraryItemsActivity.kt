@@ -1,6 +1,5 @@
 package com.liujiaming.embypro
 
-import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.ImageButton
@@ -17,12 +16,12 @@ import java.util.concurrent.ExecutorService
 
 class LibraryItemsActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
-    private val embyApiService by lazy { EmbyApiService(this) }
+    private val mediaRepository by lazy { MediaRepository(this) }
+    private val sessionStore by lazy { ServerSessionStore(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
     private val loadedItems = mutableListOf<MediaPosterUiModel>()
 
-    private lateinit var baseUrl: String
-    private lateinit var userId: String
-    private lateinit var accessToken: String
+    private lateinit var connection: ServerConnection
     private lateinit var libraryId: String
 
     private lateinit var recyclerView: RecyclerView
@@ -55,12 +54,10 @@ class LibraryItemsActivity : AppCompatActivity() {
         val libraryName = intent.getStringExtra(EXTRA_LIBRARY_NAME).orEmpty().ifBlank {
             getString(R.string.media_library)
         }
-        baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty()
-        userId = intent.getStringExtra(EXTRA_USER_ID).orEmpty()
-        accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty()
+        connection = requireServerConnection(sessionStore, serverRepository) ?: return
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
 
-        if (baseUrl.isBlank() || userId.isBlank() || accessToken.isBlank() || libraryId.isBlank()) {
+        if (libraryId.isBlank()) {
             Toast.makeText(this, getString(R.string.server_data_missing), Toast.LENGTH_SHORT).show()
             finish()
             return
@@ -79,7 +76,7 @@ class LibraryItemsActivity : AppCompatActivity() {
         adapter = MediaPosterAdapter(
             loadedItems,
             R.layout.item_library_grid_card,
-            accessToken,
+            connection.accessToken,
             onItemClick = { openItem(it) }
         )
         recyclerView.layoutManager = GridLayoutManager(this, 2)
@@ -126,10 +123,8 @@ class LibraryItemsActivity : AppCompatActivity() {
         isLoading = true
         networkExecutor.execute {
             val result = runCatching {
-                embyApiService.fetchLibraryItemsPage(
-                    baseUrl = baseUrl,
-                    userId = userId,
-                    accessToken = accessToken,
+                mediaRepository.fetchLibraryItemsPage(
+                    connection = connection,
                     parentId = libraryId,
                     startIndex = startIndex,
                     limit = pageSize,
@@ -137,7 +132,7 @@ class LibraryItemsActivity : AppCompatActivity() {
                     filterValue = currentFilterValue(),
                     sortField = currentSortField,
                     sortDescending = sortDescending
-                )
+                ).getOrThrow()
             }
 
             runOnUiThread {
@@ -224,7 +219,7 @@ class LibraryItemsActivity : AppCompatActivity() {
         }
 
         networkExecutor.execute {
-            val result = embyApiService.fetchLibraryFilterOptions(baseUrl, userId, accessToken, libraryId)
+            val result = mediaRepository.fetchLibraryFilterOptions(connection, libraryId)
             runOnUiThread {
                 result.onSuccess {
                     filterOptions = it
@@ -335,41 +330,11 @@ class LibraryItemsActivity : AppCompatActivity() {
     }
 
     private fun openItem(item: MediaPosterUiModel) {
-        if (item.id.isBlank()) return
-        if (item.isFolder || item.itemType == "BoxSet" || item.itemType == "Folder") {
-            startActivity(
-                Intent(this, LibraryItemsActivity::class.java)
-                    .putExtra(EXTRA_LIBRARY_ID, item.id)
-                    .putExtra(EXTRA_LIBRARY_NAME, item.title)
-                    .putExtra(EXTRA_BASE_URL, baseUrl)
-                    .putExtra(EXTRA_USER_ID, userId)
-                    .putExtra(EXTRA_ACCESS_TOKEN, accessToken)
-            )
-            return
-        }
-
-        val playableItems = loadedItems.filter { !it.isFolder && it.itemType != "BoxSet" && it.itemType != "Folder" }
-        val playlistIds = ArrayList(playableItems.map { it.id })
-        val playlistTitles = ArrayList(playableItems.map { it.title })
-        val playlistIndex = playableItems.indexOfFirst { it.id == item.id }
-
-        startActivity(
-            Intent(this, VideoDetailActivity::class.java)
-                .putExtra(VideoDetailActivity.EXTRA_ITEM_ID, item.id)
-                .putExtra(VideoDetailActivity.EXTRA_BASE_URL, baseUrl)
-                .putExtra(VideoDetailActivity.EXTRA_USER_ID, userId)
-                .putExtra(VideoDetailActivity.EXTRA_ACCESS_TOKEN, accessToken)
-                .putStringArrayListExtra(VideoDetailActivity.EXTRA_PLAYLIST_ITEM_IDS, playlistIds)
-                .putStringArrayListExtra(VideoDetailActivity.EXTRA_PLAYLIST_ITEM_TITLES, playlistTitles)
-                .putExtra(VideoDetailActivity.EXTRA_PLAYLIST_INDEX, playlistIndex)
-        )
+        AppNavigator.openPosterItem(this, connection, item, loadedItems)
     }
 
     companion object {
         const val EXTRA_LIBRARY_ID = "extra_library_id"
         const val EXTRA_LIBRARY_NAME = "extra_library_name"
-        const val EXTRA_BASE_URL = "extra_base_url"
-        const val EXTRA_USER_ID = "extra_user_id"
-        const val EXTRA_ACCESS_TOKEN = "extra_access_token"
     }
 }

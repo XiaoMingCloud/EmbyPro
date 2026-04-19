@@ -1,7 +1,6 @@
 package com.liujiaming.embypro
 
 import android.content.Context
-import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
@@ -22,13 +21,13 @@ import java.util.concurrent.ExecutorService
 
 class SearchActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
-    private val embyApiService by lazy { EmbyApiService(this) }
-    private val searchHistoryStore by lazy { SearchHistoryStore(this) }
+    private val mediaRepository by lazy { MediaRepository(this) }
+    private val preferenceStore by lazy { AppPreferenceStore(this) }
+    private val sessionStore by lazy { ServerSessionStore(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
     private val loadedItems = mutableListOf<MediaPosterUiModel>()
 
-    private lateinit var baseUrl: String
-    private lateinit var userId: String
-    private lateinit var accessToken: String
+    private lateinit var connection: ServerConnection
 
     private lateinit var searchInput: EditText
     private lateinit var clearButton: ImageButton
@@ -53,15 +52,7 @@ class SearchActivity : AppCompatActivity() {
         supportActionBar?.hide()
         GlobalThemeManager.apply(this)
 
-        baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty()
-        userId = intent.getStringExtra(EXTRA_USER_ID).orEmpty()
-        accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty()
-
-        if (baseUrl.isBlank() || userId.isBlank() || accessToken.isBlank()) {
-            Toast.makeText(this, getString(R.string.server_data_missing), Toast.LENGTH_SHORT).show()
-            finish()
-            return
-        }
+        connection = requireServerConnection(sessionStore, serverRepository) ?: return
 
         val topBar = findViewById<View>(R.id.searchTopBar)
         searchInput = findViewById(R.id.searchEditText)
@@ -79,7 +70,7 @@ class SearchActivity : AppCompatActivity() {
             updateEmptyState()
         }
         clearAllHistoryText.setDebouncedClickListener {
-            searchHistoryStore.clearAll()
+            preferenceStore.clearSearchHistory()
             renderHistory()
             updateEmptyState()
         }
@@ -111,7 +102,7 @@ class SearchActivity : AppCompatActivity() {
         adapter = MediaPosterAdapter(
             loadedItems,
             R.layout.item_library_grid_card,
-            accessToken,
+            connection.accessToken,
             onItemClick = { openItem(it) }
         )
         recyclerView.layoutManager = GridLayoutManager(this, 2)
@@ -142,7 +133,7 @@ class SearchActivity : AppCompatActivity() {
         }
 
         hideKeyboard()
-        searchHistoryStore.saveQuery(query)
+        preferenceStore.saveSearchQuery(query)
         renderHistory()
         currentQuery = query
         startIndex = 0
@@ -158,14 +149,7 @@ class SearchActivity : AppCompatActivity() {
         isLoading = true
         progressBar.visibility = View.VISIBLE
         networkExecutor.execute {
-            val result = embyApiService.searchMediaItemsPage(
-                baseUrl = baseUrl,
-                userId = userId,
-                accessToken = accessToken,
-                query = currentQuery,
-                startIndex = startIndex,
-                limit = pageSize
-            )
+            val result = mediaRepository.searchMediaItemsPage(connection, currentQuery, startIndex, pageSize)
             runOnUiThread {
                 isLoading = false
                 progressBar.visibility = View.GONE
@@ -201,7 +185,7 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun renderHistory() {
-        val history = searchHistoryStore.loadHistory()
+        val history = preferenceStore.loadSearchHistory()
         historyChipGroup.removeAllViews()
         clearAllHistoryText.visibility = if (history.isEmpty()) View.GONE else View.VISIBLE
         historyContainer.visibility = if (history.isEmpty()) View.GONE else View.VISIBLE
@@ -224,7 +208,7 @@ class SearchActivity : AppCompatActivity() {
                 submitSearch()
             }
             setOnCloseIconClickListener {
-                searchHistoryStore.deleteQuery(query)
+                preferenceStore.deleteSearchQuery(query)
                 renderHistory()
                 updateEmptyState()
             }
@@ -232,44 +216,11 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun openItem(item: MediaPosterUiModel) {
-        if (item.id.isBlank()) return
-        if (item.isFolder || item.itemType == "BoxSet" || item.itemType == "Folder") {
-            startActivity(
-                Intent(this, LibraryItemsActivity::class.java)
-                    .putExtra(LibraryItemsActivity.EXTRA_LIBRARY_ID, item.id)
-                    .putExtra(LibraryItemsActivity.EXTRA_LIBRARY_NAME, item.title)
-                    .putExtra(LibraryItemsActivity.EXTRA_BASE_URL, baseUrl)
-                    .putExtra(LibraryItemsActivity.EXTRA_USER_ID, userId)
-                    .putExtra(LibraryItemsActivity.EXTRA_ACCESS_TOKEN, accessToken)
-            )
-            return
-        }
-
-        val playableItems = loadedItems.filter { !it.isFolder && it.itemType != "BoxSet" && it.itemType != "Folder" }
-        val playlistIds = ArrayList(playableItems.map { it.id })
-        val playlistTitles = ArrayList(playableItems.map { it.title })
-        val playlistIndex = playableItems.indexOfFirst { it.id == item.id }
-
-        startActivity(
-            Intent(this, VideoDetailActivity::class.java)
-                .putExtra(VideoDetailActivity.EXTRA_ITEM_ID, item.id)
-                .putExtra(VideoDetailActivity.EXTRA_BASE_URL, baseUrl)
-                .putExtra(VideoDetailActivity.EXTRA_USER_ID, userId)
-                .putExtra(VideoDetailActivity.EXTRA_ACCESS_TOKEN, accessToken)
-                .putStringArrayListExtra(VideoDetailActivity.EXTRA_PLAYLIST_ITEM_IDS, playlistIds)
-                .putStringArrayListExtra(VideoDetailActivity.EXTRA_PLAYLIST_ITEM_TITLES, playlistTitles)
-                .putExtra(VideoDetailActivity.EXTRA_PLAYLIST_INDEX, playlistIndex)
-        )
+        AppNavigator.openPosterItem(this, connection, item, loadedItems)
     }
 
     private fun hideKeyboard() {
         val inputMethodManager = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
         inputMethodManager?.hideSoftInputFromWindow(searchInput.windowToken, 0)
-    }
-
-    companion object {
-        const val EXTRA_BASE_URL = "extra_base_url"
-        const val EXTRA_USER_ID = "extra_user_id"
-        const val EXTRA_ACCESS_TOKEN = "extra_access_token"
     }
 }

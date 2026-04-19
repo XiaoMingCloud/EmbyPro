@@ -25,7 +25,7 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
     private lateinit var serverList: RecyclerView
     private lateinit var emptyStateText: TextView
     private val networkExecutor: ExecutorService = AppExecutors.io
-    private val embyApiService by lazy { EmbyApiService(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
     private val sessionStore by lazy { ServerSessionStore(this) }
     private var pendingAvatarServerId: Long? = null
     private val avatarPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -70,18 +70,13 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
     }
 
     override fun onOpen(server: ServerUiModel) {
-        startActivity(
-            Intent(this, ServerHomeActivity::class.java)
-                .putExtra(ServerHomeActivity.EXTRA_SERVER_NAME, server.name)
-                .putExtra(ServerHomeActivity.EXTRA_BASE_URL, embyApiService.buildBaseUrl(server.address, server.port))
-                .putExtra(ServerHomeActivity.EXTRA_USER_ID, server.userId)
-                .putExtra(ServerHomeActivity.EXTRA_ACCESS_TOKEN, server.accessToken)
-        )
+        sessionStore.activateServer(server)
+        AppNavigator.openHome(this)
     }
 
     override fun onRelogin(server: ServerUiModel) {
         showLoginDialog(
-            baseUrl = embyApiService.buildBaseUrl(server.address, server.port),
+            baseUrl = serverRepository.buildBaseUrl(server.address, server.port),
             serverInfo = ServerInfo(server.id.toString(), server.name, ""),
             existingServer = server,
             hint = getString(R.string.relogin_hint)
@@ -183,9 +178,13 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
             .setTitle(R.string.delete_server_title)
             .setMessage(getString(R.string.delete_server_message, server.name))
             .setPositiveButton(R.string.menu_delete_server) { _, _ ->
+                val wasActiveServer = sessionStore.loadCurrentServer()?.id == server.id
                 serverItems.removeAll { it.id == server.id }
                 serverListAdapter.removeItem(server)
                 persistServers()
+                if (wasActiveServer) {
+                    sessionStore.saveActiveServerId(serverItems.firstOrNull()?.id)
+                }
                 updateEmptyState()
                 Toast.makeText(this, getString(R.string.server_deleted), Toast.LENGTH_SHORT).show()
             }
@@ -219,8 +218,8 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
             hintText.text = getString(R.string.connect_server_hint)
 
             networkExecutor.execute {
-                val baseUrl = embyApiService.buildBaseUrl(address, port)
-                val result = embyApiService.fetchPublicServerInfo(baseUrl)
+                val baseUrl = serverRepository.buildBaseUrl(address, port)
+                val result = serverRepository.fetchPublicServerInfo(baseUrl)
 
                 runOnUiThread {
                     setButtonLoading(connectButton, false, R.string.connect_server)
@@ -281,14 +280,14 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
             setButtonLoading(loginButton, true, R.string.login_server)
 
             networkExecutor.execute {
-                val result = embyApiService.authenticate(baseUrl, username, password)
+                val result = serverRepository.authenticate(baseUrl, username, password)
 
                 runOnUiThread {
                     setButtonLoading(loginButton, false, R.string.login_server)
 
                     result.onSuccess { authResult ->
-                        val parsedBase = embyApiService.parseBaseUrl(baseUrl)
-                        val avatarUrl = embyApiService.buildUserAvatarUrl(baseUrl, authResult.userId).orEmpty()
+                        val parsedBase = serverRepository.parseBaseUrl(baseUrl)
+                        val avatarUrl = serverRepository.buildUserAvatarUrl(baseUrl, authResult.userId).orEmpty()
                         val updatedServer = ServerUiModel(
                             id = existingServer?.id ?: System.currentTimeMillis(),
                             name = serverInfo.serverName.ifBlank { username },
@@ -311,12 +310,13 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
                             replaceServer(updatedServer)
                         }
 
+                        sessionStore.activateServer(updatedServer)
                         persistServers()
                         updateEmptyState()
                         dialog.dismiss()
                         Toast.makeText(this, getString(R.string.login_success, authResult.userName), Toast.LENGTH_SHORT).show()
                         if (intent.getBooleanExtra(EXTRA_RETURN_HOME_ON_SUCCESS, false)) {
-                            startActivity(Intent(this, HomeTabsActivity::class.java))
+                            AppNavigator.openHome(this)
                             finish()
                         }
                     }.onFailure { error ->
@@ -367,11 +367,12 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
 
         Toast.makeText(this, getString(R.string.avatar_uploading), Toast.LENGTH_SHORT).show()
         networkExecutor.execute {
-            val baseUrl = embyApiService.buildBaseUrl(server.address, server.port)
-            val result = embyApiService.updateUserAvatar(
-                baseUrl = baseUrl,
-                userId = server.userId,
-                accessToken = server.accessToken,
+            val result = serverRepository.updateUserAvatar(
+                connection = ServerConnection(
+                    baseUrl = serverRepository.buildBaseUrl(server.address, server.port),
+                    userId = server.userId,
+                    accessToken = server.accessToken
+                ),
                 imageBytes = imageBytes
             )
 

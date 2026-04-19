@@ -16,8 +16,10 @@ import java.util.concurrent.ExecutorService
 
 class HomeTabsActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
-    private val embyApiService by lazy { EmbyApiService(this) }
-    private val homeLibraryFilterStore by lazy { HomeLibraryFilterStore(this) }
+    private val mediaRepository by lazy { MediaRepository(this) }
+    private val homeFeedRepository by lazy { HomeFeedRepository(this) }
+    private val preferenceStore by lazy { AppPreferenceStore(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
     private val sessionStore by lazy { ServerSessionStore(this) }
     private val homeSeenItemIds = linkedSetOf<String>()
     private val homeLibraryOffsets = linkedMapOf<String, Int>()
@@ -51,10 +53,7 @@ class HomeTabsActivity : AppCompatActivity() {
     private lateinit var navigationMusicText: TextView
     private lateinit var navigationMyText: TextView
 
-    private lateinit var activeServer: ServerUiModel
-    private lateinit var baseUrl: String
-    private lateinit var userId: String
-    private lateinit var accessToken: String
+    private lateinit var connection: ServerConnection
     private var excludedHomeLibraryIds: Set<String> = emptySet()
     private var excludedHomeLibrarySignature = ""
     private var isHomeLoading = false
@@ -76,10 +75,13 @@ class HomeTabsActivity : AppCompatActivity() {
             return
         }
 
-        activeServer = servers.first()
-        baseUrl = embyApiService.buildBaseUrl(activeServer.address, activeServer.port)
-        userId = activeServer.userId
-        accessToken = activeServer.accessToken
+        val activeServer = sessionStore.loadCurrentServer() ?: servers.first()
+        sessionStore.activateServer(activeServer)
+        connection = ServerConnection(
+            baseUrl = serverRepository.buildBaseUrl(activeServer.address, activeServer.port),
+            userId = activeServer.userId,
+            accessToken = activeServer.accessToken
+        )
         syncExcludedHomeLibraries()
 
         EdgeToEdgeHelper.enable(this, lightSystemBars = GlobalThemeStore(this).loadTheme().lightSystemBars)
@@ -115,12 +117,7 @@ class HomeTabsActivity : AppCompatActivity() {
         navigationMyText = findViewById(R.id.navigationMyText)
 
         homeSearchCard.setDebouncedClickListener {
-            startActivity(
-                Intent(this, SearchActivity::class.java)
-                    .putExtra(SearchActivity.EXTRA_BASE_URL, baseUrl)
-                    .putExtra(SearchActivity.EXTRA_USER_ID, userId)
-                    .putExtra(SearchActivity.EXTRA_ACCESS_TOKEN, accessToken)
-            )
+            AppNavigator.openSearch(this, connection)
         }
         homeCategoryVideoTab.setDebouncedClickListener {
             updatePrimaryCategorySelection(PrimaryCategory.VIDEO)
@@ -132,20 +129,10 @@ class HomeTabsActivity : AppCompatActivity() {
             startActivity(Intent(this, MainActivity::class.java))
         }
         findViewById<View>(R.id.myPlaybackHistoryEntry).setDebouncedClickListener {
-            startActivity(
-                Intent(this, PlaybackHistoryActivity::class.java)
-                    .putExtra(PlaybackHistoryActivity.EXTRA_BASE_URL, baseUrl)
-                    .putExtra(PlaybackHistoryActivity.EXTRA_USER_ID, userId)
-                    .putExtra(PlaybackHistoryActivity.EXTRA_ACCESS_TOKEN, accessToken)
-            )
+            AppNavigator.openPlaybackHistory(this, connection)
         }
         findViewById<View>(R.id.myFavoriteItemsEntry).setDebouncedClickListener {
-            startActivity(
-                Intent(this, FavoriteItemsActivity::class.java)
-                    .putExtra(FavoriteItemsActivity.EXTRA_BASE_URL, baseUrl)
-                    .putExtra(FavoriteItemsActivity.EXTRA_USER_ID, userId)
-                    .putExtra(FavoriteItemsActivity.EXTRA_ACCESS_TOKEN, accessToken)
-            )
+            AppNavigator.openFavoriteItems(this, connection)
         }
         findViewById<View>(R.id.myPendingEntryOne).setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.more_actions_pending), Toast.LENGTH_SHORT).show()
@@ -154,12 +141,7 @@ class HomeTabsActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.more_actions_pending), Toast.LENGTH_SHORT).show()
         }
         findViewById<View>(R.id.mySettingsEntry).setDebouncedClickListener {
-            startActivity(
-                Intent(this, SettingsActivity::class.java)
-                    .putExtra(SettingsActivity.EXTRA_BASE_URL, baseUrl)
-                    .putExtra(SettingsActivity.EXTRA_USER_ID, userId)
-                    .putExtra(SettingsActivity.EXTRA_ACCESS_TOKEN, accessToken)
-            )
+            AppNavigator.openSettings(this, connection)
         }
         findViewById<MaterialButton>(R.id.homeRetryButton).setDebouncedClickListener {
             connectAndLoadHome()
@@ -171,8 +153,15 @@ class HomeTabsActivity : AppCompatActivity() {
         homeFeedAdapter = MediaPosterAdapter(
             homeFeedItems,
             R.layout.item_library_grid_card,
-            accessToken,
-            onItemClick = { item -> openVideoDirectly(item.id, homeFeedItems) }
+            connection.accessToken,
+            onItemClick = { item ->
+                playVideoDirectly(
+                    connection = connection,
+                    mediaRepository = mediaRepository,
+                    itemId = item.id,
+                    queue = AppNavigator.buildPosterVideoQueue(homeFeedItems, item.id)
+                )
+            }
         )
         homeFeedRecyclerView.layoutManager = GridLayoutManager(this, 2)
         homeFeedRecyclerView.adapter = homeFeedAdapter
@@ -194,12 +183,7 @@ class HomeTabsActivity : AppCompatActivity() {
         navigationHomeItem.setDebouncedClickListener { showTab(Tab.HOME) }
         navigationMediaItem.setDebouncedClickListener { showTab(Tab.MEDIA) }
         navigationMusicItem.setDebouncedClickListener {
-            startActivity(
-                Intent(this, MusicLibraryActivity::class.java)
-                    .putExtra(MusicLibraryActivity.EXTRA_BASE_URL, baseUrl)
-                    .putExtra(MusicLibraryActivity.EXTRA_USER_ID, userId)
-                    .putExtra(MusicLibraryActivity.EXTRA_ACCESS_TOKEN, accessToken)
-            )
+            AppNavigator.openMusicLibrary(this, connection)
         }
         navigationMyItem.setDebouncedClickListener { showTab(Tab.MY) }
         showTab(Tab.HOME)
@@ -222,7 +206,12 @@ class HomeTabsActivity : AppCompatActivity() {
         updateHomeLoadFailedVisibility()
         homeRefreshLayout.isRefreshing = true
         val preloadTask = if (preferPreloadedData) {
-            HomeDataPreloader.takeTask(baseUrl, userId, accessToken, excludedHomeLibraryIds)
+            HomeDataPreloader.takeTask(
+                connection.baseUrl,
+                connection.userId,
+                connection.accessToken,
+                excludedHomeLibraryIds
+            )
         } else {
             null
         }
@@ -230,7 +219,14 @@ class HomeTabsActivity : AppCompatActivity() {
             val result = runCatching {
                 val preloadedData = preloadTask?.get()
                     ?.getOrNull()
-                    ?.takeIf { it.matches(baseUrl, userId, accessToken, excludedHomeLibrarySignature) }
+                    ?.takeIf {
+                        it.matches(
+                            connection.baseUrl,
+                            connection.userId,
+                            connection.accessToken,
+                            excludedHomeLibrarySignature
+                        )
+                    }
 
                 preloadedData ?: loadFreshHomeData()
             }
@@ -257,7 +253,15 @@ class HomeTabsActivity : AppCompatActivity() {
         if (isHomeLoading || homeLibraryOrder.isEmpty()) return
         isHomeLoading = true
         networkExecutor.execute {
-            val result = runCatching { fetchNextHomeFeedBatch() }
+            val result = runCatching {
+                homeFeedRepository.loadNextHomeFeedBatch(
+                    connection = connection,
+                    homeLibraryOrder = homeLibraryOrder,
+                    homeSeenItemIds = homeSeenItemIds,
+                    homeLibraryOffsets = homeLibraryOffsets,
+                    homeLibraryTotals = homeLibraryTotals
+                )
+            }
             runOnUiThread {
                 isHomeLoading = false
                 result.onSuccess { newItems ->
@@ -282,38 +286,10 @@ class HomeTabsActivity : AppCompatActivity() {
         }
     }
 
-    private fun resetHomeFeedState(libraries: List<MediaLibraryUiModel>) {
-        homeSeenItemIds.clear()
-        homeLibraryOrder.clear()
-        homeLibraryOrder.addAll(libraries)
-        homeLibraryOffsets.clear()
-        homeLibraryTotals.clear()
-        libraries.forEach { library ->
-            homeLibraryOffsets[library.id] = 0
-            homeLibraryTotals[library.id] = Int.MAX_VALUE
-        }
-    }
-
     private fun loadFreshHomeData(): PreloadedHomeData {
-        embyApiService.fetchPublicServerInfo(baseUrl).getOrThrow()
-        val allLibraries = embyApiService.fetchMediaLibraries(baseUrl, userId, accessToken).getOrThrow()
-        val homeLibraries = allLibraries
-            .filterNot { excludedHomeLibraryIds.contains(it.id) }
-            .shuffled()
-        resetHomeFeedState(homeLibraries)
-        val homeFeed = fetchNextHomeFeedBatch()
-        return PreloadedHomeData(
-            baseUrl = baseUrl,
-            userId = userId,
-            accessToken = accessToken,
-            excludedLibrarySignature = excludedHomeLibrarySignature,
-            homeFeedItems = homeFeed,
-            mediaLibraries = allLibraries,
-            homeLibraryOrder = homeLibraryOrder.toList(),
-            homeLibraryOffsets = homeLibraryOffsets.toMap(),
-            homeLibraryTotals = homeLibraryTotals.toMap(),
-            homeSeenItemIds = homeSeenItemIds.toSet()
-        )
+        return homeFeedRepository.buildHomeData(connection, excludedHomeLibraryIds)
+            .getOrThrow()
+            .copy(excludedLibrarySignature = excludedHomeLibrarySignature)
     }
 
     private fun applyHomeData(homeData: PreloadedHomeData) {
@@ -333,62 +309,12 @@ class HomeTabsActivity : AppCompatActivity() {
         bindMediaLibraries(homeData.mediaLibraries)
     }
 
-    private fun fetchNextHomeFeedBatch(): List<MediaPosterUiModel> {
-        if (homeLibraryOrder.isEmpty()) return emptyList()
-        val freshItems = mutableListOf<MediaPosterUiModel>()
-        val libraries = homeLibraryOrder.shuffled()
-        val maxAttempts = (libraries.size * 3).coerceAtLeast(3)
-        var attempts = 0
-
-        while (freshItems.size < HOME_BATCH_SIZE && attempts < maxAttempts) {
-            val library = libraries[attempts % libraries.size]
-            val offset = homeLibraryOffsets[library.id] ?: 0
-            val total = homeLibraryTotals[library.id] ?: Int.MAX_VALUE
-            if (offset >= total) {
-                attempts++
-                continue
-            }
-
-            val page = embyApiService.fetchLibraryItemsPage(
-                baseUrl = baseUrl,
-                userId = userId,
-                accessToken = accessToken,
-                parentId = library.id,
-                startIndex = offset,
-                limit = HOME_PAGE_SIZE,
-                sortField = LibrarySortField.RANDOM,
-                sortDescending = true
-            )
-            homeLibraryOffsets[library.id] = offset + HOME_PAGE_SIZE
-            homeLibraryTotals[library.id] = page.totalCount
-
-            page.items
-                .asSequence()
-                .filter { !it.isFolder && it.itemType != "BoxSet" && it.itemType != "Folder" }
-                .filter { it.id.isNotBlank() }
-                .filter { homeSeenItemIds.add(it.id) }
-                .take(HOME_BATCH_SIZE - freshItems.size)
-                .forEach { freshItems.add(it) }
-
-            attempts++
-            if (homeLibraryTotals.values.all { knownTotal ->
-                    knownTotal != Int.MAX_VALUE
-                } && homeLibraryOffsets.all { (libraryId, currentOffset) ->
-                    currentOffset >= (homeLibraryTotals[libraryId] ?: Int.MAX_VALUE)
-                }
-            ) {
-                break
-            }
-        }
-        return freshItems.shuffled()
-    }
-
     private fun bindMediaLibraries(libraries: List<MediaLibraryUiModel>) {
         mediaTabRecyclerView.adapter = MediaLibraryGridAdapter(
             libraries,
-            accessToken
+            connection.accessToken
         ) { library ->
-            openLibrary(library)
+            AppNavigator.openLibrary(this, connection, library.id, library.title)
         }
     }
 
@@ -398,8 +324,8 @@ class HomeTabsActivity : AppCompatActivity() {
     }
 
     private fun syncExcludedHomeLibraries(): Boolean {
-        val latest = homeLibraryFilterStore.loadExcludedLibraryIds(baseUrl, userId)
-        val latestSignature = latest.toList().sorted().joinToString("|")
+        val latest = preferenceStore.loadExcludedHomeLibraryIds(connection.baseUrl, connection.userId)
+        val latestSignature = homeFeedRepository.buildExcludedSignature(latest)
         val changed = latestSignature != excludedHomeLibrarySignature
         excludedHomeLibraryIds = latest
         excludedHomeLibrarySignature = latestSignature
@@ -480,52 +406,6 @@ class HomeTabsActivity : AppCompatActivity() {
         iconView.alpha = if (selected) 1f else 0.88f
     }
 
-    private fun openLibrary(library: MediaLibraryUiModel) {
-        startActivity(
-            Intent(this, LibraryItemsActivity::class.java)
-                .putExtra(LibraryItemsActivity.EXTRA_LIBRARY_ID, library.id)
-                .putExtra(LibraryItemsActivity.EXTRA_LIBRARY_NAME, library.title)
-                .putExtra(LibraryItemsActivity.EXTRA_BASE_URL, baseUrl)
-                .putExtra(LibraryItemsActivity.EXTRA_USER_ID, userId)
-                .putExtra(LibraryItemsActivity.EXTRA_ACCESS_TOKEN, accessToken)
-        )
-    }
-
-    private fun openVideoDirectly(itemId: String, items: List<MediaPosterUiModel>) {
-        if (itemId.isBlank()) return
-        val playableItems = items.filter { !it.isFolder && it.itemType != "BoxSet" && it.itemType != "Folder" }
-        val playlistIds = ArrayList(playableItems.map { it.id })
-        val playlistTitles = ArrayList(playableItems.map { it.title })
-        val playlistIndex = playableItems.indexOfFirst { it.id == itemId }
-        networkExecutor.execute {
-            val result = embyApiService.fetchVideoDetail(baseUrl, userId, accessToken, itemId)
-            runOnUiThread {
-                result.onSuccess { detail ->
-                    startActivity(
-                        Intent(this, PlayerActivity::class.java)
-                            .putExtra(PlayerActivity.EXTRA_PLAYBACK_URL, detail.playbackUrl)
-                            .putExtra(PlayerActivity.EXTRA_ACCESS_TOKEN, accessToken)
-                            .putExtra(PlayerActivity.EXTRA_TITLE, detail.title)
-                            .putExtra(PlayerActivity.EXTRA_COVER_IMAGE_URL, detail.heroImageUrl)
-                            .putExtra(PlayerActivity.EXTRA_BASE_URL, baseUrl)
-                            .putExtra(PlayerActivity.EXTRA_USER_ID, userId)
-                            .putExtra(PlayerActivity.EXTRA_ITEM_ID, itemId)
-                            .putExtra(PlayerActivity.EXTRA_START_POSITION_MS, detail.playbackPositionTicks / 10_000L)
-                            .putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_ITEM_IDS, playlistIds)
-                            .putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_ITEM_TITLES, playlistTitles)
-                            .putExtra(PlayerActivity.EXTRA_PLAYLIST_INDEX, playlistIndex)
-                    )
-                }.onFailure { error ->
-                    Toast.makeText(
-                        this,
-                        error.message ?: getString(R.string.player_error),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
-        }
-    }
-
     private enum class Tab {
         HOME,
         MEDIA,
@@ -535,11 +415,6 @@ class HomeTabsActivity : AppCompatActivity() {
     private enum class PrimaryCategory {
         VIDEO,
         AUDIO
-    }
-
-    companion object {
-        private const val HOME_PAGE_SIZE = 12
-        private const val HOME_BATCH_SIZE = 18
     }
 }
 

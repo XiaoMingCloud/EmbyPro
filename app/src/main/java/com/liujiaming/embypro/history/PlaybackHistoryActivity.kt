@@ -18,11 +18,11 @@ import java.util.concurrent.ExecutorService
 
 class PlaybackHistoryActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
-    private val embyApiService by lazy { EmbyApiService(this) }
+    private val mediaRepository by lazy { MediaRepository(this) }
+    private val sessionStore by lazy { ServerSessionStore(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
 
-    private lateinit var baseUrl: String
-    private lateinit var userId: String
-    private lateinit var accessToken: String
+    private lateinit var connection: ServerConnection
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var progressBar: ProgressBar
@@ -52,15 +52,7 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         supportActionBar?.hide()
         GlobalThemeManager.apply(this)
 
-        baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty()
-        userId = intent.getStringExtra(EXTRA_USER_ID).orEmpty()
-        accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty()
-
-        if (baseUrl.isBlank() || userId.isBlank() || accessToken.isBlank()) {
-            Toast.makeText(this, getString(R.string.server_data_missing), Toast.LENGTH_SHORT).show()
-            finish()
-            return
-        }
+        connection = requireServerConnection(sessionStore, serverRepository) ?: return
 
         topBar = findViewById(R.id.playbackHistoryTopBar)
         recyclerView = findViewById(R.id.playbackHistoryRecyclerView)
@@ -95,7 +87,7 @@ class PlaybackHistoryActivity : AppCompatActivity() {
 
         adapter = PlaybackHistoryAdapter(
             items = items,
-            accessToken = accessToken,
+            accessToken = connection.accessToken,
             onItemClick = { item ->
                 if (adapter.isSelectionMode()) {
                     adapter.toggleSelection(item.itemId)
@@ -168,14 +160,7 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         }
 
         networkExecutor.execute {
-            val result = embyApiService.fetchPlaybackHistoryPage(
-                baseUrl = baseUrl,
-                userId = userId,
-                accessToken = accessToken,
-                startIndex = startIndex,
-                limit = PAGE_SIZE,
-                category = currentCategory
-            )
+            val result = mediaRepository.fetchPlaybackHistoryPage(connection, startIndex, PAGE_SIZE, currentCategory)
             runOnUiThread {
                 isLoading = false
                 progressBar.visibility = View.GONE
@@ -209,38 +194,14 @@ class PlaybackHistoryActivity : AppCompatActivity() {
     }
 
     private fun openVideoDirectly(item: PlaybackHistoryItemUiModel) {
-        val playlistIds = ArrayList(items.map { it.itemId })
-        val playlistTitles = ArrayList(items.map { it.title })
-        val playlistIndex = items.indexOfFirst { it.itemId == item.itemId }
         val preferredStartPositionMs = if (item.played) 0L else item.playbackPositionTicks / 10_000L
-
-        networkExecutor.execute {
-            val result = embyApiService.fetchVideoDetail(baseUrl, userId, accessToken, item.itemId)
-            runOnUiThread {
-                result.onSuccess { detail ->
-                    startActivity(
-                        Intent(this, PlayerActivity::class.java)
-                            .putExtra(PlayerActivity.EXTRA_PLAYBACK_URL, detail.playbackUrl)
-                            .putExtra(PlayerActivity.EXTRA_ACCESS_TOKEN, accessToken)
-                            .putExtra(PlayerActivity.EXTRA_TITLE, detail.title)
-                            .putExtra(PlayerActivity.EXTRA_COVER_IMAGE_URL, detail.heroImageUrl)
-                            .putExtra(PlayerActivity.EXTRA_BASE_URL, baseUrl)
-                            .putExtra(PlayerActivity.EXTRA_USER_ID, userId)
-                            .putExtra(PlayerActivity.EXTRA_ITEM_ID, item.itemId)
-                            .putExtra(PlayerActivity.EXTRA_START_POSITION_MS, preferredStartPositionMs)
-                            .putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_ITEM_IDS, playlistIds)
-                            .putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_ITEM_TITLES, playlistTitles)
-                            .putExtra(PlayerActivity.EXTRA_PLAYLIST_INDEX, playlistIndex)
-                    )
-                }.onFailure { error ->
-                    Toast.makeText(
-                        this,
-                        error.message ?: getString(R.string.player_error),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
-        }
+        playVideoDirectly(
+            connection = connection,
+            mediaRepository = mediaRepository,
+            itemId = item.itemId,
+            queue = AppNavigator.buildHistoryVideoQueue(items, item.itemId),
+            preferredStartPositionMs = preferredStartPositionMs
+        )
     }
 
     private fun enterSelectionMode() {
@@ -309,7 +270,7 @@ class PlaybackHistoryActivity : AppCompatActivity() {
             var successCount = 0
             var firstError: Throwable? = null
             selectedIds.forEach { itemId ->
-                val result = embyApiService.clearPlayedState(baseUrl, userId, accessToken, itemId)
+                val result = mediaRepository.clearPlayedState(connection, itemId)
                 result.onSuccess { successCount++ }
                     .onFailure { error ->
                         if (firstError == null) firstError = error
@@ -353,12 +314,7 @@ class PlaybackHistoryActivity : AppCompatActivity() {
             }
         }
     }
-
     companion object {
-        const val EXTRA_BASE_URL = "extra_base_url"
-        const val EXTRA_USER_ID = "extra_user_id"
-        const val EXTRA_ACCESS_TOKEN = "extra_access_token"
-
         private const val PAGE_SIZE = 20
     }
 }

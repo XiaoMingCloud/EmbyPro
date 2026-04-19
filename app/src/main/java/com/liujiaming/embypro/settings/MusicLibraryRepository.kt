@@ -33,9 +33,8 @@ object MusicLibraryRepository {
     private val listeners = linkedSetOf<MusicLibraryStateListener>()
 
     private var appContext: Context? = null
-    private var embyApiService: EmbyApiService? = null
-    private var aliasStore: MusicLibraryAliasStore? = null
-    private var selectionStore: MusicLibrarySelectionStore? = null
+    private var musicRepository: MusicRepository? = null
+    private var preferenceStore: AppPreferenceStore? = null
     private var state: MusicLibraryState = MusicLibraryState()
     private var currentSessionKey: String = ""
 
@@ -109,12 +108,13 @@ object MusicLibraryRepository {
         }
 
         AppExecutors.io.execute {
-            val api = embyApiService ?: return@execute
-            val librariesResult = api.fetchMusicLibraries(baseUrl, userId, accessToken)
+            val repository = musicRepository ?: return@execute
+            val connection = ServerConnection(baseUrl, userId, accessToken)
+            val librariesResult = repository.fetchMusicLibraries(connection)
             mainHandler.post {
                 if (currentSessionKey != sessionKey) return@post
                 librariesResult.onSuccess { libraries ->
-                    val selection = selectionStore?.loadSelectedLibraryId(baseUrl, userId)
+                    val selection = preferenceStore?.loadSelectedMusicLibraryId(baseUrl, userId)
                     val currentLibraryId = libraries.firstOrNull { it.id == selection }?.id ?: libraries.firstOrNull()?.id
                     updateState {
                         it.copy(
@@ -133,7 +133,7 @@ object MusicLibraryRepository {
                     if (currentLibraryId.isNullOrBlank()) {
                         notifyListeners()
                     } else {
-                        selectionStore?.saveSelectedLibraryId(baseUrl, userId, currentLibraryId)
+                        preferenceStore?.saveSelectedMusicLibraryId(baseUrl, userId, currentLibraryId)
                         refreshStats()
                     }
                 }.onFailure { error ->
@@ -166,13 +166,9 @@ object MusicLibraryRepository {
         }
 
         AppExecutors.io.execute {
-            val api = embyApiService ?: return@execute
-            val statsResult = api.fetchMusicLibraryStats(
-                baseUrl = state.baseUrl,
-                userId = state.userId,
-                accessToken = state.accessToken,
-                libraryId = current.id
-            )
+            val repository = musicRepository ?: return@execute
+            val connection = ServerConnection(state.baseUrl, state.userId, state.accessToken)
+            val statsResult = repository.fetchMusicLibraryStats(connection, current.id)
             mainHandler.post {
                 if (currentSessionKey != sessionKey) return@post
                 statsResult.onSuccess { stats ->
@@ -202,7 +198,7 @@ object MusicLibraryRepository {
         if (libraryId.isBlank() || libraryId == state.currentLibraryId) return
         if (state.musicLibraries.none { it.id == libraryId }) return
 
-        selectionStore?.saveSelectedLibraryId(state.baseUrl, state.userId, libraryId)
+        preferenceStore?.saveSelectedMusicLibraryId(state.baseUrl, state.userId, libraryId)
         updateState {
             it.copy(
                 currentLibraryId = libraryId,
@@ -215,13 +211,13 @@ object MusicLibraryRepository {
 
     fun saveAlias(libraryId: String, alias: String) {
         if (libraryId.isBlank()) return
-        aliasStore?.saveAlias(state.baseUrl, state.userId, libraryId, alias)
+        preferenceStore?.saveMusicLibraryAlias(state.baseUrl, state.userId, libraryId, alias)
         updateAliasMap()
     }
 
     fun clearAlias(libraryId: String) {
         if (libraryId.isBlank()) return
-        aliasStore?.clearAlias(state.baseUrl, state.userId, libraryId)
+        preferenceStore?.clearMusicLibraryAlias(state.baseUrl, state.userId, libraryId)
         updateAliasMap()
     }
 
@@ -233,9 +229,8 @@ object MusicLibraryRepository {
     private fun ensureInitialized(context: Context) {
         if (appContext != null) return
         appContext = context.applicationContext
-        embyApiService = EmbyApiService(appContext!!)
-        aliasStore = MusicLibraryAliasStore(appContext!!)
-        selectionStore = MusicLibrarySelectionStore(appContext!!)
+        musicRepository = MusicRepository(appContext!!)
+        preferenceStore = AppPreferenceStore(appContext!!)
     }
 
     private fun updateAliasMap() {
@@ -251,9 +246,9 @@ object MusicLibraryRepository {
         userId: String,
         libraries: List<MediaLibraryUiModel>
     ): Map<String, String> {
-        val store = aliasStore ?: return emptyMap()
+        val store = preferenceStore ?: return emptyMap()
         return libraries.mapNotNull { library ->
-            store.loadAlias(baseUrl, userId, library.id)?.let { alias ->
+            store.loadMusicLibraryAlias(baseUrl, userId, library.id)?.let { alias ->
                 library.id to alias
             }
         }.toMap()

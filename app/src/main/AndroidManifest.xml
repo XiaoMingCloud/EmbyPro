@@ -75,10 +75,6 @@
             android:exported="false" />
 
         <activity
-            android:name=".ServerHomeActivity"
-            android:exported="false" />
-
-        <activity
             android:name=".MainActivity"
             android:exported="false" />
 

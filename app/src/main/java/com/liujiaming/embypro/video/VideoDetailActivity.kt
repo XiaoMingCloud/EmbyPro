@@ -1,6 +1,5 @@
 package com.liujiaming.embypro
 
-import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -29,7 +28,9 @@ import java.util.concurrent.ExecutorService
 
 class VideoDetailActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
-    private val embyApiService by lazy { EmbyApiService(this) }
+    private val mediaRepository by lazy { MediaRepository(this) }
+    private val sessionStore by lazy { ServerSessionStore(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
     private val playerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode != RESULT_OK) return@registerForActivityResult
         val data = result.data ?: return@registerForActivityResult
@@ -38,9 +39,7 @@ class VideoDetailActivity : AppCompatActivity() {
         loadVideoDetail()
     }
 
-    private lateinit var baseUrl: String
-    private lateinit var userId: String
-    private lateinit var accessToken: String
+    private lateinit var connection: ServerConnection
     private lateinit var itemId: String
     private var playlistItemIds: ArrayList<String> = arrayListOf()
     private var playlistItemTitles: ArrayList<String> = arrayListOf()
@@ -77,15 +76,13 @@ class VideoDetailActivity : AppCompatActivity() {
 
         supportActionBar?.hide()
 
-        baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty()
-        userId = intent.getStringExtra(EXTRA_USER_ID).orEmpty()
-        accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty()
+        connection = requireServerConnection(sessionStore, serverRepository) ?: return
         itemId = intent.getStringExtra(EXTRA_ITEM_ID).orEmpty()
         playlistItemIds = intent.getStringArrayListExtra(EXTRA_PLAYLIST_ITEM_IDS) ?: arrayListOf()
         playlistItemTitles = intent.getStringArrayListExtra(EXTRA_PLAYLIST_ITEM_TITLES) ?: arrayListOf()
         playlistIndex = intent.getIntExtra(EXTRA_PLAYLIST_INDEX, -1)
 
-        if (baseUrl.isBlank() || userId.isBlank() || accessToken.isBlank() || itemId.isBlank()) {
+        if (itemId.isBlank()) {
             Toast.makeText(this, getString(R.string.server_data_missing), Toast.LENGTH_SHORT).show()
             finish()
             return
@@ -134,7 +131,7 @@ class VideoDetailActivity : AppCompatActivity() {
 
     private fun loadVideoDetail() {
         networkExecutor.execute {
-            val result = embyApiService.fetchVideoDetail(baseUrl, userId, accessToken, itemId)
+            val result = mediaRepository.fetchVideoDetail(connection, itemId)
             runOnUiThread {
                 result.onSuccess { detail ->
                     bindDetail(detail)
@@ -177,13 +174,13 @@ class VideoDetailActivity : AppCompatActivity() {
                 )
             },
             cardLayout = R.layout.item_chapter_card,
-            accessToken = accessToken
+            accessToken = connection.accessToken
         )
 
         EmbyImageLoader.load(
             imageView = heroImage,
             url = detail.heroImageUrl,
-            token = accessToken,
+            token = connection.accessToken,
             onFailure = {
                 val fallbackColor = Color.parseColor(ServerIconStyle.INDIGO.fillColor)
                 applyFallbackGradient(ServerIconStyle.INDIGO.fillColor)
@@ -199,32 +196,32 @@ class VideoDetailActivity : AppCompatActivity() {
     }
 
     private fun openPlayer() {
-        val detail = currentDetail
-        if (detail?.playbackUrl.isNullOrBlank()) {
+        val detail = currentDetail ?: return
+        if (detail.playbackUrl.isNullOrBlank()) {
             Toast.makeText(this, getString(R.string.playback_url_missing), Toast.LENGTH_SHORT).show()
             return
         }
 
         playerLauncher.launch(
-            Intent(this, PlayerActivity::class.java)
-                .putExtra(PlayerActivity.EXTRA_PLAYBACK_URL, detail?.playbackUrl)
-                .putExtra(PlayerActivity.EXTRA_ACCESS_TOKEN, accessToken)
-                .putExtra(PlayerActivity.EXTRA_TITLE, detail?.title)
-                .putExtra(PlayerActivity.EXTRA_COVER_IMAGE_URL, detail?.heroImageUrl)
-                .putExtra(PlayerActivity.EXTRA_BASE_URL, baseUrl)
-                .putExtra(PlayerActivity.EXTRA_USER_ID, userId)
-                .putExtra(PlayerActivity.EXTRA_ITEM_ID, itemId)
-                .putExtra(PlayerActivity.EXTRA_START_POSITION_MS, (detail?.playbackPositionTicks ?: 0L) / 10_000L)
-                .putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_ITEM_IDS, playlistItemIds)
-                .putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_ITEM_TITLES, playlistItemTitles)
-                .putExtra(PlayerActivity.EXTRA_PLAYLIST_INDEX, playlistIndex)
+            AppNavigator.videoPlayerIntent(
+                context = this,
+                connection = connection,
+                detail = detail,
+                queue = VideoQueue(
+                    itemIds = playlistItemIds,
+                    itemTitles = playlistItemTitles,
+                    currentIndex = playlistIndex
+                ),
+                itemId = itemId,
+                preferredStartPositionMs = (detail.playbackPositionTicks) / 10_000L
+            )
         )
     }
 
     private fun toggleFavorite() {
         val target = !isFavorite
         networkExecutor.execute {
-            val result = embyApiService.setFavoriteState(baseUrl, userId, accessToken, itemId, target)
+            val result = mediaRepository.setFavoriteState(connection, itemId, target)
             runOnUiThread {
                 result.onSuccess {
                     isFavorite = target
@@ -297,7 +294,7 @@ class VideoDetailActivity : AppCompatActivity() {
         EmbyImageLoader.load(
             imageView = posterImage,
             url = detail.heroImageUrl,
-            token = accessToken,
+            token = connection.accessToken,
             onFailure = {
                 AppIconPlaceholder.apply(
                     imageView = posterImage,
@@ -354,7 +351,7 @@ class VideoDetailActivity : AppCompatActivity() {
 
     private fun deleteCurrentVideo() {
         networkExecutor.execute {
-            val result = embyApiService.deleteItem(baseUrl, accessToken, itemId)
+            val result = mediaRepository.deleteItem(connection, itemId)
             runOnUiThread {
                 result.onSuccess {
                     Toast.makeText(this, getString(R.string.delete_video_success), Toast.LENGTH_SHORT).show()
@@ -487,9 +484,6 @@ class VideoDetailActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_ITEM_ID = "extra_item_id"
-        const val EXTRA_BASE_URL = "extra_base_url"
-        const val EXTRA_USER_ID = "extra_user_id"
-        const val EXTRA_ACCESS_TOKEN = "extra_access_token"
         const val EXTRA_PLAYLIST_ITEM_IDS = "extra_playlist_item_ids"
         const val EXTRA_PLAYLIST_ITEM_TITLES = "extra_playlist_item_titles"
         const val EXTRA_PLAYLIST_INDEX = "extra_playlist_index"

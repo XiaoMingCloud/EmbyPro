@@ -49,7 +49,9 @@ import kotlin.math.abs
 @androidx.annotation.OptIn(UnstableApi::class)
 class PlayerActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
-    private val embyApiService by lazy { EmbyApiService(this) }
+    private val mediaRepository by lazy { MediaRepository(this) }
+    private val sessionStore by lazy { ServerSessionStore(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
 
     private lateinit var playerView: PlayerView
     private lateinit var coverImageView: ImageView
@@ -67,8 +69,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var accessToken: String
     private lateinit var title: String
     private var coverImageUrl: String? = null
-    private lateinit var baseUrl: String
-    private lateinit var userId: String
+    private lateinit var connection: ServerConnection
     private lateinit var itemId: String
     private var startPositionMs: Long = 0L
     private var currentSpeedIndex = 0
@@ -110,8 +111,7 @@ class PlayerActivity : AppCompatActivity() {
         accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty()
         title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
         coverImageUrl = intent.getStringExtra(EXTRA_COVER_IMAGE_URL)
-        baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty()
-        userId = intent.getStringExtra(EXTRA_USER_ID).orEmpty()
+        connection = sessionStore.resolveConnection(intent, serverRepository) ?: ServerConnection("", "", "")
         itemId = intent.getStringExtra(EXTRA_ITEM_ID).orEmpty()
         startPositionMs = intent.getLongExtra(EXTRA_START_POSITION_MS, 0L)
         playlistItemIds = intent.getStringArrayListExtra(EXTRA_PLAYLIST_ITEM_IDS) ?: arrayListOf()
@@ -606,7 +606,7 @@ class PlayerActivity : AppCompatActivity() {
             return
         }
         networkExecutor.execute {
-            val result = embyApiService.fetchVideoDetail(baseUrl, userId, accessToken, targetItemId)
+            val result = mediaRepository.fetchVideoDetail(connection, targetItemId)
             runOnUiThread {
                 isSwitchingItem = false
                 result.onSuccess { detail ->
@@ -703,7 +703,7 @@ class PlayerActivity : AppCompatActivity() {
         networkExecutor.execute {
             val preloadTargets = mutableListOf<Pair<String, String>>()
             nextIds.forEach { nextItemId ->
-                val detail = embyApiService.fetchVideoDetail(baseUrl, userId, accessToken, nextItemId).getOrNull()
+                val detail = mediaRepository.fetchVideoDetail(connection, nextItemId).getOrNull()
                 val url = detail?.playbackUrl.orEmpty()
                 if (url.isNotBlank()) {
                     PlayerCache.savePrefetchedPlayback(
@@ -865,15 +865,9 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun reportPlaybackProgress(positionMs: Long) {
-        if (baseUrl.isBlank() || userId.isBlank() || accessToken.isBlank() || itemId.isBlank()) return
+        if (!connection.isValid || itemId.isBlank()) return
         networkExecutor.execute {
-            embyApiService.updatePlaybackProgress(
-                baseUrl = baseUrl,
-                userId = userId,
-                accessToken = accessToken,
-                itemId = itemId,
-                playbackPositionMs = positionMs
-            )
+            mediaRepository.updatePlaybackProgress(connection, itemId, positionMs)
         }
     }
 
@@ -996,8 +990,6 @@ class PlayerActivity : AppCompatActivity() {
         const val EXTRA_ACCESS_TOKEN = "extra_access_token"
         const val EXTRA_TITLE = "extra_title"
         const val EXTRA_COVER_IMAGE_URL = "extra_cover_image_url"
-        const val EXTRA_BASE_URL = "extra_base_url"
-        const val EXTRA_USER_ID = "extra_user_id"
         const val EXTRA_ITEM_ID = "extra_item_id"
         const val EXTRA_START_POSITION_MS = "extra_start_position_ms"
         const val EXTRA_PLAYLIST_ITEM_IDS = "extra_playlist_item_ids"

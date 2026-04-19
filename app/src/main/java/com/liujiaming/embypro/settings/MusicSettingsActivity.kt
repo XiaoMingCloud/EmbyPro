@@ -12,6 +12,7 @@ import com.google.android.material.button.MaterialButton
 
 class MusicSettingsActivity : AppCompatActivity() {
     private val sessionStore by lazy { ServerSessionStore(this) }
+    private val serverRepository by lazy { ServerRepository(this) }
 
     private lateinit var topBar: View
     private lateinit var loadingContainer: View
@@ -30,9 +31,7 @@ class MusicSettingsActivity : AppCompatActivity() {
     private lateinit var partitionValueText: TextView
     private lateinit var aliasValueText: TextView
 
-    private lateinit var baseUrl: String
-    private lateinit var userId: String
-    private lateinit var accessToken: String
+    private lateinit var connection: ServerConnection
 
     private val stateListener = MusicLibraryStateListener { state ->
         renderState(state)
@@ -45,7 +44,7 @@ class MusicSettingsActivity : AppCompatActivity() {
         supportActionBar?.hide()
         GlobalThemeManager.apply(this)
 
-        resolveSessionParams()
+        connection = requireServerConnection(sessionStore, serverRepository) ?: return
 
         topBar = findViewById(R.id.musicSettingsTopBar)
         loadingContainer = findViewById(R.id.musicSettingsLoadingContainer)
@@ -66,7 +65,13 @@ class MusicSettingsActivity : AppCompatActivity() {
 
         findViewById<ImageButton>(R.id.musicSettingsBackButton).setDebouncedClickListener { finish() }
         retryButton.setDebouncedClickListener {
-            MusicLibraryRepository.connect(this, baseUrl, userId, accessToken, forceRefresh = true)
+            MusicLibraryRepository.connect(
+                this,
+                connection.baseUrl,
+                connection.userId,
+                connection.accessToken,
+                forceRefresh = true
+            )
         }
         currentPartitionRow.setDebouncedClickListener { showLibraryPicker() }
         aliasRow.setDebouncedClickListener { showAliasEditor() }
@@ -78,7 +83,7 @@ class MusicSettingsActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         MusicLibraryRepository.subscribe(stateListener)
-        MusicLibraryRepository.connect(this, baseUrl, userId, accessToken)
+        MusicLibraryRepository.connect(this, connection.baseUrl, connection.userId, connection.accessToken)
     }
 
     override fun onStop() {
@@ -89,20 +94,6 @@ class MusicSettingsActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         GlobalThemeManager.apply(this)
-    }
-
-    private fun resolveSessionParams() {
-        baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty()
-        userId = intent.getStringExtra(EXTRA_USER_ID).orEmpty()
-        accessToken = intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty()
-
-        if (baseUrl.isNotBlank() && userId.isNotBlank() && accessToken.isNotBlank()) return
-
-        val activeServer = sessionStore.loadServers().firstOrNull() ?: return
-        val embyApiService = EmbyApiService(this)
-        baseUrl = baseUrl.ifBlank { embyApiService.buildBaseUrl(activeServer.address, activeServer.port) }
-        userId = userId.ifBlank { activeServer.userId }
-        accessToken = accessToken.ifBlank { activeServer.accessToken }
     }
 
     private fun renderState(state: MusicLibraryState) {
@@ -233,11 +224,5 @@ class MusicSettingsActivity : AppCompatActivity() {
         emptyContainer.visibility = View.GONE
         errorContainer.visibility = View.GONE
         contentScrollView.visibility = View.VISIBLE
-    }
-
-    companion object {
-        const val EXTRA_BASE_URL = "extra_base_url"
-        const val EXTRA_USER_ID = "extra_user_id"
-        const val EXTRA_ACCESS_TOKEN = "extra_access_token"
     }
 }
