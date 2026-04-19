@@ -1,308 +1,183 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/music_library_background">
+    android:background="@color/screen_background"
+    android:orientation="vertical">
 
-    <View
-        android:layout_width="280dp"
-        android:layout_height="280dp"
-        android:layout_gravity="top|start"
-        android:layout_marginStart="-84dp"
-        android:layout_marginTop="-68dp"
-        android:background="@drawable/bg_music_library_glow_magenta" />
-
-    <View
-        android:layout_width="540dp"
-        android:layout_height="540dp"
-        android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="-72dp"
-        android:background="@drawable/bg_music_library_glow_cyan" />
-
-    <View
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@drawable/bg_music_library_depth" />
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="4dp">
 
-    <androidx.core.widget.NestedScrollView
+        <ImageButton
+            android:id="@+id/libraryBackButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/back"
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_back_ios" />
+
+        <TextView
+            android:id="@+id/libraryTitleText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <HorizontalScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clipToPadding="false"
-        android:fillViewport="true"
-        android:paddingStart="30dp"
-        android:paddingTop="42dp"
-        android:paddingEnd="30dp"
-        android:paddingBottom="34dp">
+        android:layout_height="wrap_content"
+        android:scrollbars="none">
+
+        <com.google.android.material.chip.ChipGroup
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="4dp"
+            android:singleLine="true"
+            app:singleSelection="true">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/tabAll"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/tab_all" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/tabContinueWatching"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/tab_continue" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/tabFavorites"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/tab_favorites" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/tabGenres"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/tab_genres" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/tabTags"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/tab_tags" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/tabCollections"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/tab_collections" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/tabFolders"
+                style="@style/Widget.MaterialComponents.Chip.Choice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/tab_folders" />
+        </com.google.android.material.chip.ChipGroup>
+    </HorizontalScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="4dp">
 
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:orientation="vertical">
+            android:id="@+id/librarySortSelector"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:minHeight="36dp"
+            android:orientation="horizontal"
+            android:paddingEnd="8dp">
 
-            <LinearLayout
-                android:layout_width="match_parent"
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@android:drawable/ic_menu_sort_by_size"
+                android:tint="@color/text_primary" />
+
+            <TextView
+                android:id="@+id/librarySortText"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:background="@drawable/bg_music_library_glass_card"
-                android:elevation="14dp"
-                android:minHeight="540dp"
-                android:orientation="vertical"
-                android:paddingStart="24dp"
-                android:paddingTop="24dp"
-                android:paddingEnd="24dp"
-                android:paddingBottom="22dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <FrameLayout
-                        android:layout_width="92dp"
-                        android:layout_height="92dp"
-                        android:background="@drawable/bg_music_library_cover_glow">
-
-                        <ImageView
-                            android:layout_width="78dp"
-                            android:layout_height="78dp"
-                            android:layout_gravity="center"
-                            android:contentDescription="@string/music_library_cover"
-                            android:scaleType="fitCenter"
-                            android:src="@drawable/ic_launcher_emby_source" />
-                    </FrameLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="18dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-medium"
-                            android:letterSpacing="0.01"
-                            android:text="@string/music_library_name"
-                            android:textColor="@color/music_library_title"
-                            android:textSize="31sp" />
-
-                        <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="10dp"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:fontFamily="sans-serif-medium"
-                                android:text="@string/music_library_route"
-                                android:textColor="@color/music_library_meta"
-                                android:textSize="14sp" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="10dp"
-                                android:text="&#8226;"
-                                android:textColor="@color/music_library_meta"
-                                android:textSize="15sp" />
-
-                            <ImageView
-                                android:layout_width="15dp"
-                                android:layout_height="15dp"
-                                android:layout_marginStart="10dp"
-                                android:contentDescription="@null"
-                                android:src="@drawable/ic_music_library_song" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="6dp"
-                                android:fontFamily="sans-serif-medium"
-                                android:text="@string/music_library_count"
-                                android:textColor="@color/music_library_meta"
-                                android:textSize="14sp" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginTop="26dp"
-                    android:layout_marginBottom="20dp"
-                    android:alpha="0.88"
-                    android:background="@drawable/bg_music_library_divider" />
-
-                <GridLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:alignmentMode="alignMargins"
-                    android:columnCount="3"
-                    android:rowCount="2"
-                    android:useDefaultMargins="false">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:layout_marginBottom="24dp"
-                        android:gravity="center"
-                        android:orientation="vertical"
-                        android:padding="8dp">
-
-                        <ImageView
-                            android:layout_width="34dp"
-                            android:layout_height="34dp"
-                            android:contentDescription="@null"
-                            android:src="@drawable/ic_music_library_song" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/music_library_entry_songs"
-                            android:textColor="@color/music_library_accent"
-                            android:textSize="15sp" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:layout_marginBottom="24dp"
-                        android:gravity="center"
-                        android:orientation="vertical"
-                        android:padding="8dp">
-
-                        <ImageView
-                            android:layout_width="34dp"
-                            android:layout_height="34dp"
-                            android:contentDescription="@null"
-                            android:src="@drawable/ic_music_library_favorite" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/music_library_entry_favorites"
-                            android:textColor="@color/music_library_accent"
-                            android:textSize="15sp" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:layout_marginBottom="24dp"
-                        android:gravity="center"
-                        android:orientation="vertical"
-                        android:padding="8dp">
-
-                        <ImageView
-                            android:layout_width="34dp"
-                            android:layout_height="34dp"
-                            android:contentDescription="@null"
-                            android:src="@drawable/ic_music_library_download" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/music_library_entry_local"
-                            android:textColor="@color/music_library_accent"
-                            android:textSize="15sp" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:gravity="center"
-                        android:orientation="vertical"
-                        android:padding="8dp">
-
-                        <ImageView
-                            android:layout_width="34dp"
-                            android:layout_height="34dp"
-                            android:contentDescription="@null"
-                            android:src="@drawable/ic_music_library_album" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/music_library_entry_albums"
-                            android:textColor="@color/music_library_accent"
-                            android:textSize="15sp" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:gravity="center"
-                        android:orientation="vertical"
-                        android:padding="8dp">
-
-                        <ImageView
-                            android:layout_width="34dp"
-                            android:layout_height="34dp"
-                            android:contentDescription="@null"
-                            android:src="@drawable/ic_music_library_artist" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/music_library_entry_artists"
-                            android:textColor="@color/music_library_accent"
-                            android:textSize="15sp" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:gravity="center"
-                        android:orientation="vertical"
-                        android:padding="8dp">
-
-                        <ImageView
-                            android:layout_width="34dp"
-                            android:layout_height="34dp"
-                            android:contentDescription="@null"
-                            android:src="@drawable/ic_music_library_folder" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/music_library_entry_folders"
-                            android:textColor="@color/music_library_accent"
-                            android:textSize="15sp" />
-                    </LinearLayout>
-                </GridLayout>
-
-                <ImageView
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:layout_gravity="center_horizontal"
-                    android:layout_marginTop="24dp"
-                    android:contentDescription="@string/music_library_expand"
-                    android:src="@drawable/ic_music_library_chevron_down" />
-            </LinearLayout>
+                android:layout_marginStart="6dp"
+                android:text="@string/sort_title_desc"
+                android:textColor="@color/text_primary"
+                android:textStyle="bold" />
         </LinearLayout>
-    </androidx.core.widget.NestedScrollView>
-</FrameLayout>
+
+        <TextView
+            android:id="@+id/libraryFilterValueText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <ImageButton
+            android:id="@+id/libraryFilterButton"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/filter"
+            android:padding="8dp"
+            android:src="@android:drawable/ic_menu_sort_by_size"
+            android:visibility="invisible" />
+
+        <TextView
+            android:id="@+id/libraryCountText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textColor="@color/text_primary" />
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/libraryItemsRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingStart="12dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp" />
+
+</LinearLayout>

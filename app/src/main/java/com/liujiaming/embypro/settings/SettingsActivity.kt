@@ -23,6 +23,14 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.settingsThemeEntry).setDebouncedClickListener {
             startActivity(Intent(this, ThemeSettingsActivity::class.java))
         }
+        findViewById<View>(R.id.settingsMusicEntry).setDebouncedClickListener {
+            startActivity(
+                Intent(this, MusicSettingsActivity::class.java)
+                    .putExtra(MusicSettingsActivity.EXTRA_BASE_URL, intent.getStringExtra(EXTRA_BASE_URL).orEmpty())
+                    .putExtra(MusicSettingsActivity.EXTRA_USER_ID, intent.getStringExtra(EXTRA_USER_ID).orEmpty())
+                    .putExtra(MusicSettingsActivity.EXTRA_ACCESS_TOKEN, intent.getStringExtra(EXTRA_ACCESS_TOKEN).orEmpty())
+            )
+        }
         findViewById<View>(R.id.settingsHomeDisplayEntry).setDebouncedClickListener {
             startActivity(
                 Intent(this, HomeSettingsActivity::class.java)

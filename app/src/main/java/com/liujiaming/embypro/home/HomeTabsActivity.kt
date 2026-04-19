@@ -195,8 +195,10 @@ class HomeTabsActivity : AppCompatActivity() {
         navigationMediaItem.setDebouncedClickListener { showTab(Tab.MEDIA) }
         navigationMusicItem.setDebouncedClickListener {
             startActivity(
-                Intent(this, LibraryItemsActivity::class.java)
-                    .putExtra(LibraryItemsActivity.EXTRA_LIBRARY_NAME, getString(R.string.music_library_name))
+                Intent(this, MusicLibraryActivity::class.java)
+                    .putExtra(MusicLibraryActivity.EXTRA_BASE_URL, baseUrl)
+                    .putExtra(MusicLibraryActivity.EXTRA_USER_ID, userId)
+                    .putExtra(MusicLibraryActivity.EXTRA_ACCESS_TOKEN, accessToken)
             )
         }
         navigationMyItem.setDebouncedClickListener { showTab(Tab.MY) }

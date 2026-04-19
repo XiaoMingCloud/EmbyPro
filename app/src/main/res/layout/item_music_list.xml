@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="10dp"
+    app:cardBackgroundColor="@color/music_library_card_surface"
+    app:cardCornerRadius="22dp"
+    app:cardElevation="0dp"
+    app:strokeColor="@color/music_library_card_stroke"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:minHeight="88dp"
+        android:orientation="horizontal"
+        android:paddingStart="14dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="12dp">
+
+        <ImageView
+            android:id="@+id/musicListArtwork"
+            android:layout_width="58dp"
+            android:layout_height="58dp"
+            android:scaleType="centerCrop" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/musicListTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:textColor="@color/music_library_title"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/musicListSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:maxLines="1"
+                android:textColor="@color/music_library_meta"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/musicListDetail"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:maxLines="1"
+                android:textColor="@color/music_library_accent"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/musicListActionIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:tint="@color/music_library_accent" />
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

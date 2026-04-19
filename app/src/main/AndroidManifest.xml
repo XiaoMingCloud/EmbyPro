@@ -43,6 +43,22 @@
             android:exported="false" />
 
         <activity
+            android:name=".MusicPlayerActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".MusicListActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".MusicLibraryActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".MusicSettingsActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".SettingsActivity"
             android:exported="false" />
 

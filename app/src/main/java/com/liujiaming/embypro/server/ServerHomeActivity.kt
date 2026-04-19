@@ -29,7 +29,8 @@ data class MediaLibraryUiModel(
     val title: String,
     val style: ServerIconStyle,
     val imageUrl: String? = null,
-    val totalCount: Int = 0
+    val totalCount: Int = 0,
+    val collectionType: String = ""
 )
 
 class ServerHomeActivity : AppCompatActivity() {
