@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="purple_200">#D2BBEE</color>
     <color name="purple_500">#B68AF9</color>
@@ -53,4 +53,8 @@
     <color name="music_library_depth_start">#1E87BEE8</color>
     <color name="music_library_depth_end">#000A2749</color>
     <color name="music_library_cover_glow">#2637C2A0</color>
+    <color name="music_library_search_background">#223B5D86</color>
+    <color name="music_library_search_stroke">#2ECAEEFF</color>
+    <color name="music_library_search_icon">#D3E2E9F2</color>
+    <color name="music_library_search_hint">#89E2E9F2</color>
 </resources>

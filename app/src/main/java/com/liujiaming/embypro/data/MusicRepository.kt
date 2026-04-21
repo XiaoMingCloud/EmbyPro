@@ -52,6 +52,20 @@ class MusicRepository(context: Context) {
         )
     }
 
+    fun searchMusicItems(
+        connection: ServerConnection,
+        libraryId: String,
+        query: String
+    ): Result<MusicListPageUiModel> {
+        return embyApiService.searchMusicItems(
+            baseUrl = connection.baseUrl,
+            userId = connection.userId,
+            accessToken = connection.accessToken,
+            libraryId = libraryId,
+            query = query
+        )
+    }
+
     fun setFavoriteState(
         connection: ServerConnection,
         itemId: String,

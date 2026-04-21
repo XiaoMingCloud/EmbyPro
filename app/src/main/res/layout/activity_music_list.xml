@@ -69,40 +69,68 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <LinearLayout
-                android:id="@+id/musicListPartitionRow"
-                android:layout_width="wrap_content"
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/musicListSearchCard"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/bg_music_page_chip"
-                android:clickable="true"
-                android:focusable="true"
-                android:foreground="?attr/selectableItemBackgroundBorderless"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingStart="14dp"
-                android:paddingTop="10dp"
-                android:paddingEnd="14dp"
-                android:paddingBottom="10dp">
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="4dp"
+                app:cardBackgroundColor="@color/music_library_search_background"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/music_library_search_stroke"
+                app:strokeWidth="1dp">
 
-                <TextView
-                    android:id="@+id/musicListPartitionText"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/music_library_meta"
-                    android:textSize="13sp" />
+                    android:gravity="center_vertical"
+                    android:minHeight="40dp"
+                    android:orientation="horizontal"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="10dp">
 
-                <ImageView
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:layout_marginStart="8dp"
-                    android:src="@drawable/ic_music_library_chevron_down" />
-            </LinearLayout>
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:src="@android:drawable/ic_menu_search"
+                        android:tint="@color/music_library_search_icon" />
+
+                    <EditText
+                        android:id="@+id/musicListSearchInput"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:background="@android:color/transparent"
+                        android:hint="@string/music_search_hint"
+                        android:imeOptions="actionSearch"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:paddingTop="0dp"
+                        android:paddingBottom="0dp"
+                        android:textColor="@color/music_library_title"
+                        android:textColorHint="@color/music_library_search_hint"
+                        android:textSize="14sp" />
+
+                    <ImageButton
+                        android:id="@+id/musicListSearchClearButton"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/music_search_clear"
+                        android:padding="6dp"
+                        android:src="@android:drawable/ic_menu_close_clear_cancel"
+                        android:tint="@color/music_library_search_icon"
+                        android:visibility="gone" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/musicListRecyclerView"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="10dp"
                 android:layout_weight="1"
                 android:clipToPadding="false"
                 android:paddingBottom="12dp" />

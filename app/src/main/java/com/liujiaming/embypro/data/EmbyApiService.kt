@@ -1,4 +1,4 @@
-﻿package com.liujiaming.embypro
+package com.liujiaming.embypro
 
 import android.content.Context
 import android.provider.Settings
@@ -623,6 +623,78 @@ class EmbyApiService(
         }
     }
 
+    fun searchMusicItems(
+        baseUrl: String,
+        userId: String,
+        accessToken: String,
+        libraryId: String,
+        query: String
+    ): Result<MusicListPageUiModel> {
+        return runCatching {
+            val request = Request.Builder()
+                .url(buildMusicSearchUrl(baseUrl, userId, libraryId, query))
+                .header("X-Emby-Token", accessToken)
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("搜索音乐失败：${response.code}")
+                }
+
+                val json = JSONObject(response.body?.string().orEmpty())
+                val items = buildList {
+                    val rawItems = json.optJSONArray("Items") ?: return@buildList
+                    
+                    for (index in 0 until rawItems.length()) {
+                        val item = rawItems.optJSONObject(index) ?: continue
+                        val itemType = item.optString("Type")
+                        
+                        when (itemType) {
+                            "Audio" -> {
+                                val songEntries = buildMusicSongEntries(baseUrl, JSONArray().put(item))
+                                addAll(songEntries)
+                            }
+                            "MusicAlbum" -> {
+                                val albumEntries = buildMusicContainerEntries(
+                                    baseUrl,
+                                    JSONArray().put(item),
+                                    MusicBrowseType.ALBUMS
+                                )
+                                addAll(albumEntries)
+                            }
+                            "MusicArtist" -> {
+                                val artistEntries = buildMusicArtistEntries(baseUrl, JSONArray().put(item))
+                                addAll(artistEntries)
+                            }
+                            "Playlist" -> {
+                                val playlistEntries = buildMusicContainerEntries(
+                                    baseUrl,
+                                    JSONArray().put(item),
+                                    MusicBrowseType.PLAYLISTS
+                                )
+                                addAll(playlistEntries)
+                            }
+                        }
+                    }
+                }
+
+                MusicListPageUiModel(
+                    title = context.getString(R.string.music_search_hint),
+                    subtitle = if (items.isEmpty()) {
+                        context.getString(R.string.music_search_no_results)
+                    } else {
+                        context.getString(R.string.library_total_count, items.size)
+                    },
+                    items = items,
+                    totalCount = items.size,
+                    isSongList = false,
+                    libraryId = libraryId
+                )
+            }
+        }
+    }
+
     fun fetchVideoDetail(
         baseUrl: String,
         userId: String,
@@ -1091,17 +1163,17 @@ class EmbyApiService(
         pageTitle: String,
         pageSubtitle: String
     ): MusicListPageUiModel {
-        val favoriteItems = mutableListOf<JSONObject>()
+        val allItems = mutableListOf<MusicListEntryUiModel>()
         var totalCount = 0
         var startIndex = 0
 
         do {
             val request = Request.Builder()
                 .url(
-                    buildMusicSongsUrl(
+                    buildMusicFavoritesUrl(
                         baseUrl = baseUrl,
                         userId = userId,
-                        parentId = libraryId,
+                        libraryId = libraryId,
                         startIndex = startIndex,
                         limit = MUSIC_ITEMS_PAGE_SIZE
                     )
@@ -1116,33 +1188,22 @@ class EmbyApiService(
                 }
 
                 val json = JSONObject(response.body?.string().orEmpty())
-                totalCount = json.optInt("TotalRecordCount", favoriteItems.size)
-                json.optJSONArray("Items")
+                totalCount = json.optInt("TotalRecordCount", allItems.size)
+                buildMusicSongEntries(baseUrl, json.optJSONArray("Items"))
             }
 
-            for (index in 0 until (pageItems?.length() ?: 0)) {
-                val item = pageItems?.optJSONObject(index) ?: continue
-                if (isMusicFavorite(item)) {
-                    favoriteItems.add(item)
-                }
-            }
-
+            allItems.addAll(pageItems)
             startIndex += MUSIC_ITEMS_PAGE_SIZE
         } while (startIndex < totalCount)
 
         return MusicListPageUiModel(
             title = pageTitle,
             subtitle = pageSubtitle,
-            items = buildMusicSongEntries(baseUrl, JSONArray(favoriteItems)),
-            totalCount = favoriteItems.size,
+            items = allItems,
+            totalCount = totalCount,
             isSongList = true,
             libraryId = libraryId
         )
-    }
-
-    private fun isMusicFavorite(item: JSONObject): Boolean {
-        val userData = item.optJSONObject("UserData") ?: return false
-        return userData.optBoolean("IsFavorite") || userData.optBoolean("Likes")
     }
 
     private fun fetchMusicAlbumsPage(
@@ -2090,7 +2151,7 @@ class EmbyApiService(
             append("&SearchTerm=${encodeQueryValue(query)}")
             append("&StartIndex=$startIndex")
             append("&Limit=$limit")
-            append("&IncludeItemTypes=Movie,Episode,Video,Series,MusicVideo,BoxSet,Folder")
+            append("&IncludeItemTypes=Movie,Episode,Video,Series,MusicVideo,BoxSet,Folder,Audio,MusicAlbum,MusicArtist,Playlist")
             append("&Fields=PrimaryImageAspectRatio,Overview,People,ImageTags,PrimaryImageAspectRatio,ChildCount")
             append("&EnableImageTypes=Primary,Thumb,Backdrop&ImageTypeLimit=1")
             append("&SortBy=SortName")
@@ -2114,6 +2175,29 @@ class EmbyApiService(
             append("&Limit=$limit")
             append("&IncludeItemTypes=Audio")
             append("&MediaTypes=Audio")
+            append("&Fields=ImageTags,PrimaryImageTag,PrimaryImageItemId,AlbumPrimaryImageTag,AlbumId,Artists,Album,RunTimeTicks,UserData")
+            append("&EnableImageTypes=Primary,Thumb,Backdrop")
+            append("&EnableUserData=true")
+            append("&SortBy=SortName")
+            append("&SortOrder=Ascending")
+        }
+    }
+
+    private fun buildMusicFavoritesUrl(
+        baseUrl: String,
+        userId: String,
+        libraryId: String,
+        startIndex: Int = 0,
+        limit: Int = MUSIC_ITEMS_PAGE_SIZE
+    ): String {
+        return buildString {
+            append("$baseUrl/emby/Users/$userId/Items?")
+            append("ParentId=$libraryId")
+            append("&Recursive=true")
+            append("&StartIndex=$startIndex")
+            append("&Limit=$limit")
+            append("&IsFavorite=true")
+            append("&IncludeItemTypes=Audio")
             append("&Fields=ImageTags,PrimaryImageTag,PrimaryImageItemId,AlbumPrimaryImageTag,AlbumId,Artists,Album,RunTimeTicks,UserData")
             append("&EnableImageTypes=Primary,Thumb,Backdrop")
             append("&EnableUserData=true")
@@ -2227,6 +2311,27 @@ class EmbyApiService(
             append("&SortBy=SortName")
             append("&SortOrder=Ascending")
             append("&Limit=500")
+        }
+    }
+
+    private fun buildMusicSearchUrl(
+        baseUrl: String,
+        userId: String,
+        libraryId: String,
+        query: String
+    ): String {
+        return buildString {
+            append("$baseUrl/emby/Users/$userId/Items?")
+            append("ParentId=$libraryId")
+            append("&Recursive=true")
+            append("&SearchTerm=${encodeQueryValue(query)}")
+            append("&IncludeItemTypes=Audio,MusicAlbum,MusicArtist,Playlist")
+            append("&Fields=ImageTags,PrimaryImageTag,PrimaryImageItemId,AlbumPrimaryImageTag,AlbumId,Artists,Album,RunTimeTicks,UserData,ChildCount")
+            append("&EnableImageTypes=Primary,Thumb,Backdrop")
+            append("&EnableUserData=true")
+            append("&SortBy=SortName")
+            append("&SortOrder=Ascending")
+            append("&Limit=100")
         }
     }
 

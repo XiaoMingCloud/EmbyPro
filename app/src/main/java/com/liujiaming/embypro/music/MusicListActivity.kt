@@ -1,12 +1,17 @@
 package com.liujiaming.embypro
 
+import android.content.Context
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
@@ -22,6 +27,8 @@ class MusicListActivity : AppCompatActivity() {
     private var containerTitle: String? = null
     private var lastLibraryId: String? = null
     private var isLoadingPage = false
+    
+    private var currentSearchQuery: String = ""
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var loadingContainer: View
@@ -30,9 +37,9 @@ class MusicListActivity : AppCompatActivity() {
     private lateinit var errorTextView: TextView
     private lateinit var pageTitleView: TextView
     private lateinit var pageSubtitleView: TextView
-    private lateinit var partitionRow: View
-    private lateinit var partitionTextView: TextView
     private lateinit var adapter: MusicListAdapter
+    private lateinit var searchInput: EditText
+    private lateinit var searchClearButton: ImageButton
 
     private val items = mutableListOf<MusicListEntryUiModel>()
 
@@ -62,11 +69,10 @@ class MusicListActivity : AppCompatActivity() {
         errorTextView = findViewById(R.id.musicListErrorText)
         pageTitleView = findViewById(R.id.musicListTitleText)
         pageSubtitleView = findViewById(R.id.musicListSubtitleText)
-        partitionRow = findViewById(R.id.musicListPartitionRow)
-        partitionTextView = findViewById(R.id.musicListPartitionText)
+        searchInput = findViewById(R.id.musicListSearchInput)
+        searchClearButton = findViewById(R.id.musicListSearchClearButton)
 
         findViewById<ImageButton>(R.id.musicListBackButton).setDebouncedClickListener { finish() }
-        partitionRow.setDebouncedClickListener { showLibraryPicker() }
         findViewById<View>(R.id.musicListRetryButton).setDebouncedClickListener {
             MusicLibraryRepository.connect(
                 this,
@@ -75,6 +81,30 @@ class MusicListActivity : AppCompatActivity() {
                 connection.accessToken,
                 forceRefresh = true
             )
+        }
+        
+        searchInput.doAfterTextChanged {
+            searchClearButton.visibility = if (it.isNullOrBlank()) View.GONE else View.VISIBLE
+            if (it.isNullOrBlank()) {
+                currentSearchQuery = ""
+                if (lastLibraryId != null) {
+                    loadPage(lastLibraryId!!)
+                }
+            }
+        }
+        searchInput.setOnEditorActionListener { _, actionId, event ->
+            val imeHandled = actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE
+            val enterHandled = event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN
+            if (imeHandled || enterHandled) {
+                performMusicSearch()
+                true
+            } else {
+                false
+            }
+        }
+        searchClearButton.setDebouncedClickListener {
+            searchInput.setText("")
+            hideKeyboard()
         }
 
         adapter = MusicListAdapter(items, connection.accessToken) { entry ->
@@ -117,8 +147,6 @@ class MusicListActivity : AppCompatActivity() {
             showEmpty()
             return
         }
-
-        partitionTextView.text = MusicLibraryRepository.displayName(currentLibrary)
 
         if (lastLibraryId != null && lastLibraryId != currentLibrary.id && !containerId.isNullOrBlank()) {
             containerId = null
@@ -190,23 +218,6 @@ class MusicListActivity : AppCompatActivity() {
         )
     }
 
-    private fun showLibraryPicker() {
-        val state = MusicLibraryRepository.currentState()
-        if (state.musicLibraries.isEmpty()) return
-
-        val labels = state.musicLibraries.map { MusicLibraryRepository.displayName(it) }.toTypedArray()
-        val selectedIndex = state.musicLibraries.indexOfFirst { it.id == state.currentLibraryId }.coerceAtLeast(0)
-
-        AlertDialog.Builder(this)
-            .setTitle(R.string.music_settings_partition_dialog_title)
-            .setSingleChoiceItems(labels, selectedIndex) { dialog, which ->
-                MusicLibraryRepository.selectLibrary(state.musicLibraries[which].id)
-                dialog.dismiss()
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-    }
-
     private fun showLoading() {
         recyclerView.visibility = View.GONE
         loadingContainer.visibility = View.VISIBLE
@@ -235,6 +246,54 @@ class MusicListActivity : AppCompatActivity() {
         emptyContainer.visibility = View.GONE
         errorContainer.visibility = View.GONE
     }
+    
+    private fun performMusicSearch() {
+        val query = searchInput.text?.toString()?.trim().orEmpty()
+        if (query.isBlank()) {
+            Toast.makeText(this, getString(R.string.search_keyword_required), Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        hideKeyboard()
+        currentSearchQuery = query
+        
+        if (lastLibraryId == null) {
+            Toast.makeText(this, getString(R.string.music_list_load_failed), Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        isLoadingPage = true
+        showLoading()
+        
+        AppExecutors.io.execute {
+            val result = musicRepository.searchMusicItems(
+                connection = connection,
+                libraryId = lastLibraryId!!,
+                query = currentSearchQuery
+            )
+            runOnUiThread {
+                isLoadingPage = false
+                result.onSuccess { page ->
+                    pageTitleView.text = page.title
+                    pageSubtitleView.text = page.subtitle
+                    adapter.submitItems(page.items)
+                    if (page.items.isEmpty()) {
+                        showEmpty()
+                    } else {
+                        showContent()
+                    }
+                }.onFailure { error ->
+                    showError(error.message ?: getString(R.string.music_search_failed))
+                }
+            }
+        }
+    }
+    
+    private fun hideKeyboard() {
+        val inputMethodManager = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+        inputMethodManager?.hideSoftInputFromWindow(searchInput.windowToken, 0)
+    }
+    
     companion object {
         const val EXTRA_BROWSE_TYPE = "extra_browse_type"
         const val EXTRA_CONTAINER_ID = "extra_container_id"
