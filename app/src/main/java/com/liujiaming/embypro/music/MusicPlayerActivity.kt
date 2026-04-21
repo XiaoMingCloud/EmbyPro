@@ -1,7 +1,15 @@
 package com.liujiaming.embypro
 
+import android.Manifest
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
+import android.os.IBinder
 import android.os.Looper
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -10,12 +18,13 @@ import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 
 class MusicPlayerActivity : AppCompatActivity() {
     private val musicRepository by lazy { MusicRepository(this) }
@@ -44,7 +53,9 @@ class MusicPlayerActivity : AppCompatActivity() {
     private var queueImages: ArrayList<String> = arrayListOf()
     private var currentIndex: Int = 0
 
-    private var player: ExoPlayer? = null
+    private var player: Player? = null
+    private var playbackService: MusicPlaybackService? = null
+    private var isServiceBound = false
     private var currentPlaybackItemId: String = ""
     private var currentPlaybackPositionMs: Long = 0L
     private var shouldResumeAfterLoad = true
@@ -54,6 +65,72 @@ class MusicPlayerActivity : AppCompatActivity() {
         if (libraryId != null && state.currentLibraryId != null && state.currentLibraryId != libraryId) {
             Toast.makeText(this, getString(R.string.music_list_partition_changed), Toast.LENGTH_SHORT).show()
             finish()
+        }
+    }
+
+    private val playerListener = object : Player.Listener {
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            loadingIndicator.visibility = if (playbackState == Player.STATE_BUFFERING) {
+                android.view.View.VISIBLE
+            } else {
+                android.view.View.GONE
+            }
+            if (playbackState == Player.STATE_ENDED) {
+                switchToIndex(currentIndex + 1, true)
+            }
+            syncControls()
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            syncControls()
+            if (isPlaying) {
+                mainHandler.post(progressUpdater)
+            } else {
+                mainHandler.removeCallbacks(progressUpdater)
+            }
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            val itemId = mediaItem?.mediaId
+            if (!itemId.isNullOrBlank()) {
+                currentPlaybackItemId = itemId
+                currentIndex = queueIds.indexOf(itemId).takeIf { it >= 0 } ?: currentIndex
+            }
+            syncMetadataFromCurrentItem(mediaItem)
+            syncControls()
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            Toast.makeText(this@MusicPlayerActivity, error.message ?: getString(R.string.player_error), Toast.LENGTH_SHORT).show()
+            syncControls()
+        }
+    }
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val localBinder = service as? MusicPlaybackService.LocalBinder ?: return
+            playbackService = localBinder.getService()
+            isServiceBound = true
+            attachPlayer(playbackService?.getPlayer())
+
+            val currentPlayer = player
+            if (currentPlayer == null || currentPlayer.mediaItemCount == 0) {
+                switchToIndex(currentIndex, true, resetPosition = false)
+            } else {
+                val activeItem = currentPlayer.currentMediaItem
+                val activeIndex = activeItem?.mediaId?.let { queueIds.indexOf(it) } ?: -1
+                if (activeIndex >= 0) {
+                    currentIndex = activeIndex
+                }
+                syncMetadataFromCurrentItem(activeItem)
+                syncControls()
+            }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            detachPlayer()
+            playbackService = null
+            isServiceBound = false
         }
     }
 
@@ -114,66 +191,44 @@ class MusicPlayerActivity : AppCompatActivity() {
                 isSeekingFromUser = false
             }
         })
+
+        requestNotificationPermissionIfNeeded()
     }
 
     override fun onStart() {
         super.onStart()
         MusicLibraryRepository.subscribe(stateListener)
-        initializePlayer()
-        switchToIndex(currentIndex, true, resetPosition = false)
+
+        val serviceIntent = Intent(this, MusicPlaybackService::class.java)
+        ContextCompat.startForegroundService(this, serviceIntent)
+        bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
     override fun onStop() {
         MusicLibraryRepository.unsubscribe(stateListener)
-        releasePlayer()
+        detachPlayer()
+        if (isServiceBound) {
+            unbindService(serviceConnection)
+            isServiceBound = false
+        }
+        playbackService = null
         super.onStop()
     }
 
-    private fun initializePlayer() {
-        if (player != null) return
-
-        val httpFactory = DefaultHttpDataSource.Factory().apply {
-            setDefaultRequestProperties(mapOf("X-Emby-Token" to connection.accessToken))
-        }
-
-        val exoPlayer = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
-            .build()
-        exoPlayer.addListener(object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                loadingIndicator.visibility = if (playbackState == Player.STATE_BUFFERING) {
-                    android.view.View.VISIBLE
-                } else {
-                    android.view.View.GONE
-                }
-                if (playbackState == Player.STATE_ENDED) {
-                    switchToIndex(currentIndex + 1, true)
-                }
-                syncControls()
-            }
-
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                syncControls()
-                if (isPlaying) {
-                    mainHandler.post(progressUpdater)
-                } else {
-                    mainHandler.removeCallbacks(progressUpdater)
-                }
-            }
-
-            override fun onPlayerError(error: PlaybackException) {
-                Toast.makeText(this@MusicPlayerActivity, error.message ?: getString(R.string.player_error), Toast.LENGTH_SHORT).show()
-                syncControls()
-            }
-        })
-        player = exoPlayer
+    private fun attachPlayer(servicePlayer: Player?) {
+        if (servicePlayer == null || player === servicePlayer) return
+        detachPlayer()
+        player = servicePlayer
+        servicePlayer.addListener(playerListener)
     }
 
-    private fun releasePlayer() {
-        val currentPlayer = player ?: return
-        reportPlaybackProgress(currentPlayer.currentPosition)
+    private fun detachPlayer() {
+        val currentPlayer = player
+        if (currentPlayer != null) {
+            reportPlaybackProgress(currentPlayer.currentPosition)
+            currentPlayer.removeListener(playerListener)
+        }
         mainHandler.removeCallbacks(progressUpdater)
-        currentPlayer.release()
         player = null
     }
 
@@ -183,7 +238,8 @@ class MusicPlayerActivity : AppCompatActivity() {
             return
         }
 
-        val previousPosition = player?.currentPosition ?: currentPlaybackPositionMs
+        val currentPlayer = player ?: return
+        val previousPosition = currentPlayer.currentPosition.takeIf { it > 0L } ?: currentPlaybackPositionMs
         reportPlaybackProgress(previousPosition)
 
         currentIndex = index
@@ -207,8 +263,19 @@ class MusicPlayerActivity : AppCompatActivity() {
                     titleTextView.text = playback.title
                     subtitleTextView.text = playback.subtitle
                     bindCover(playback.coverImageUrl)
-                    val currentPlayer = player ?: return@onSuccess
-                    currentPlayer.setMediaItem(MediaItem.fromUri(playback.playbackUrl))
+
+                    val metadata = MediaMetadata.Builder()
+                        .setTitle(playback.title)
+                        .setArtist(playback.subtitle)
+                        .setArtworkUri(playback.coverImageUrl?.toUri())
+                        .build()
+                    val mediaItem = MediaItem.Builder()
+                        .setMediaId(playback.itemId)
+                        .setUri(playback.playbackUrl)
+                        .setMediaMetadata(metadata)
+                        .build()
+
+                    currentPlayer.setMediaItem(mediaItem)
                     currentPlayer.prepare()
                     currentPlayer.seekTo(currentPlaybackPositionMs)
                     currentPlayer.playWhenReady = shouldResumeAfterLoad
@@ -229,6 +296,22 @@ class MusicPlayerActivity : AppCompatActivity() {
         titleTextView.text = queueTitles.getOrNull(currentIndex).orEmpty().ifBlank { getString(R.string.untitled_media) }
         subtitleTextView.text = queueSubtitles.getOrNull(currentIndex).orEmpty()
         bindCover(queueImages.getOrNull(currentIndex).orEmpty().ifBlank { null })
+    }
+
+    private fun syncMetadataFromCurrentItem(mediaItem: MediaItem?) {
+        if (mediaItem == null) {
+            syncStaticMetadata()
+            return
+        }
+        val metadata = mediaItem.mediaMetadata
+        val title = metadata.title?.toString().orEmpty()
+        val artist = metadata.artist?.toString().orEmpty()
+        titleTextView.text = title.ifBlank {
+            queueTitles.getOrNull(currentIndex).orEmpty().ifBlank { getString(R.string.untitled_media) }
+        }
+        subtitleTextView.text = artist.ifBlank { queueSubtitles.getOrNull(currentIndex).orEmpty() }
+        val artworkUrl = metadata.artworkUri?.toString().orEmpty()
+        bindCover(artworkUrl.ifBlank { queueImages.getOrNull(currentIndex).orEmpty().ifBlank { null } })
     }
 
     private fun bindCover(url: String?) {
@@ -282,6 +365,18 @@ class MusicPlayerActivity : AppCompatActivity() {
         }
     }
 
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            NOTIFICATION_PERMISSION_REQUEST_CODE
+        )
+    }
+
     private fun formatMillis(positionMs: Long): String {
         val totalSeconds = (positionMs / 1000).coerceAtLeast(0L)
         val hours = totalSeconds / 3600
@@ -309,5 +404,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         const val EXTRA_QUEUE_SUBTITLES = "extra_queue_subtitles"
         const val EXTRA_QUEUE_IMAGES = "extra_queue_images"
         const val EXTRA_QUEUE_INDEX = "extra_queue_index"
+
+        private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 2001
     }
 }

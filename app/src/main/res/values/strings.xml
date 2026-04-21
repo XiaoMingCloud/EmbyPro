@@ -211,6 +211,7 @@
     <string name="no_genres_found">这个媒体库没有可用类型</string>
     <string name="no_tags_found">这个媒体库没有可用标签</string>
     <string name="play">播放</string>
+    <string name="pause">暂停</string>
     <string name="continue_play_from">继续播放 %1$s</string>
     <string name="play_pending">播放功能稍后接入</string>
     <string name="action_replay_from_start">从头播放</string>
