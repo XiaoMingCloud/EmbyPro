@@ -2,9 +2,11 @@
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
+import android.view.WindowManager
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.TextView
@@ -97,7 +99,7 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
             .setView(dialogView)
             .create()
 
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        applyGlassDialogWindow(dialog)
 
         saveButton.setDebouncedClickListener {
             val newPassword = passwordInput.text?.toString().orEmpty()
@@ -136,7 +138,7 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
             .setView(dialogView)
             .create()
 
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        applyGlassDialogWindow(dialog)
 
         saveButton.setDebouncedClickListener {
             val updatedName = nameInput.text?.toString()?.trim().orEmpty()
@@ -203,7 +205,7 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
             .setView(dialogView)
             .create()
 
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        applyGlassDialogWindow(dialog)
 
         connectButton.setDebouncedClickListener {
             val address = addressInput.text?.toString()?.trim().orEmpty()
@@ -261,7 +263,7 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
             .setView(dialogView)
             .create()
 
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        applyGlassDialogWindow(dialog)
 
         loginButton.setDebouncedClickListener {
             val username = usernameInput.text?.toString()?.trim().orEmpty()
@@ -332,6 +334,21 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
     private fun setButtonLoading(button: MaterialButton, isLoading: Boolean, idleTextRes: Int) {
         button.isEnabled = !isLoading
         button.text = if (isLoading) getString(R.string.loading) else getString(idleTextRes)
+    }
+
+    private fun applyGlassDialogWindow(dialog: AlertDialog) {
+        val window = dialog.window ?: return
+        window.setBackgroundDrawableResource(android.R.color.transparent)
+        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+        }
+        window.attributes = window.attributes.apply {
+            dimAmount = 0.18f
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                blurBehindRadius = 36
+            }
+        }
     }
 
     private fun updateServer(server: ServerUiModel) {

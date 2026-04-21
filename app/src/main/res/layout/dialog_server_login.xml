@@ -4,9 +4,12 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="24dp"
-    app:cardBackgroundColor="@color/dialog_background"
-    app:cardCornerRadius="28dp"
-    app:cardElevation="0dp">
+    android:background="@drawable/bg_music_library_glass_card"
+    app:cardBackgroundColor="@android:color/transparent"
+    app:cardCornerRadius="34dp"
+    app:cardElevation="0dp"
+    app:cardMaxElevation="0dp"
+    app:strokeWidth="0dp">
 
     <LinearLayout
         android:layout_width="match_parent"
