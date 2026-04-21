@@ -43,5 +43,6 @@ data class MusicPlaybackUiModel(
     val subtitle: String,
     val coverImageUrl: String?,
     val playbackUrl: String,
-    val playbackPositionMs: Long
+    val playbackPositionMs: Long,
+    val isFavorite: Boolean
 )

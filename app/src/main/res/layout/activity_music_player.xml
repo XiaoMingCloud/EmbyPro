@@ -93,11 +93,21 @@
                     android:textColor="@color/music_library_meta"
                     android:textSize="14sp" />
 
+                <ImageButton
+                    android:id="@+id/musicPlayerFavoriteButton"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="14dp"
+                    android:background="@drawable/bg_music_player_favorite_button"
+                    android:contentDescription="@string/favorite"
+                    android:padding="11dp"
+                    android:src="@drawable/ic_favorite_heart_outline" />
+
                 <SeekBar
                     android:id="@+id/musicPlayerSeekBar"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="28dp"
+                    android:layout_marginTop="18dp"
                     android:progressTint="@color/music_library_accent"
                     android:thumbTint="@color/music_library_accent" />
 

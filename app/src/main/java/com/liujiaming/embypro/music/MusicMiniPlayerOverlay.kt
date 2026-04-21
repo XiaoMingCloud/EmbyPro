@@ -37,6 +37,7 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
     private var capsuleView: View? = null
     private var coverImageView: ImageView? = null
     private var titleTextView: TextView? = null
+    private var subtitleTextView: TextView? = null
     private var playPauseButton: ImageButton? = null
     private var closeButton: ImageButton? = null
     private var seekBar: SeekBar? = null
@@ -125,6 +126,7 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
         capsuleView = null
         coverImageView = null
         titleTextView = null
+        subtitleTextView = null
         playPauseButton = null
         closeButton = null
         seekBar = null
@@ -186,13 +188,13 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
         )
 
         playPauseButton = ImageButton(activity).apply {
-            background = null
+            setBackgroundResource(R.drawable.bg_music_capsule_control_button)
             setColorFilter(Color.parseColor("#FF272336"))
             setOnClickListener {
                 MusicPlaybackService.activeService()?.togglePlayback()
             }
         }
-        contentRow.addView(playPauseButton, LinearLayout.LayoutParams(dp(activity, 48), dp(activity, 48)))
+        contentRow.addView(playPauseButton, LinearLayout.LayoutParams(dp(activity, 42), dp(activity, 42)))
 
         val centerColumn = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
@@ -201,12 +203,21 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
         }
         titleTextView = TextView(activity).apply {
             setTextColor(Color.parseColor("#FF272336"))
-            textSize = 15f
+            textSize = 14f
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        subtitleTextView = TextView(activity).apply {
+            setTextColor(Color.parseColor("#FF7E748E"))
+            textSize = 11f
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
         seekBar = SeekBar(activity).apply {
             splitTrack = false
+            progressDrawable = activity.getDrawable(R.drawable.bg_music_capsule_seekbar_progress)
+            thumb = activity.getDrawable(R.drawable.bg_music_capsule_seekbar_thumb)
+            thumbOffset = dp(activity, 7)
             setPadding(0, 0, 0, 0)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) = Unit
@@ -233,7 +244,14 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
             seekBar,
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(activity, 34)
+                dp(activity, 26)
+            )
+        )
+        centerColumn.addView(
+            subtitleTextView,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
             )
         )
         contentRow.addView(
@@ -242,7 +260,7 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
         )
 
         closeButton = ImageButton(activity).apply {
-            background = null
+            setBackgroundResource(R.drawable.bg_music_capsule_control_button)
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
             setColorFilter(Color.parseColor("#FF272336"))
             setOnClickListener { closePlayback() }
@@ -259,10 +277,12 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
         val title = mediaItem?.mediaMetadata?.title?.toString()
             ?.ifBlank { null }
             ?: mediaItem?.mediaId.orEmpty()
+        val subtitle = mediaItem?.mediaMetadata?.artist?.toString().orEmpty()
         titleTextView?.text = title.ifBlank { "正在播放" }
+        subtitleTextView?.text = subtitle
         bindCover(mediaItem?.mediaMetadata?.artworkUri?.toString())
         playPauseButton?.setImageResource(
-            if (player.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+            if (player.isPlaying) R.drawable.ic_music_capsule_pause else R.drawable.ic_music_capsule_play
         )
 
         if (!isUserSeeking) {

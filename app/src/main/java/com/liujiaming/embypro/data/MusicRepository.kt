@@ -52,6 +52,20 @@ class MusicRepository(context: Context) {
         )
     }
 
+    fun setFavoriteState(
+        connection: ServerConnection,
+        itemId: String,
+        favorite: Boolean
+    ): Result<Unit> {
+        return embyApiService.setFavoriteState(
+            baseUrl = connection.baseUrl,
+            userId = connection.userId,
+            accessToken = connection.accessToken,
+            itemId = itemId,
+            favorite = favorite
+        )
+    }
+
     fun updatePlaybackProgress(
         connection: ServerConnection,
         itemId: String,

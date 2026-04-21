@@ -617,7 +617,8 @@ class EmbyApiService(
                     playSessionId = playSessionId
                 ),
                 playbackPositionMs = (itemJson.optJSONObject("UserData")?.optLong("PlaybackPositionTicks")
-                    ?: 0L) / 10_000L
+                    ?: 0L) / 10_000L,
+                isFavorite = itemJson.optJSONObject("UserData")?.optBoolean("IsFavorite") == true
             )
         }
     }
@@ -1023,9 +1024,20 @@ class EmbyApiService(
             pageSubtitle = pageSubtitle,
             favoriteOnly = favoriteOnly
         )
-        val cachedJson = localMediaCache.readJson(cacheKey, MUSIC_CACHE_MAX_AGE_MS)
-        if (!cachedJson.isNullOrBlank()) {
-            return parseMusicListPageCache(JSONObject(cachedJson))
+        if (!favoriteOnly) {
+            val cachedJson = localMediaCache.readJson(cacheKey, MUSIC_CACHE_MAX_AGE_MS)
+            if (!cachedJson.isNullOrBlank()) {
+                return parseMusicListPageCache(JSONObject(cachedJson))
+            }
+        } else {
+            return fetchFavoriteMusicSongsPage(
+                baseUrl = baseUrl,
+                userId = userId,
+                accessToken = accessToken,
+                libraryId = libraryId,
+                pageTitle = pageTitle,
+                pageSubtitle = pageSubtitle
+            )
         }
 
         try {
@@ -1035,7 +1047,8 @@ class EmbyApiService(
                         baseUrl = baseUrl,
                         userId = userId,
                         parentId = parentId,
-                        favoriteOnly = favoriteOnly
+                        startIndex = 0,
+                        limit = MUSIC_ITEMS_PAGE_SIZE
                     )
                 )
                 .header("X-Emby-Token", accessToken)
@@ -1049,6 +1062,7 @@ class EmbyApiService(
 
                 val json = JSONObject(response.body?.string().orEmpty())
                 val items = buildMusicSongEntries(baseUrl, json.optJSONArray("Items"))
+
                 return MusicListPageUiModel(
                     title = pageTitle,
                     subtitle = pageSubtitle,
@@ -1067,6 +1081,68 @@ class EmbyApiService(
             }
             throw error
         }
+    }
+
+    private fun fetchFavoriteMusicSongsPage(
+        baseUrl: String,
+        userId: String,
+        accessToken: String,
+        libraryId: String,
+        pageTitle: String,
+        pageSubtitle: String
+    ): MusicListPageUiModel {
+        val favoriteItems = mutableListOf<JSONObject>()
+        var totalCount = 0
+        var startIndex = 0
+
+        do {
+            val request = Request.Builder()
+                .url(
+                    buildMusicSongsUrl(
+                        baseUrl = baseUrl,
+                        userId = userId,
+                        parentId = libraryId,
+                        startIndex = startIndex,
+                        limit = MUSIC_ITEMS_PAGE_SIZE
+                    )
+                )
+                .header("X-Emby-Token", accessToken)
+                .get()
+                .build()
+
+            val pageItems = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("读取收藏歌曲失败：${response.code}")
+                }
+
+                val json = JSONObject(response.body?.string().orEmpty())
+                totalCount = json.optInt("TotalRecordCount", favoriteItems.size)
+                json.optJSONArray("Items")
+            }
+
+            for (index in 0 until (pageItems?.length() ?: 0)) {
+                val item = pageItems?.optJSONObject(index) ?: continue
+                if (isMusicFavorite(item)) {
+                    favoriteItems.add(item)
+                }
+            }
+
+            startIndex += MUSIC_ITEMS_PAGE_SIZE
+        } while (startIndex < totalCount)
+
+        return MusicListPageUiModel(
+            title = pageTitle,
+            subtitle = pageSubtitle,
+            items = buildMusicSongEntries(baseUrl, JSONArray(favoriteItems)),
+            totalCount = favoriteItems.size,
+            isSongList = true,
+            libraryId = libraryId
+        )
+    }
+
+    private fun isMusicFavorite(item: JSONObject): Boolean {
+        val userData = item.optJSONObject("UserData") ?: return false
+        return userData.optBoolean("IsFavorite") || userData.optBoolean("Likes")
     }
 
     private fun fetchMusicAlbumsPage(
@@ -1532,7 +1608,7 @@ class EmbyApiService(
             runtimeLabel = formatTicks(item.optLong("RunTimeTicks")),
             versionLine = buildVersionLine(item, firstMediaSource, tagLines),
             audioLine = buildAudioLine(mediaStreams),
-            subtitleLine = buildSubtitleLine(item, firstMediaSource, studios, people),
+            subtitleLine = buildSubtitleLine(firstMediaSource, studios, people),
             studioLine = buildStudioLine(studios, people),
             mediaTitleLine = buildMediaTitleLine(item),
             chapters = chapters,
@@ -1591,7 +1667,6 @@ class EmbyApiService(
     }
 
     private fun buildSubtitleLine(
-        item: JSONObject,
         mediaSource: JSONObject,
         studios: JSONArray?,
         people: JSONArray?
@@ -2027,12 +2102,16 @@ class EmbyApiService(
         baseUrl: String,
         userId: String,
         parentId: String,
-        favoriteOnly: Boolean
+        startIndex: Int = 0,
+        limit: Int = MUSIC_ITEMS_PAGE_SIZE
     ): String {
         return buildString {
             append("$baseUrl/emby/Users/$userId/Items?")
             append("ParentId=$parentId")
-            append("&Recursive=true")
+            append("&")
+            append("Recursive=true")
+            append("&StartIndex=$startIndex")
+            append("&Limit=$limit")
             append("&IncludeItemTypes=Audio")
             append("&MediaTypes=Audio")
             append("&Fields=ImageTags,PrimaryImageTag,PrimaryImageItemId,AlbumPrimaryImageTag,AlbumId,Artists,Album,RunTimeTicks,UserData")
@@ -2040,10 +2119,6 @@ class EmbyApiService(
             append("&EnableUserData=true")
             append("&SortBy=SortName")
             append("&SortOrder=Ascending")
-            append("&Limit=500")
-            if (favoriteOnly) {
-                append("&Filters=IsFavorite")
-            }
         }
     }
 
@@ -2540,5 +2615,6 @@ class EmbyApiService(
         private const val LIBRARY_CACHE_MAX_AGE_MS = 15L * 60L * 1000L
         private const val MUSIC_CACHE_MAX_AGE_MS = 15L * 60L * 1000L
         private const val FILTER_CACHE_MAX_AGE_MS = 30L * 60L * 1000L
+        private const val MUSIC_ITEMS_PAGE_SIZE = 500
     }
 }

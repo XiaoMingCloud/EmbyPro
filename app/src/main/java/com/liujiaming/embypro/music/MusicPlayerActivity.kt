@@ -39,6 +39,7 @@ class MusicPlayerActivity : AppCompatActivity() {
     private lateinit var playPauseButton: ImageButton
     private lateinit var previousButton: ImageButton
     private lateinit var nextButton: ImageButton
+    private lateinit var favoriteButton: ImageButton
     private lateinit var elapsedTextView: TextView
     private lateinit var durationTextView: TextView
     private lateinit var seekBar: SeekBar
@@ -60,6 +61,8 @@ class MusicPlayerActivity : AppCompatActivity() {
     private var currentPlaybackPositionMs: Long = 0L
     private var shouldResumeAfterLoad = true
     private var isSeekingFromUser = false
+    private var isCurrentFavorite = false
+    private var favoriteRequestInFlight = false
 
     private val stateListener = MusicLibraryStateListener { state ->
         if (libraryId != null && state.currentLibraryId != null && state.currentLibraryId != libraryId) {
@@ -128,6 +131,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                 }
                 syncMetadataFromCurrentItem(activeItem)
                 syncControls()
+                refreshFavoriteState(activeItem?.mediaId)
             }
         }
 
@@ -177,6 +181,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         playPauseButton = findViewById(R.id.musicPlayerPlayPauseButton)
         previousButton = findViewById(R.id.musicPlayerPreviousButton)
         nextButton = findViewById(R.id.musicPlayerNextButton)
+        favoriteButton = findViewById(R.id.musicPlayerFavoriteButton)
         elapsedTextView = findViewById(R.id.musicPlayerElapsedText)
         durationTextView = findViewById(R.id.musicPlayerDurationText)
         seekBar = findViewById(R.id.musicPlayerSeekBar)
@@ -186,7 +191,9 @@ class MusicPlayerActivity : AppCompatActivity() {
         playPauseButton.setDebouncedClickListener { togglePlayPause() }
         previousButton.setDebouncedClickListener { switchToIndex(currentIndex - 1, true) }
         nextButton.setDebouncedClickListener { switchToIndex(currentIndex + 1, true) }
+        favoriteButton.setDebouncedClickListener { toggleFavorite() }
         queueTitleTextView.text = queueTitle
+        updateFavoriteIcon()
 
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -262,6 +269,7 @@ class MusicPlayerActivity : AppCompatActivity() {
             currentPlaybackPositionMs = 0L
         }
         syncStaticMetadata()
+        favoriteButton.isEnabled = false
         loadingIndicator.visibility = android.view.View.VISIBLE
 
         AppExecutors.io.execute {
@@ -277,6 +285,9 @@ class MusicPlayerActivity : AppCompatActivity() {
                     titleTextView.text = playback.title
                     subtitleTextView.text = playback.subtitle
                     bindCover(playback.coverImageUrl)
+                    isCurrentFavorite = playback.isFavorite
+                    favoriteButton.isEnabled = true
+                    updateFavoriteIcon()
 
                     val metadata = MediaMetadata.Builder()
                         .setTitle(playback.title)
@@ -296,6 +307,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                     syncControls()
                 }.onFailure { error ->
                     loadingIndicator.visibility = android.view.View.GONE
+                    favoriteButton.isEnabled = true
                     Toast.makeText(
                         this,
                         error.message ?: getString(R.string.player_error),
@@ -341,6 +353,61 @@ class MusicPlayerActivity : AppCompatActivity() {
                 AppIconPlaceholder.apply(coverImageView, cornerRadiusDp = 24f)
             }
         )
+    }
+
+    private fun toggleFavorite() {
+        val itemId = currentPlaybackItemId.ifBlank { queueIds.getOrNull(currentIndex).orEmpty() }
+        if (itemId.isBlank() || favoriteRequestInFlight) return
+
+        val target = !isCurrentFavorite
+        favoriteRequestInFlight = true
+        favoriteButton.isEnabled = false
+        AppExecutors.io.execute {
+            val result = musicRepository.setFavoriteState(connection, itemId, target)
+            runOnUiThread {
+                favoriteRequestInFlight = false
+                favoriteButton.isEnabled = true
+                result.onSuccess {
+                    isCurrentFavorite = target
+                    updateFavoriteIcon()
+                    Toast.makeText(
+                        this,
+                        if (isCurrentFavorite) getString(R.string.favorite_added) else getString(R.string.favorite_removed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }.onFailure { error ->
+                    Toast.makeText(
+                        this,
+                        error.message ?: getString(R.string.favorite_update_failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun refreshFavoriteState(itemId: String?) {
+        if (itemId.isNullOrBlank()) return
+        favoriteButton.isEnabled = false
+        AppExecutors.io.execute {
+            val result = musicRepository.fetchAudioPlayback(connection, itemId)
+            runOnUiThread {
+                favoriteButton.isEnabled = true
+                result.onSuccess { playback ->
+                    if (currentPlaybackItemId == playback.itemId || player?.currentMediaItem?.mediaId == playback.itemId) {
+                        isCurrentFavorite = playback.isFavorite
+                        updateFavoriteIcon()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateFavoriteIcon() {
+        favoriteButton.setImageResource(
+            if (isCurrentFavorite) R.drawable.ic_favorite_heart_filled else R.drawable.ic_favorite_heart_outline
+        )
+        favoriteButton.clearColorFilter()
     }
 
     private fun togglePlayPause() {
