@@ -18,3 +18,8 @@ data class MediaLibraryUiModel(
     val totalCount: Int = 0,
     val collectionType: String = ""
 )
+
+enum class LibraryContentCategory {
+    VIDEO,
+    AUDIO
+}

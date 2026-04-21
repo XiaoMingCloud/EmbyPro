@@ -747,7 +747,8 @@ class EmbyApiService(
         mode: LibraryBrowseMode = LibraryBrowseMode.ALL,
         filterValue: String? = null,
         sortField: LibrarySortField = LibrarySortField.TITLE,
-        sortDescending: Boolean = true
+        sortDescending: Boolean = true,
+        contentCategory: LibraryContentCategory = LibraryContentCategory.VIDEO
     ): LibraryItemsPageUiModel {
         val cacheKey = buildLibraryPageCacheKey(
             baseUrl,
@@ -758,7 +759,8 @@ class EmbyApiService(
             mode,
             filterValue,
             sortField,
-            sortDescending
+            sortDescending,
+            contentCategory
         )
         val cachedJson = localMediaCache.readJson(cacheKey, LIBRARY_CACHE_MAX_AGE_MS)
         if (!cachedJson.isNullOrBlank()) {
@@ -777,7 +779,8 @@ class EmbyApiService(
                         mode,
                         filterValue,
                         sortField,
-                        sortDescending
+                        sortDescending,
+                        contentCategory
                     )
                 )
                 .header("X-Emby-Token", accessToken)
@@ -1011,34 +1014,58 @@ class EmbyApiService(
         pageSubtitle: String,
         favoriteOnly: Boolean = false
     ): MusicListPageUiModel {
-        val request = Request.Builder()
-            .url(
-                buildMusicSongsUrl(
-                    baseUrl = baseUrl,
-                    userId = userId,
-                    parentId = parentId,
-                    favoriteOnly = favoriteOnly
+        val cacheKey = buildMusicSongsPageCacheKey(
+            baseUrl = baseUrl,
+            userId = userId,
+            libraryId = libraryId,
+            parentId = parentId,
+            pageTitle = pageTitle,
+            pageSubtitle = pageSubtitle,
+            favoriteOnly = favoriteOnly
+        )
+        val cachedJson = localMediaCache.readJson(cacheKey, MUSIC_CACHE_MAX_AGE_MS)
+        if (!cachedJson.isNullOrBlank()) {
+            return parseMusicListPageCache(JSONObject(cachedJson))
+        }
+
+        try {
+            val request = Request.Builder()
+                .url(
+                    buildMusicSongsUrl(
+                        baseUrl = baseUrl,
+                        userId = userId,
+                        parentId = parentId,
+                        favoriteOnly = favoriteOnly
+                    )
                 )
-            )
-            .header("X-Emby-Token", accessToken)
-            .get()
-            .build()
+                .header("X-Emby-Token", accessToken)
+                .get()
+                .build()
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IllegalStateException("读取歌曲列表失败：${response.code}")
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("读取歌曲列表失败：${response.code}")
+                }
+
+                val json = JSONObject(response.body?.string().orEmpty())
+                val items = buildMusicSongEntries(baseUrl, json.optJSONArray("Items"))
+                return MusicListPageUiModel(
+                    title = pageTitle,
+                    subtitle = pageSubtitle,
+                    items = items,
+                    totalCount = json.optInt("TotalRecordCount", items.size),
+                    isSongList = true,
+                    libraryId = libraryId
+                ).also { page ->
+                    localMediaCache.writeJson(cacheKey, buildMusicListPageCache(page).toString())
+                }
             }
-
-            val json = JSONObject(response.body?.string().orEmpty())
-            val items = buildMusicSongEntries(baseUrl, json.optJSONArray("Items"))
-            return MusicListPageUiModel(
-                title = pageTitle,
-                subtitle = pageSubtitle,
-                items = items,
-                totalCount = json.optInt("TotalRecordCount", items.size),
-                isSongList = true,
-                libraryId = libraryId
-            )
+        } catch (error: Throwable) {
+            val staleJson = localMediaCache.readJsonAnyAge(cacheKey)
+            if (!staleJson.isNullOrBlank()) {
+                return parseMusicListPageCache(JSONObject(staleJson))
+            }
+            throw error
         }
     }
 
@@ -1362,11 +1389,18 @@ class EmbyApiService(
                 val userData = item.optJSONObject("UserData")
                 val playedPercentage = userData?.optDouble("PlayedPercentage", Double.NaN) ?: Double.NaN
                 val imageInfo = resolveImageInfo(item)
+                val artists = parseSimpleStrings(item.optJSONArray("Artists")).joinToString(" / ")
+                val albumTitle = item.optString("Album")
                 add(
                     MediaPosterUiModel(
                         id = item.optString("Id"),
                         title = item.optString("Name", context.getString(R.string.untitled_media)),
-                        subtitle = if (!playedPercentage.isNaN()) {
+                        subtitle = if (item.optString("Type").equals("Audio", ignoreCase = true)) {
+                            listOfNotNull(
+                                artists.takeIf { it.isNotBlank() },
+                                albumTitle.takeIf { it.isNotBlank() }
+                            ).joinToString(" • ")
+                        } else if (!playedPercentage.isNaN()) {
                             context.getString(R.string.played_percentage, playedPercentage.toInt())
                         } else if (item.optBoolean("IsFolder")) {
                             item.optInt("ChildCount").takeIf { it > 0 }?.let {
@@ -1720,9 +1754,22 @@ class EmbyApiService(
         mode: LibraryBrowseMode,
         filterValue: String?,
         sortField: LibrarySortField,
-        sortDescending: Boolean
+        sortDescending: Boolean,
+        contentCategory: LibraryContentCategory
     ): String {
-        return "library::$baseUrl::$userId::$parentId::$startIndex::$limit::${mode.name}::${filterValue.orEmpty()}::${sortField.name}::$sortDescending"
+        return "library::$baseUrl::$userId::$parentId::$startIndex::$limit::${mode.name}::${filterValue.orEmpty()}::${sortField.name}::$sortDescending::${contentCategory.name}"
+    }
+
+    private fun buildMusicSongsPageCacheKey(
+        baseUrl: String,
+        userId: String,
+        libraryId: String,
+        parentId: String,
+        pageTitle: String,
+        pageSubtitle: String,
+        favoriteOnly: Boolean
+    ): String {
+        return "music-songs::$baseUrl::$userId::$libraryId::$parentId::$pageTitle::$pageSubtitle::$favoriteOnly"
     }
 
     private fun buildLibraryItemsUrl(
@@ -1734,14 +1781,21 @@ class EmbyApiService(
         mode: LibraryBrowseMode,
         filterValue: String?,
         sortField: LibrarySortField,
-        sortDescending: Boolean
+        sortDescending: Boolean,
+        contentCategory: LibraryContentCategory
     ): String {
         val builder = StringBuilder()
         when (mode) {
             LibraryBrowseMode.CONTINUE -> {
                 builder.append("$baseUrl/emby/Users/$userId/Items/Resume?")
                 builder.append("ParentId=$parentId&Limit=$limit&StartIndex=$startIndex")
-                builder.append("&MediaTypes=Video&Recursive=true")
+                builder.append(
+                    if (contentCategory == LibraryContentCategory.AUDIO) {
+                        "&MediaTypes=Audio&Recursive=true"
+                    } else {
+                        "&MediaTypes=Video&Recursive=true"
+                    }
+                )
             }
 
             else -> {
@@ -1757,7 +1811,11 @@ class EmbyApiService(
                     }
 
                     else -> {
-                        builder.append("&Recursive=true&IncludeItemTypes=Movie,Episode,Video,Series,MusicVideo,BoxSet")
+                        if (contentCategory == LibraryContentCategory.AUDIO) {
+                            builder.append("&Recursive=true&IncludeItemTypes=Audio&MediaTypes=Audio")
+                        } else {
+                            builder.append("&Recursive=true&IncludeItemTypes=Movie,Episode,Video,Series,MusicVideo,BoxSet")
+                        }
                     }
                 }
 
@@ -1770,7 +1828,7 @@ class EmbyApiService(
             }
         }
 
-        builder.append("&Fields=PrimaryImageAspectRatio,Overview,People,ImageTags,PrimaryImageAspectRatio,ChildCount")
+        builder.append("&Fields=PrimaryImageAspectRatio,Overview,People,ImageTags,PrimaryImageAspectRatio,ChildCount,PrimaryImageTag,PrimaryImageItemId,AlbumPrimaryImageTag,AlbumId,Artists,Album,RunTimeTicks,UserData")
         builder.append("&EnableImageTypes=Primary,Thumb,Backdrop&ImageTypeLimit=1")
         builder.append("&SortBy=${sortField.apiValue}")
         builder.append("&SortOrder=${if (sortDescending) "Descending" else "Ascending"}")
@@ -2300,6 +2358,27 @@ class EmbyApiService(
         )
     }
 
+    private fun buildMusicListPageCache(page: MusicListPageUiModel): JSONObject {
+        return JSONObject()
+            .put("title", page.title)
+            .put("subtitle", page.subtitle)
+            .put("totalCount", page.totalCount)
+            .put("isSongList", page.isSongList)
+            .put("libraryId", page.libraryId)
+            .put("items", page.items.toMusicListEntryJsonArray())
+    }
+
+    private fun parseMusicListPageCache(json: JSONObject): MusicListPageUiModel {
+        return MusicListPageUiModel(
+            title = json.optString("title"),
+            subtitle = json.optString("subtitle"),
+            items = parseMusicListEntries(json.optJSONArray("items")),
+            totalCount = json.optInt("totalCount", 0),
+            isSongList = json.optBoolean("isSongList", true),
+            libraryId = json.optString("libraryId")
+        )
+    }
+
     private fun parsePosterItems(items: JSONArray?): List<MediaPosterUiModel> {
         return buildList {
             for (index in 0 until (items?.length() ?: 0)) {
@@ -2364,6 +2443,35 @@ class EmbyApiService(
         }
     }
 
+    private fun parseMusicListEntries(items: JSONArray?): List<MusicListEntryUiModel> {
+        return buildList {
+            for (index in 0 until (items?.length() ?: 0)) {
+                val item = items?.optJSONObject(index) ?: continue
+                val kind = runCatching {
+                    MusicEntryKind.valueOf(item.optString("kind", MusicEntryKind.SONG.name))
+                }.getOrDefault(MusicEntryKind.SONG)
+                val browseType = runCatching {
+                    MusicBrowseType.valueOf(item.optString("browseType", MusicBrowseType.SONGS.name))
+                }.getOrDefault(MusicBrowseType.SONGS)
+                add(
+                    MusicListEntryUiModel(
+                        id = item.optString("id"),
+                        title = item.optString("title"),
+                        subtitle = item.optString("subtitle"),
+                        detail = item.optString("detail"),
+                        imageUrl = item.optString("imageUrl").ifBlank { null },
+                        kind = kind,
+                        browseType = browseType,
+                        itemType = item.optString("itemType"),
+                        runtimeTicks = item.optLong("runtimeTicks"),
+                        albumTitle = item.optString("albumTitle"),
+                        artistLine = item.optString("artistLine")
+                    )
+                )
+            }
+        }
+    }
+
     private fun buildAuthorizationHeader(): String {
         val deviceId = Settings.Secure.getString(
             context.contentResolver,
@@ -2406,9 +2514,31 @@ class EmbyApiService(
         }
     }
 
+    private fun List<MusicListEntryUiModel>.toMusicListEntryJsonArray(): JSONArray {
+        return JSONArray().also { array ->
+            forEach { item ->
+                array.put(
+                    JSONObject()
+                        .put("id", item.id)
+                        .put("title", item.title)
+                        .put("subtitle", item.subtitle)
+                        .put("detail", item.detail)
+                        .put("imageUrl", item.imageUrl)
+                        .put("kind", item.kind.name)
+                        .put("browseType", item.browseType.name)
+                        .put("itemType", item.itemType)
+                        .put("runtimeTicks", item.runtimeTicks)
+                        .put("albumTitle", item.albumTitle)
+                        .put("artistLine", item.artistLine)
+                )
+            }
+        }
+    }
+
     companion object {
         private const val HOME_CACHE_MAX_AGE_MS = 15L * 60L * 1000L
         private const val LIBRARY_CACHE_MAX_AGE_MS = 15L * 60L * 1000L
+        private const val MUSIC_CACHE_MAX_AGE_MS = 15L * 60L * 1000L
         private const val FILTER_CACHE_MAX_AGE_MS = 30L * 60L * 1000L
     }
 }

@@ -86,6 +86,7 @@ class PlayerActivity : AppCompatActivity() {
     private var pendingLoadingVisible = false
     private var loadingAnimator: AnimatorSet? = null
     private var hasRenderedFirstFrame = false
+    private var wasInPictureInPictureMode = false
 
     private lateinit var audioManager: AudioManager
     private var currentBrightness = 0.5f
@@ -191,21 +192,23 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        if (activeInstance === this && !isInPictureInPictureMode) {
+        val shouldEndPlayback = isFinishing || wasInPictureInPictureMode
+        val shouldReleasePlayer = !isInPictureInPictureMode || shouldEndPlayback
+        if (activeInstance === this && shouldReleasePlayer) {
             activeInstance = null
         }
-        if (!isInPictureInPictureMode) {
-            releasePlayer()
+        if (shouldReleasePlayer) {
+            releasePlayer(endPlayback = shouldEndPlayback)
         }
     }
 
     override fun onDestroy() {
-        super.onDestroy()
         if (activeInstance === this) {
             activeInstance = null
         }
         mainHandler.removeCallbacks(showLoadingRunnable)
-        releasePlayer()
+        releasePlayer(endPlayback = isFinishing || wasInPictureInPictureMode)
+        super.onDestroy()
     }
 
     override fun onUserLeaveHint() {
@@ -219,12 +222,14 @@ class PlayerActivity : AppCompatActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         if (isInPictureInPictureMode) {
+            wasInPictureInPictureMode = true
             playerView.hideController()
             topBar.visibility = View.GONE
             stopLoadingAnimation()
             gestureText.visibility = View.GONE
             updatePictureInPictureParams()
         } else {
+            wasInPictureInPictureMode = false
             syncPlaybackControls()
         }
     }
@@ -322,13 +327,23 @@ class PlayerActivity : AppCompatActivity() {
         syncPlaybackControls()
     }
 
-    private fun releasePlayer() {
-        if (player == null) return
-        playbackPosition = player?.currentPosition ?: playbackPosition
-        playWhenReady = player?.playWhenReady ?: playWhenReady
+    private fun releasePlayer(endPlayback: Boolean = false) {
+        val currentPlayer = player ?: return
+        playbackPosition = currentPlayer.currentPosition
+        playWhenReady = if (endPlayback) false else currentPlayer.playWhenReady
         reportPlaybackProgress(playbackPosition)
-        player?.release()
+        currentPlayer.playWhenReady = false
+        currentPlayer.pause()
+        if (endPlayback) {
+            currentPlayer.stop()
+            currentPlayer.clearMediaItems()
+        }
+        playerView.player = null
+        currentPlayer.release()
         player = null
+        stopLoadingAnimation()
+        mainHandler.removeCallbacks(showLoadingRunnable)
+        centerTimeText.removeCallbacks(centerTimeTicker)
     }
 
     private fun applySpeed(index: Int) {

@@ -21,7 +21,8 @@ class MediaRepository(context: Context) {
         mode: LibraryBrowseMode = LibraryBrowseMode.ALL,
         filterValue: String? = null,
         sortField: LibrarySortField = LibrarySortField.TITLE,
-        sortDescending: Boolean = true
+        sortDescending: Boolean = true,
+        contentCategory: LibraryContentCategory = LibraryContentCategory.VIDEO
     ): Result<LibraryItemsPageUiModel> {
         return runCatching {
             embyApiService.fetchLibraryItemsPage(
@@ -34,7 +35,8 @@ class MediaRepository(context: Context) {
                 mode = mode,
                 filterValue = filterValue,
                 sortField = sortField,
-                sortDescending = sortDescending
+                sortDescending = sortDescending,
+                contentCategory = contentCategory
             )
         }
     }

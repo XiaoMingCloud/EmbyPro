@@ -10,12 +10,15 @@ import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Binder
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import java.util.concurrent.CopyOnWriteArraySet
 
 class MusicPlaybackService : Service() {
     private val binder = LocalBinder()
@@ -25,9 +28,11 @@ class MusicPlaybackService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        activeService = this
         createNotificationChannel()
         initializePlayer()
         initializeMediaSession()
+        notifyStateChanged()
     }
 
     override fun onBind(intent: Intent?): IBinder {
@@ -37,16 +42,10 @@ class MusicPlaybackService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_TOGGLE_PLAYBACK -> {
-                if (player.isPlaying) {
-                    player.pause()
-                } else {
-                    player.play()
-                }
+                togglePlayback()
             }
             ACTION_STOP -> {
-                player.pause()
-                stopForegroundCompat(removeNotification = true)
-                stopSelf()
+                stopPlaybackAndSelf()
             }
         }
         return START_STICKY
@@ -63,11 +62,48 @@ class MusicPlaybackService : Service() {
         player.release()
         mediaSession.release()
         stopForegroundCompat(removeNotification = true)
+        if (activeService === this) {
+            activeService = null
+        }
+        notifyStateChanged()
         super.onDestroy()
     }
 
     fun getPlayer(): ExoPlayer {
         return player
+    }
+
+    fun hasActivePlayback(): Boolean {
+        return ::player.isInitialized && player.mediaItemCount > 0
+    }
+
+    fun togglePlayback() {
+        if (!hasActivePlayback()) return
+        if (player.isPlaying) {
+            player.pause()
+        } else {
+            player.play()
+        }
+        notifyStateChanged()
+    }
+
+    fun seekTo(positionMs: Long) {
+        if (!hasActivePlayback()) return
+        val duration = player.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
+        player.seekTo(positionMs.coerceIn(0L, duration))
+        notifyStateChanged()
+    }
+
+    fun stopPlaybackAndSelf() {
+        if (::player.isInitialized) {
+            player.playWhenReady = false
+            player.pause()
+            player.stop()
+            player.clearMediaItems()
+        }
+        stopForegroundCompat(removeNotification = true)
+        notifyStateChanged()
+        stopSelf()
     }
 
     private fun initializePlayer() {
@@ -231,21 +267,25 @@ class MusicPlaybackService : Service() {
         override fun onPlaybackStateChanged(playbackState: Int) {
             syncMediaSessionState()
             updateForegroundNotification()
+            notifyStateChanged()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             syncMediaSessionState()
             updateForegroundNotification()
+            notifyStateChanged()
         }
 
         override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
             syncMediaSessionState()
             updateForegroundNotification()
+            notifyStateChanged()
         }
 
         override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
             syncMediaSessionState()
             updateForegroundNotification()
+            notifyStateChanged()
         }
     }
 
@@ -259,5 +299,32 @@ class MusicPlaybackService : Service() {
 
         private const val ACTION_TOGGLE_PLAYBACK = "com.liujiaming.embypro.action.TOGGLE_PLAYBACK"
         private const val ACTION_STOP = "com.liujiaming.embypro.action.STOP"
+
+        private val mainHandler = Handler(Looper.getMainLooper())
+        private val stateListeners = CopyOnWriteArraySet<PlaybackStateListener>()
+
+        @Volatile
+        private var activeService: MusicPlaybackService? = null
+
+        fun activeService(): MusicPlaybackService? = activeService
+
+        fun registerStateListener(listener: PlaybackStateListener) {
+            stateListeners.add(listener)
+            mainHandler.post { listener.onMusicPlaybackStateChanged() }
+        }
+
+        fun unregisterStateListener(listener: PlaybackStateListener) {
+            stateListeners.remove(listener)
+        }
+
+        private fun notifyStateChanged() {
+            mainHandler.post {
+                stateListeners.forEach { it.onMusicPlaybackStateChanged() }
+            }
+        }
+    }
+
+    fun interface PlaybackStateListener {
+        fun onMusicPlaybackStateChanged()
     }
 }

@@ -61,6 +61,7 @@ class HomeTabsActivity : AppCompatActivity() {
     private var excludedHomeLibraryIds: Set<String> = emptySet()
     private var excludedHomeLibrarySignature = ""
     private var isHomeLoading = false
+    private var pendingHomeReload = false
     private var currentTab = Tab.HOME
     private var isHomeLoadFailed = false
     private var currentPrimaryCategory = PrimaryCategory.VIDEO
@@ -195,12 +196,7 @@ class HomeTabsActivity : AppCompatActivity() {
             R.layout.item_library_grid_card,
             connection.accessToken,
             onItemClick = { item ->
-                playVideoDirectly(
-                    connection = connection,
-                    mediaRepository = mediaRepository,
-                    itemId = item.id,
-                    queue = AppNavigator.buildPosterVideoQueue(homeFeedItems, item.id)
-                )
+                openHomeFeedItem(item)
             }
         )
         homeFeedRecyclerView.layoutManager = GridLayoutManager(this, 2)
@@ -218,6 +214,7 @@ class HomeTabsActivity : AppCompatActivity() {
         })
         homeRefreshLayout.setOnRefreshListener { refreshHomeFeed() }
         mediaTabRecyclerView.layoutManager = GridLayoutManager(this, 1)
+        loadMediaTabLibraries()
         updatePrimaryCategorySelection(PrimaryCategory.VIDEO)
 
         navigationHomeItem.setDebouncedClickListener { showTab(Tab.HOME) }
@@ -257,19 +254,23 @@ class HomeTabsActivity : AppCompatActivity() {
     }
 
     private fun connectAndLoadHome(preferPreloadedData: Boolean = false) {
-        if (isHomeLoading) return
+        if (isHomeLoading) {
+            pendingHomeReload = true
+            return
+        }
         isHomeLoading = true
         isHomeLoadFailed = false
         updateHomeLoadFailedVisibility()
         homeRefreshLayout.isRefreshing = true
         preloadCurrentCategoryData()
+        val requestedCategoryKey = currentPrimaryCategory.key
         val preloadTask = if (preferPreloadedData) {
             HomeDataPreloader.takeTask(
                 connection.baseUrl,
                 connection.userId,
                 connection.accessToken,
                 excludedHomeLibraryIds,
-                currentPrimaryCategory.key
+                requestedCategoryKey
             )
         } else {
             null
@@ -284,22 +285,30 @@ class HomeTabsActivity : AppCompatActivity() {
                             connection.userId,
                             connection.accessToken,
                             excludedHomeLibrarySignature,
-                            currentPrimaryCategory.key
+                            requestedCategoryKey
                         )
                     }
 
-                preloadedData ?: loadFreshHomeData()
+                preloadedData ?: loadFreshHomeData(requestedCategoryKey)
             }
             runOnUiThread {
                 isHomeLoading = false
                 homeRefreshLayout.isRefreshing = false
                 result.onSuccess { homeData ->
-                    isHomeLoadFailed = false
-                    updateHomeLoadFailedVisibility()
-                    applyHomeData(homeData)
+                    if (homeData.primaryCategoryKey == currentPrimaryCategory.key) {
+                        isHomeLoadFailed = false
+                        updateHomeLoadFailedVisibility()
+                        applyHomeData(homeData)
+                    } else {
+                        pendingHomeReload = true
+                    }
                 }.onFailure {
                     isHomeLoadFailed = true
                     updateHomeLoadFailedVisibility()
+                }
+                if (pendingHomeReload) {
+                    pendingHomeReload = false
+                    connectAndLoadHome(preferPreloadedData = true)
                 }
             }
         }
@@ -319,7 +328,8 @@ class HomeTabsActivity : AppCompatActivity() {
                     homeLibraryOrder = homeLibraryOrder,
                     homeSeenItemIds = homeSeenItemIds,
                     homeLibraryOffsets = homeLibraryOffsets,
-                    homeLibraryTotals = homeLibraryTotals
+                    homeLibraryTotals = homeLibraryTotals,
+                    contentCategory = homeFeedRepository.contentCategoryFor(currentPrimaryCategory.key)
                 )
             }
             runOnUiThread {
@@ -346,16 +356,16 @@ class HomeTabsActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadFreshHomeData(): PreloadedHomeData {
+    private fun loadFreshHomeData(primaryCategoryKey: String = currentPrimaryCategory.key): PreloadedHomeData {
         return homeFeedRepository.buildHomeData(
             connection = connection,
             excludedLibraryIds = excludedHomeLibraryIds,
-            primaryCategoryKey = currentPrimaryCategory.key
+            primaryCategoryKey = primaryCategoryKey
         )
             .getOrThrow()
             .copy(
                 excludedLibrarySignature = excludedHomeLibrarySignature,
-                primaryCategoryKey = currentPrimaryCategory.key
+                primaryCategoryKey = primaryCategoryKey
             )
     }
 
@@ -373,16 +383,64 @@ class HomeTabsActivity : AppCompatActivity() {
         homeFeedItems.addAll(homeData.homeFeedItems)
         homeFeedAdapter.notifyDataSetChanged()
 
-        bindMediaLibraries(homeData.mediaLibraries)
+        if (homeData.primaryCategoryKey == PrimaryCategory.VIDEO.key) {
+            bindMediaTabLibraries(homeData.mediaLibraries)
+        }
     }
 
-    private fun bindMediaLibraries(libraries: List<MediaLibraryUiModel>) {
+    private fun loadMediaTabLibraries() {
+        networkExecutor.execute {
+            val result = mediaRepository.fetchMediaLibraries(connection)
+                .map { libraries ->
+                    libraries.filterNot { it.collectionType.equals("music", ignoreCase = true) }
+                }
+            runOnUiThread {
+                result.onSuccess { libraries ->
+                    bindMediaTabLibraries(libraries)
+                }
+            }
+        }
+    }
+
+    private fun bindMediaTabLibraries(libraries: List<MediaLibraryUiModel>) {
         mediaTabRecyclerView.adapter = MediaLibraryGridAdapter(
             libraries,
             connection.accessToken
         ) { library ->
             AppNavigator.openLibrary(this, connection, library.id, library.title)
         }
+    }
+
+    private fun openHomeFeedItem(item: MediaPosterUiModel) {
+        if (currentPrimaryCategory == PrimaryCategory.AUDIO) {
+            openHomeAudioItem(item)
+            return
+        }
+
+        playVideoDirectly(
+            connection = connection,
+            mediaRepository = mediaRepository,
+            itemId = item.id,
+            queue = AppNavigator.buildPosterVideoQueue(homeFeedItems, item.id)
+        )
+    }
+
+    private fun openHomeAudioItem(item: MediaPosterUiModel) {
+        val queue = homeFeedItems.filter { it.itemType.equals("Audio", ignoreCase = true) }
+        val currentIndex = queue.indexOfFirst { it.id == item.id }
+        if (currentIndex < 0) return
+
+        AppNavigator.openMusicPlayer(
+            activity = this,
+            connection = connection,
+            libraryId = homeLibraryOrder.firstOrNull()?.id,
+            queueTitle = getString(R.string.home_category_audio),
+            queueIds = ArrayList(queue.map { it.id }),
+            queueTitles = ArrayList(queue.map { it.title }),
+            queueSubtitles = ArrayList(queue.map { it.subtitle }),
+            queueImages = ArrayList(queue.map { it.imageUrl.orEmpty() }),
+            queueIndex = currentIndex
+        )
     }
 
     private fun updateHomeLoadFailedVisibility() {
@@ -428,6 +486,8 @@ class HomeTabsActivity : AppCompatActivity() {
         )
         if (changed && currentTab == Tab.HOME && !isHomeLoading) {
             connectAndLoadHome(preferPreloadedData = true)
+        } else if (changed && currentTab == Tab.HOME) {
+            pendingHomeReload = true
         }
     }
 

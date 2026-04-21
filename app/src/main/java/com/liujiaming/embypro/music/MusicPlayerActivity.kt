@@ -95,6 +95,7 @@ class MusicPlayerActivity : AppCompatActivity() {
             if (!itemId.isNullOrBlank()) {
                 currentPlaybackItemId = itemId
                 currentIndex = queueIds.indexOf(itemId).takeIf { it >= 0 } ?: currentIndex
+                MusicPlayerSessionStore.updateCurrentItem(itemId)
             }
             syncMetadataFromCurrentItem(mediaItem)
             syncControls()
@@ -114,13 +115,16 @@ class MusicPlayerActivity : AppCompatActivity() {
             attachPlayer(playbackService?.getPlayer())
 
             val currentPlayer = player
-            if (currentPlayer == null || currentPlayer.mediaItemCount == 0) {
+            val requestedItemId = queueIds.getOrNull(currentIndex).orEmpty()
+            val activeItem = currentPlayer?.currentMediaItem
+            val isRequestedItemAlreadyActive = requestedItemId.isNotBlank() && activeItem?.mediaId == requestedItemId
+            if (currentPlayer == null || currentPlayer.mediaItemCount == 0 || !isRequestedItemAlreadyActive) {
                 switchToIndex(currentIndex, true, resetPosition = false)
             } else {
-                val activeItem = currentPlayer.currentMediaItem
                 val activeIndex = activeItem?.mediaId?.let { queueIds.indexOf(it) } ?: -1
                 if (activeIndex >= 0) {
                     currentIndex = activeIndex
+                    MusicPlayerSessionStore.updateCurrentItem(activeItem?.mediaId)
                 }
                 syncMetadataFromCurrentItem(activeItem)
                 syncControls()
@@ -149,6 +153,16 @@ class MusicPlayerActivity : AppCompatActivity() {
         queueSubtitles = intent.getStringArrayListExtra(EXTRA_QUEUE_SUBTITLES) ?: arrayListOf()
         queueImages = intent.getStringArrayListExtra(EXTRA_QUEUE_IMAGES) ?: arrayListOf()
         currentIndex = intent.getIntExtra(EXTRA_QUEUE_INDEX, 0).coerceIn(0, (queueIds.lastIndex).coerceAtLeast(0))
+        MusicPlayerSessionStore.record(
+            connection = connection,
+            libraryId = libraryId,
+            queueTitle = queueTitle,
+            queueIds = queueIds,
+            queueTitles = queueTitles,
+            queueSubtitles = queueSubtitles,
+            queueImages = queueImages,
+            queueIndex = currentIndex
+        )
 
         if (queueIds.isEmpty()) {
             Toast.makeText(this, getString(R.string.server_data_missing), Toast.LENGTH_SHORT).show()
