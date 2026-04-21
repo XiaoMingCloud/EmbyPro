@@ -59,18 +59,25 @@
                 android:paddingEnd="24dp"
                 android:paddingBottom="26dp">
 
-                <ImageView
-                    android:id="@+id/musicPlayerCover"
+                <FrameLayout
                     android:layout_width="220dp"
-                    android:layout_height="220dp"
-                    android:scaleType="centerCrop" />
+                    android:layout_height="220dp">
 
-                <ProgressBar
-                    android:id="@+id/musicPlayerLoadingIndicator"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp"
-                    android:visibility="gone" />
+                    <ImageView
+                        android:id="@+id/musicPlayerCover"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:scaleType="centerCrop" />
+
+                    <ProgressBar
+                        android:id="@+id/musicPlayerLoadingIndicator"
+                        style="?android:attr/progressBarStyleSmall"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:indeterminateTint="@color/music_library_accent"
+                        android:visibility="gone" />
+                </FrameLayout>
 
                 <TextView
                     android:id="@+id/musicPlayerTitle"

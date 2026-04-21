@@ -1,5 +1,7 @@
 package com.liujiaming.embypro
 
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.Manifest
 import android.content.ComponentName
 import android.content.Context
@@ -11,6 +13,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.view.View
+import android.view.ViewPropertyAnimator
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -63,6 +67,7 @@ class MusicPlayerActivity : AppCompatActivity() {
     private var isSeekingFromUser = false
     private var isCurrentFavorite = false
     private var favoriteRequestInFlight = false
+    private var loadingAnimator: AnimatorSet? = null
 
     private val stateListener = MusicLibraryStateListener { state ->
         if (libraryId != null && state.currentLibraryId != null && state.currentLibraryId != libraryId) {
@@ -73,10 +78,10 @@ class MusicPlayerActivity : AppCompatActivity() {
 
     private val playerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
-            loadingIndicator.visibility = if (playbackState == Player.STATE_BUFFERING) {
-                android.view.View.VISIBLE
+            if (playbackState == Player.STATE_BUFFERING) {
+                startLoadingAnimation()
             } else {
-                android.view.View.GONE
+                stopLoadingAnimation()
             }
             if (playbackState == Player.STATE_ENDED) {
                 switchToIndex(currentIndex + 1, true)
@@ -204,6 +209,7 @@ class MusicPlayerActivity : AppCompatActivity() {
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) {
                 isSeekingFromUser = true
+                stopLoadingAnimation()
             }
 
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
@@ -270,7 +276,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         }
         syncStaticMetadata()
         favoriteButton.isEnabled = false
-        loadingIndicator.visibility = android.view.View.VISIBLE
+        startLoadingAnimation()
 
         AppExecutors.io.execute {
             val result = musicRepository.fetchAudioPlayback(connection, queueIds[index])
@@ -306,7 +312,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                     currentPlayer.playWhenReady = shouldResumeAfterLoad
                     syncControls()
                 }.onFailure { error ->
-                    loadingIndicator.visibility = android.view.View.GONE
+                    stopLoadingAnimation()
                     favoriteButton.isEnabled = true
                     Toast.makeText(
                         this,
@@ -468,6 +474,35 @@ class MusicPlayerActivity : AppCompatActivity() {
         } else {
             String.format("%02d:%02d", minutes, seconds)
         }
+    }
+    
+    private fun startLoadingAnimation() {
+        if (loadingAnimator?.isRunning == true) return
+        loadingIndicator.visibility = View.VISIBLE
+        seekBar.alpha = 0.56f
+        seekBar.scaleY = 0.92f
+        val alphaAnimator = ObjectAnimator.ofFloat(seekBar, View.ALPHA, 0.52f, 1f).apply {
+            duration = 760L
+            repeatCount = ObjectAnimator.INFINITE
+            repeatMode = ObjectAnimator.REVERSE
+        }
+        val scaleAnimator = ObjectAnimator.ofFloat(seekBar, View.SCALE_Y, 0.9f, 1.08f).apply {
+            duration = 760L
+            repeatCount = ObjectAnimator.INFINITE
+            repeatMode = ObjectAnimator.REVERSE
+        }
+        loadingAnimator = AnimatorSet().apply {
+            playTogether(alphaAnimator, scaleAnimator)
+            start()
+        }
+    }
+    
+    private fun stopLoadingAnimation() {
+        loadingAnimator?.cancel()
+        loadingAnimator = null
+        seekBar.alpha = 1f
+        seekBar.scaleY = 1f
+        loadingIndicator.visibility = View.GONE
     }
 
     private val progressUpdater = object : Runnable {

@@ -466,8 +466,7 @@ class EmbyApiService(
                         libraryId = libraryId,
                         parentId = parentId,
                         pageTitle = containerTitle ?: context.getString(R.string.music_library_entry_songs),
-                        pageSubtitle = containerTitle?.takeIf { it.isNotBlank() }
-                            ?: context.getString(R.string.music_list_partition_subtitle)
+                        pageSubtitle = containerTitle.orEmpty()
                     )
                 }
 
