@@ -2,18 +2,19 @@ package com.liujiaming.embypro
 
 import android.app.Activity
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
-import android.graphics.RenderEffect
-import android.graphics.Shader
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
+import android.graphics.Outline
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -27,6 +28,9 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
     MusicPlaybackService.PlaybackStateListener {
 
     private const val OVERLAY_TAG = "music_mini_player_overlay"
+    private const val PREF_NAME = "music_mini_player_overlay"
+    private const val KEY_LEFT = "capsule_left"
+    private const val KEY_TOP = "capsule_top"
     private val mainHandler = Handler(Looper.getMainLooper())
     private var application: Application? = null
     private var currentActivityRef: WeakReference<Activity>? = null
@@ -37,6 +41,11 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
     private var closeButton: ImageButton? = null
     private var seekBar: SeekBar? = null
     private var isUserSeeking = false
+    private var dragDownRawX = 0f
+    private var dragDownRawY = 0f
+    private var dragStartLeft = 0
+    private var dragStartTop = 0
+    private var hasDragged = false
 
     fun install(application: Application) {
         if (this.application === application) return
@@ -94,16 +103,18 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
 
         val capsule = buildCapsule(activity)
         val params = FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(activity, 112)
+            activity.resources.displayMetrics.widthPixels - dp(activity, 28),
+            dp(activity, 101)
         ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            marginStart = dp(activity, 14)
-            marginEnd = dp(activity, 14)
-            topMargin = statusBarHeight(activity) + dp(activity, 2)
+            gravity = Gravity.TOP or Gravity.START
+            leftMargin = dp(activity, 14)
+            topMargin = 0
         }
         decor.addView(capsule, params)
         capsuleView = capsule
+        capsule.post {
+            restorePosition(activity, capsule)
+        }
     }
 
     private fun detach() {
@@ -123,35 +134,23 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
     private fun buildCapsule(activity: Activity): View {
         val root = FrameLayout(activity).apply {
             tag = OVERLAY_TAG
-            setPadding(dp(activity, 14), dp(activity, 10), dp(activity, 12), dp(activity, 10))
-            elevation = dp(activity, 8).toFloat()
-            setOnClickListener { openMusicPlayer(activity) }
-        }
-
-        val backgroundView = View(activity).apply {
+            setPadding(dp(activity, 14), dp(activity, 8), dp(activity, 12), dp(activity, 8))
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(activity, 34).toFloat()
+                cornerRadius = dp(activity, 44).toFloat()
                 setColor(Color.WHITE)
-                setStroke(dp(activity, 1), Color.parseColor("#1FFFFFFF"))
+                setStroke(dp(activity, 1), Color.parseColor("#33272336"))
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                setRenderEffect(
-                    RenderEffect.createBlurEffect(
-                        dp(activity, 18).toFloat(),
-                        dp(activity, 18).toFloat(),
-                        Shader.TileMode.CLAMP
-                    )
-                )
+            elevation = dp(activity, 18).toFloat()
+            translationZ = dp(activity, 8).toFloat()
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, dp(activity, 44).toFloat())
+                }
             }
+            clipToOutline = true
+            setOnTouchListener { view, event -> handleDragTouch(activity, view, event) }
         }
-        root.addView(
-            backgroundView,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        )
 
         val contentRow = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -168,10 +167,16 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
         coverImageView = ImageView(activity).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(activity, 18).toFloat()
+                shape = GradientDrawable.OVAL
                 setColor(Color.parseColor("#33FFFFFF"))
             }
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    val size = minOf(view.width, view.height)
+                    outline.setOval(0, 0, size, size)
+                }
+            }
+            clipToOutline = true
         }
         contentRow.addView(
             coverImageView,
@@ -278,7 +283,11 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
     private fun bindCover(url: String?) {
         val imageView = coverImageView ?: return
         if (url.isNullOrBlank()) {
-            AppIconPlaceholder.apply(imageView, cornerRadiusDp = 18f)
+            imageView.setImageDrawable(null)
+            imageView.background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#FFE5DDFF"))
+            }
             return
         }
         EmbyImageLoader.load(
@@ -286,10 +295,109 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
             url = url,
             token = MusicPlayerSessionStore.currentConnection()?.accessToken,
             onFailure = {
-                AppIconPlaceholder.apply(imageView, cornerRadiusDp = 18f)
+                imageView.setImageDrawable(null)
+                imageView.background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.parseColor("#FFE5DDFF"))
+                }
             }
         )
     }
+
+    private fun handleDragTouch(activity: Activity, view: View, event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                dragDownRawX = event.rawX
+                dragDownRawY = event.rawY
+                val params = view.layoutParams as? FrameLayout.LayoutParams
+                dragStartLeft = params?.leftMargin ?: view.left
+                dragStartTop = params?.topMargin ?: view.top
+                hasDragged = false
+                view.parent?.requestDisallowInterceptTouchEvent(true)
+                return true
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                val dx = event.rawX - dragDownRawX
+                val dy = event.rawY - dragDownRawY
+                if (!hasDragged && (kotlin.math.abs(dx) > dp(activity, 4) || kotlin.math.abs(dy) > dp(activity, 4))) {
+                    hasDragged = true
+                }
+                val bounds = dragBounds(activity, view)
+                updateCapsulePosition(
+                    view = view,
+                    left = (dragStartLeft + dx.toInt()).coerceIn(bounds.minLeft, bounds.maxLeft),
+                    top = (dragStartTop + dy.toInt()).coerceIn(bounds.minTop, bounds.maxTop)
+                )
+                return true
+            }
+
+            MotionEvent.ACTION_UP -> {
+                view.parent?.requestDisallowInterceptTouchEvent(false)
+                if (hasDragged) {
+                    savePosition(activity, view)
+                } else {
+                    openMusicPlayer(activity)
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                view.parent?.requestDisallowInterceptTouchEvent(false)
+                if (hasDragged) {
+                    savePosition(activity, view)
+                }
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun restorePosition(activity: Activity, view: View) {
+        val preferences = activity.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        val bounds = dragBounds(activity, view)
+        val left = preferences.getInt(KEY_LEFT, dp(activity, 14))
+        val top = preferences.getInt(KEY_TOP, 0)
+        updateCapsulePosition(
+            view = view,
+            left = left.coerceIn(bounds.minLeft, bounds.maxLeft),
+            top = top.coerceIn(bounds.minTop, bounds.maxTop)
+        )
+    }
+
+    private fun savePosition(activity: Activity, view: View) {
+        val params = view.layoutParams as? FrameLayout.LayoutParams ?: return
+        activity.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(KEY_LEFT, params.leftMargin)
+            .putInt(KEY_TOP, params.topMargin)
+            .apply()
+    }
+
+    private fun dragBounds(activity: Activity, view: View): DragBounds {
+        val decor = activity.window.decorView as? View ?: return DragBounds(0, 0, 0, 0)
+        val availableWidth = decor.width.takeIf { it > 0 } ?: activity.resources.displayMetrics.widthPixels
+        val availableHeight = decor.height.takeIf { it > 0 } ?: activity.resources.displayMetrics.heightPixels
+        val minLeft = dp(activity, 8)
+        val maxLeft = (availableWidth - view.width - dp(activity, 8)).coerceAtLeast(minLeft)
+        val minTop = 0
+        val maxTop = (availableHeight - view.height - dp(activity, 12)).coerceAtLeast(minTop)
+        return DragBounds(minLeft, maxLeft, minTop, maxTop)
+    }
+
+    private fun updateCapsulePosition(view: View, left: Int, top: Int) {
+        val params = view.layoutParams as? FrameLayout.LayoutParams ?: return
+        params.leftMargin = left
+        params.topMargin = top
+        view.layoutParams = params
+    }
+
+    private data class DragBounds(
+        val minLeft: Int,
+        val maxLeft: Int,
+        val minTop: Int,
+        val maxTop: Int
+    )
 
     private fun openMusicPlayer(activity: Activity) {
         val intent = MusicPlayerSessionStore.createPlayerIntent(activity) ?: return
