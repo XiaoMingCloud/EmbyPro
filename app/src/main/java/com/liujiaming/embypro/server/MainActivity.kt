@@ -228,7 +228,7 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
                         dialog.dismiss()
                         showLoginDialog(baseUrl, serverInfo)
                     }.onFailure { error ->
-                        hintText.text = error.message ?: getString(R.string.error_connect_server_failed)
+                        hintText.text = userFriendlyErrorMessage(error, R.string.error_connect_server_failed)
                     }
                 }
             }
@@ -320,7 +320,7 @@ class MainActivity : AppCompatActivity(), ServerActionListener {
                             finish()
                         }
                     }.onFailure { error ->
-                        loginHintText.text = error.message ?: getString(R.string.error_login_failed)
+                        loginHintText.text = userFriendlyErrorMessage(error, R.string.error_login_failed)
                     }
                 }
             }

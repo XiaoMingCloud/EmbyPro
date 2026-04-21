@@ -71,7 +71,7 @@ class HomeSettingsActivity : AppCompatActivity() {
                 }.onFailure { error ->
                     recyclerView.visibility = View.GONE
                     emptyText.visibility = View.VISIBLE
-                    emptyText.text = error.message ?: getString(R.string.home_settings_load_failed)
+                    emptyText.text = userFriendlyErrorMessage(error, R.string.home_settings_load_failed)
                 }
             }
         }

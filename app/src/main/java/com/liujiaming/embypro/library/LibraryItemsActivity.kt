@@ -147,7 +147,7 @@ class LibraryItemsActivity : AppCompatActivity() {
                 }.onFailure { error ->
                     Toast.makeText(
                         this,
-                        error.message ?: getString(R.string.library_load_failed),
+                        userFriendlyErrorMessage(error, R.string.library_load_failed),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -227,7 +227,7 @@ class LibraryItemsActivity : AppCompatActivity() {
                 }.onFailure { error ->
                     Toast.makeText(
                         this,
-                        error.message ?: getString(R.string.library_filter_load_failed),
+                        userFriendlyErrorMessage(error, R.string.library_filter_load_failed),
                         Toast.LENGTH_SHORT
                     ).show()
                 }

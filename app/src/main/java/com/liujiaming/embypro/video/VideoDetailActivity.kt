@@ -138,7 +138,7 @@ class VideoDetailActivity : AppCompatActivity() {
                 }.onFailure { error ->
                     Toast.makeText(
                         this,
-                        error.message ?: getString(R.string.video_detail_load_failed),
+                        userFriendlyErrorMessage(error, R.string.video_detail_load_failed),
                         Toast.LENGTH_SHORT
                     ).show()
                     finish()
@@ -234,7 +234,7 @@ class VideoDetailActivity : AppCompatActivity() {
                 }.onFailure { error ->
                     Toast.makeText(
                         this,
-                        error.message ?: getString(R.string.favorite_update_failed),
+                        userFriendlyErrorMessage(error, R.string.favorite_update_failed),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -360,7 +360,7 @@ class VideoDetailActivity : AppCompatActivity() {
                 }.onFailure { error ->
                     Toast.makeText(
                         this,
-                        error.message ?: getString(R.string.delete_video_failed),
+                        userFriendlyErrorMessage(error, R.string.delete_video_failed),
                         Toast.LENGTH_SHORT
                     ).show()
                 }

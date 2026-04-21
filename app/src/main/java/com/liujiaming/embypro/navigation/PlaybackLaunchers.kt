@@ -29,7 +29,7 @@ fun AppCompatActivity.playVideoDirectly(
             }.onFailure { error ->
                 Toast.makeText(
                     this,
-                    error.message ?: getString(R.string.player_error),
+                    userFriendlyErrorMessage(error, R.string.player_error),
                     Toast.LENGTH_SHORT
                 ).show()
             }

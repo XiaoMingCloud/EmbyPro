@@ -110,13 +110,14 @@ class FavoriteItemsActivity : AppCompatActivity() {
                     emptyText.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
                     recyclerView.visibility = if (items.isEmpty()) View.INVISIBLE else View.VISIBLE
                 }.onFailure { error ->
+                    val message = userFriendlyErrorMessage(error, R.string.favorite_items_load_failed)
                     emptyText.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
                     if (items.isEmpty()) {
-                        emptyText.text = error.message ?: getString(R.string.favorite_items_load_failed)
+                        emptyText.text = message
                     } else {
                         Toast.makeText(
                             this,
-                            error.message ?: getString(R.string.favorite_items_load_failed),
+                            message,
                             Toast.LENGTH_SHORT
                         ).show()
                     }
@@ -150,7 +151,7 @@ class FavoriteItemsActivity : AppCompatActivity() {
                 }.onFailure { error ->
                     Toast.makeText(
                         this,
-                        error.message ?: getString(R.string.favorite_update_failed),
+                        userFriendlyErrorMessage(error, R.string.favorite_update_failed),
                         Toast.LENGTH_SHORT
                     ).show()
                 }

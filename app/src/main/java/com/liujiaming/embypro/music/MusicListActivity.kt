@@ -184,7 +184,7 @@ class MusicListActivity : AppCompatActivity() {
                         showContent()
                     }
                 }.onFailure { error ->
-                    showError(error.message ?: getString(R.string.music_list_load_failed))
+                    showError(userFriendlyErrorMessage(error, R.string.music_list_load_failed))
                 }
             }
         }
@@ -283,7 +283,7 @@ class MusicListActivity : AppCompatActivity() {
                         showContent()
                     }
                 }.onFailure { error ->
-                    showError(error.message ?: getString(R.string.music_search_failed))
+                    showError(userFriendlyErrorMessage(error, R.string.music_search_failed))
                 }
             }
         }

@@ -144,7 +144,7 @@ object MusicLibraryRepository {
                             musicLibraries = emptyList(),
                             currentLibraryId = null,
                             libraryStats = null,
-                            errorMessage = error.message ?: context.getString(R.string.music_settings_load_failed)
+                            errorMessage = context.userFriendlyErrorMessage(error, R.string.music_settings_load_failed)
                         )
                     }
                 }
@@ -186,7 +186,10 @@ object MusicLibraryRepository {
                         it.copy(
                             isLoadingStats = false,
                             libraryStats = null,
-                            statsErrorMessage = error.message ?: appContext?.getString(R.string.music_settings_stats_load_failed)
+                            statsErrorMessage = appContext?.userFriendlyErrorMessage(
+                                error,
+                                R.string.music_settings_stats_load_failed
+                            )
                         )
                     }
                 }

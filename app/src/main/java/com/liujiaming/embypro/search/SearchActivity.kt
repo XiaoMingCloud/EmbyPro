@@ -164,7 +164,7 @@ class SearchActivity : AppCompatActivity() {
                     updateEmptyState()
                     Toast.makeText(
                         this,
-                        error.message ?: getString(R.string.search_load_failed),
+                        userFriendlyErrorMessage(error, R.string.search_load_failed),
                         Toast.LENGTH_SHORT
                     ).show()
                 }

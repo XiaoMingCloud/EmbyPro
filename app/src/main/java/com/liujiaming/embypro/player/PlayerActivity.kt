@@ -312,7 +312,11 @@ class PlayerActivity : AppCompatActivity() {
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                Toast.makeText(this@PlayerActivity, error.message ?: getString(R.string.player_error), Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    this@PlayerActivity,
+                    userFriendlyPlaybackErrorMessage(error),
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         })
 
@@ -639,7 +643,7 @@ class PlayerActivity : AppCompatActivity() {
                     updateLoadingVisibility(false, immediate = true)
                     Toast.makeText(
                         this,
-                        error.message ?: getString(R.string.player_error),
+                        userFriendlyErrorMessage(error, R.string.player_error),
                         Toast.LENGTH_SHORT
                     ).show()
                 }

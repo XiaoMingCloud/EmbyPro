@@ -178,13 +178,14 @@ class PlaybackHistoryActivity : AppCompatActivity() {
                     emptyText.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
                     recyclerView.visibility = if (items.isEmpty()) View.INVISIBLE else View.VISIBLE
                 }.onFailure { error ->
+                    val message = userFriendlyErrorMessage(error, R.string.playback_history_load_failed)
                     emptyText.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
                     if (items.isEmpty()) {
-                        emptyText.text = error.message ?: getString(R.string.playback_history_load_failed)
+                        emptyText.text = message
                     } else {
                         Toast.makeText(
                             this,
-                            error.message ?: getString(R.string.playback_history_load_failed),
+                            message,
                             Toast.LENGTH_SHORT
                         ).show()
                     }
@@ -307,7 +308,7 @@ class PlaybackHistoryActivity : AppCompatActivity() {
                 if (firstError != null && successCount == 0) {
                     Toast.makeText(
                         this,
-                        firstError?.message ?: getString(R.string.playback_history_load_failed),
+                        userFriendlyErrorMessage(firstError, R.string.playback_history_load_failed),
                         Toast.LENGTH_SHORT
                     ).show()
                 }

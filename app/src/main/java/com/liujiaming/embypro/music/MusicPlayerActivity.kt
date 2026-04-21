@@ -110,7 +110,11 @@ class MusicPlayerActivity : AppCompatActivity() {
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            Toast.makeText(this@MusicPlayerActivity, error.message ?: getString(R.string.player_error), Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                this@MusicPlayerActivity,
+                userFriendlyPlaybackErrorMessage(error),
+                Toast.LENGTH_SHORT
+            ).show()
             syncControls()
         }
     }
@@ -316,7 +320,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                     favoriteButton.isEnabled = true
                     Toast.makeText(
                         this,
-                        error.message ?: getString(R.string.player_error),
+                        userFriendlyErrorMessage(error, R.string.player_error),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -384,7 +388,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                 }.onFailure { error ->
                     Toast.makeText(
                         this,
-                        error.message ?: getString(R.string.favorite_update_failed),
+                        userFriendlyErrorMessage(error, R.string.favorite_update_failed),
                         Toast.LENGTH_SHORT
                     ).show()
                 }

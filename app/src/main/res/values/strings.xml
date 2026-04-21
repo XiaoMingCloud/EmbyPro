@@ -28,6 +28,16 @@
     <string name="loading">请稍候...</string>
     <string name="error_server_address_required">请输入服务器地址</string>
     <string name="error_connect_server_failed">服务器连接失败，请检查地址和端口</string>
+    <string name="error_network_timeout">连接超时，请检查网络后重试</string>
+    <string name="error_network_failed">网络异常，请检查网络后重试</string>
+    <string name="error_network_host_unreachable">无法连接服务器，请检查服务器地址或网络</string>
+    <string name="error_server_unreachable">无法连接服务器，请确认服务器已启动</string>
+    <string name="error_ssl_connection_failed">安全连接失败，请检查服务器证书或地址</string>
+    <string name="error_permission_denied">权限不足，无法完成此操作</string>
+    <string name="error_playback_network_failed">播放失败，请检查网络后重试</string>
+    <string name="error_playback_server_rejected">服务器暂时无法提供播放内容</string>
+    <string name="error_playback_url_unavailable">播放地址不可用，请稍后重试</string>
+    <string name="error_playback_format_unsupported">当前设备不支持播放此格式</string>
     <string name="error_username_required">请输入用户名</string>
     <string name="error_password_required">请输入密码</string>
     <string name="error_login_failed">登录失败，请检查用户名和密码</string>

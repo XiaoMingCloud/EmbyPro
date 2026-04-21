@@ -347,7 +347,7 @@ class HomeTabsActivity : AppCompatActivity() {
                     } else {
                         Toast.makeText(
                             this,
-                            error.message ?: getString(R.string.server_home_load_failed),
+                            userFriendlyErrorMessage(error, R.string.server_home_load_failed),
                             Toast.LENGTH_SHORT
                         ).show()
                     }
