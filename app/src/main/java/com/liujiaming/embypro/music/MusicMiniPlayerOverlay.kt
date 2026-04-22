@@ -24,6 +24,12 @@ import android.widget.TextView
 import androidx.media3.common.Player
 import java.lang.ref.WeakReference
 
+/**
+ * Singleton overlay that displays a draggable mini music player capsule on top of activities.
+ * Automatically attaches to the current activity when music is playing.
+ * Supports drag-to-reposition, progress seeking, and tap-to-open full player.
+ * Persists capsule position across activity transitions.
+ */
 object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
     MusicPlaybackService.PlaybackStateListener {
 
@@ -48,6 +54,10 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
     private var dragStartTop = 0
     private var hasDragged = false
 
+    /**
+     * Installs the overlay system to monitor activity lifecycle and playback state.
+     * Should be called once during application initialization.
+     */
     fun install(application: Application) {
         if (this.application === application) return
         this.application = application
@@ -82,6 +92,10 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
     override fun onActivityStopped(activity: Activity) = Unit
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
 
+    /**
+     * Refreshes the overlay visibility and content based on current playback state.
+     * Detaches if on MusicPlayerActivity or no active playback.
+     */
     private fun refresh() {
         mainHandler.post {
             val activity = currentActivityRef?.get()
@@ -96,6 +110,10 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
         }
     }
 
+    /**
+     * Attaches the mini player capsule view to the activity's decor view.
+     * Removes any existing overlay before adding a new one.
+     */
     private fun attach(activity: Activity) {
         val decor = activity.window.decorView as? ViewGroup ?: return
         val existing = decor.findViewWithTag<View>(OVERLAY_TAG)
@@ -118,6 +136,9 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
         }
     }
 
+    /**
+     * Detaches and cleans up the overlay view and all references.
+     */
     private fun detach() {
         stopTicker()
         capsuleView?.let { view ->
@@ -133,6 +154,10 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
         isUserSeeking = false
     }
 
+    /**
+     * Builds the complete mini player capsule UI with cover art, controls, and seek bar.
+     * Configures rounded corners, shadow, and touch handling.
+     */
     private fun buildCapsule(activity: Activity): View {
         val root = FrameLayout(activity).apply {
             tag = OVERLAY_TAG
@@ -270,6 +295,10 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
         return root
     }
 
+    /**
+     * Updates the capsule content with current playback information.
+     * Refreshes title, artist, cover art, play/pause icon, and seek bar progress.
+     */
     private fun updateContent() {
         val service = MusicPlaybackService.activeService() ?: return
         val player = service.getPlayer()
@@ -300,6 +329,10 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
         }
     }
 
+    /**
+     * Loads and displays the cover art image from URL.
+     * Falls back to placeholder if URL is blank or loading fails.
+     */
     private fun bindCover(url: String?) {
         val imageView = coverImageView ?: return
         if (url.isNullOrBlank()) {

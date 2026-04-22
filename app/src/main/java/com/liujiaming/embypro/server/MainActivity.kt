@@ -1,4 +1,4 @@
-﻿package com.liujiaming.embypro
+package com.liujiaming.embypro
 
 import android.content.Intent
 import android.net.Uri
@@ -20,6 +20,10 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import java.util.concurrent.ExecutorService
 
+/**
+ * Main activity for managing server connections.
+ * Displays a list of servers and provides CRUD operations for server management.
+ */
 class MainActivity : AppCompatActivity(), ServerActionListener {
 
     private val serverItems = mutableListOf<ServerUiModel>()

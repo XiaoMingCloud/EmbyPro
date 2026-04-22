@@ -7,6 +7,10 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 
+/**
+ * Activity displaying the music library overview with statistics.
+ * Shows songs, albums, artists, and playlists counts for the selected music library.
+ */
 class MusicLibraryActivity : AppCompatActivity() {
     private val sessionStore by lazy { ServerSessionStore(this) }
     private val serverRepository by lazy { ServerRepository(this) }

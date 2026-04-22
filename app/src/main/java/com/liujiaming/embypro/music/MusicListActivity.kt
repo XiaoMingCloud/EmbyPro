@@ -15,6 +15,10 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
+/**
+ * Activity displaying a list of music items (songs, albums, artists, playlists).
+ * Supports search functionality and navigation to nested lists or player.
+ */
 class MusicListActivity : AppCompatActivity() {
     private val sessionStore by lazy { ServerSessionStore(this) }
     private val musicRepository by lazy { MusicRepository(this) }

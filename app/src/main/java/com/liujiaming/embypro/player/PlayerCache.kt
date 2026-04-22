@@ -14,8 +14,16 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
+/**
+ * Manages video cache and prefetching for smoother playback experience.
+ * Uses ExoPlayer's SimpleCache with LRU eviction strategy (150MB max).
+ * Supports prefetching initial video segments (24MB) for faster startup.
+ */
 @androidx.annotation.OptIn(UnstableApi::class)
 object PlayerCache {
+    /**
+     * Data class holding prefetched playback information for quick resume.
+     */
     data class PrefetchedPlayback(
         val itemId: String,
         val playbackUrl: String,
@@ -28,17 +36,31 @@ object PlayerCache {
     private val prefetchExecutor = Executors.newSingleThreadExecutor()
     private val prefetchedPlaybackMap = ConcurrentHashMap<String, PrefetchedPlayback>()
 
+    /**
+     * Gets or initializes the video cache instance.
+     * Thread-safe singleton pattern with double-checked locking.
+     */
     fun get(context: Context): SimpleCache {
         return cache ?: synchronized(this) {
             cache ?: buildCache(context.applicationContext).also { cache = it }
         }
     }
 
+    /**
+     * Marks a video as fully played and removes its prefetch data.
+     */
     fun markPlayed(context: Context, itemId: String) {
         prefs(context).edit().remove(itemId).apply()
         prefetchedPlaybackMap.remove(itemId)
     }
 
+    /**
+     * Cleans up expired prefetch entries from cache and preferences.
+     * Prefetch data expires after 20 minutes.
+     *
+     * @param context Application context
+     * @param protectedItemIds Item IDs to skip during cleanup
+     */
     fun cleanupExpiredPrefetch(context: Context, protectedItemIds: Set<String> = emptySet()) {
         val now = System.currentTimeMillis()
         val prefs = prefs(context)
@@ -62,16 +84,31 @@ object PlayerCache {
         editor.apply()
     }
 
+    /**
+     * Saves prefetched playback information for quick resume.
+     */
     fun savePrefetchedPlayback(playback: PrefetchedPlayback) {
         if (playback.itemId.isBlank() || playback.playbackUrl.isBlank()) return
         prefetchedPlaybackMap[playback.itemId] = playback
     }
 
+    /**
+     * Retrieves and removes prefetched playback data for an item.
+     * Returns null if no prefetched data exists.
+     */
     fun takePrefetchedPlayback(itemId: String): PrefetchedPlayback? {
         if (itemId.isBlank()) return null
         return prefetchedPlaybackMap[itemId]
     }
 
+    /**
+     * Prefetches initial video segments (24MB) for faster playback startup.
+     * Downloads occur in background thread with proper authentication headers.
+     *
+     * @param context Application context
+     * @param accessToken Emby API access token
+     * @param videos List of (itemId, url) pairs to prefetch
+     */
     fun prefetchVideos(context: Context, accessToken: String, videos: List<Pair<String, String>>) {
         if (videos.isEmpty()) return
         val appContext = context.applicationContext
@@ -104,6 +141,10 @@ object PlayerCache {
         }
     }
 
+    /**
+     * Builds and configures the video cache with LRU eviction.
+     * Cache size limited to 150MB.
+     */
     private fun buildCache(context: Context): SimpleCache {
         val cacheDir = File(context.cacheDir, "video_cache")
         return SimpleCache(
@@ -113,6 +154,9 @@ object PlayerCache {
         )
     }
 
+    /**
+     * Gets SharedPreferences for tracking prefetch metadata.
+     */
     private fun prefs(context: Context): SharedPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }

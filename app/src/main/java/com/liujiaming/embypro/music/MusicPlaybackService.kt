@@ -20,6 +20,11 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import java.util.concurrent.CopyOnWriteArraySet
 
+/**
+ * Foreground service for background music playback using ExoPlayer.
+ * Manages audio session, media session for system controls, and playback notifications.
+ * Supports play/pause, seek, and stop operations via notification and media buttons.
+ */
 class MusicPlaybackService : Service() {
     private val binder = LocalBinder()
 
@@ -69,14 +74,23 @@ class MusicPlaybackService : Service() {
         super.onDestroy()
     }
 
+    /**
+     * Returns the ExoPlayer instance for direct control.
+     */
     fun getPlayer(): ExoPlayer {
         return player
     }
 
+    /**
+     * Checks if there is active media in the playlist.
+     */
     fun hasActivePlayback(): Boolean {
         return ::player.isInitialized && player.mediaItemCount > 0
     }
 
+    /**
+     * Toggles between play and pause states.
+     */
     fun togglePlayback() {
         if (!hasActivePlayback()) return
         if (player.isPlaying) {
@@ -87,6 +101,10 @@ class MusicPlaybackService : Service() {
         notifyStateChanged()
     }
 
+    /**
+     * Seeks to the specified position in the current media.
+     * Position is clamped to valid range [0, duration].
+     */
     fun seekTo(positionMs: Long) {
         if (!hasActivePlayback()) return
         val duration = player.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
@@ -94,6 +112,9 @@ class MusicPlaybackService : Service() {
         notifyStateChanged()
     }
 
+    /**
+     * Stops playback, clears media queue, and stops the service.
+     */
     fun stopPlaybackAndSelf() {
         if (::player.isInitialized) {
             player.playWhenReady = false
@@ -106,6 +127,10 @@ class MusicPlaybackService : Service() {
         stopSelf()
     }
 
+    /**
+     * Initializes ExoPlayer with music-optimized audio attributes.
+     * Handles audio focus and headphone unplugging automatically.
+     */
     private fun initializePlayer() {
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
@@ -121,6 +146,10 @@ class MusicPlaybackService : Service() {
             }
     }
 
+    /**
+     * Initializes MediaSession for system-level playback control.
+     * Handles play, pause, stop, and seek commands from external sources.
+     */
     private fun initializeMediaSession() {
         mediaSession = MediaSession(this, "EmbyProMusicPlayback").apply {
             setCallback(object : MediaSession.Callback() {
@@ -145,6 +174,10 @@ class MusicPlaybackService : Service() {
         syncMediaSessionState()
     }
 
+    /**
+     * Synchronizes MediaSession state with current player state.
+     * Updates playback state and media metadata.
+     */
     private fun syncMediaSessionState() {
         val state = when {
             player.isPlaying -> PlaybackState.STATE_PLAYING
@@ -172,6 +205,9 @@ class MusicPlaybackService : Service() {
         mediaSession.setMetadata(mediaMetadata)
     }
 
+    /**
+     * Updates or removes the foreground notification based on playback state.
+     */
     private fun updateForegroundNotification() {
         if (player.mediaItemCount == 0) {
             stopForegroundCompat(removeNotification = true)
@@ -182,6 +218,10 @@ class MusicPlaybackService : Service() {
         startForeground(NOTIFICATION_ID, notification)
     }
 
+    /**
+     * Builds the playback notification with media controls.
+     * Shows play/pause and stop actions with media style layout.
+     */
     private fun buildNotification(): Notification {
         val metadata = player.currentMediaItem?.mediaMetadata
         val title = metadata?.title?.toString().orEmpty().ifBlank { getString(R.string.app_name) }
@@ -240,6 +280,9 @@ class MusicPlaybackService : Service() {
             .build()
     }
 
+    /**
+     * Creates the notification channel for Android O and above.
+     */
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
@@ -252,6 +295,9 @@ class MusicPlaybackService : Service() {
         manager.createNotificationChannel(channel)
     }
 
+    /**
+     * Stops foreground mode with compatibility for different Android versions.
+     */
     private fun stopForegroundCompat(removeNotification: Boolean) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(
@@ -263,6 +309,9 @@ class MusicPlaybackService : Service() {
         }
     }
 
+    /**
+     * Listens to player state changes and updates notification and media session.
+     */
     private val playerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             syncMediaSessionState()
@@ -289,6 +338,9 @@ class MusicPlaybackService : Service() {
         }
     }
 
+    /**
+     * Binder for local service connections.
+     */
     inner class LocalBinder : Binder() {
         fun getService(): MusicPlaybackService = this@MusicPlaybackService
     }
@@ -306,17 +358,30 @@ class MusicPlaybackService : Service() {
         @Volatile
         private var activeService: MusicPlaybackService? = null
 
+        /**
+         * Returns the currently active service instance.
+         */
         fun activeService(): MusicPlaybackService? = activeService
 
+        /**
+         * Registers a listener for playback state changes.
+         * Immediately notifies listener of current state.
+         */
         fun registerStateListener(listener: PlaybackStateListener) {
             stateListeners.add(listener)
             mainHandler.post { listener.onMusicPlaybackStateChanged() }
         }
 
+        /**
+         * Unregisters a previously registered state listener.
+         */
         fun unregisterStateListener(listener: PlaybackStateListener) {
             stateListeners.remove(listener)
         }
 
+        /**
+         * Notifies all registered listeners of state change on main thread.
+         */
         private fun notifyStateChanged() {
             mainHandler.post {
                 stateListeners.forEach { it.onMusicPlaybackStateChanged() }
@@ -324,6 +389,9 @@ class MusicPlaybackService : Service() {
         }
     }
 
+    /**
+     * Functional interface for listening to playback state changes.
+     */
     fun interface PlaybackStateListener {
         fun onMusicPlaybackStateChanged()
     }

@@ -8,6 +8,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
+/**
+ * Settings activity for selecting application theme.
+ * Displays a list of theme options and applies the selected theme immediately.
+ */
 class ThemeSettingsActivity : AppCompatActivity() {
     private lateinit var adapter: ThemeOptionAdapter
     private lateinit var topBar: View

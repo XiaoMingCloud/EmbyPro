@@ -4,17 +4,31 @@ import android.content.Context
 import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 
+/**
+ * Data class representing a video playback queue.
+ * Contains item IDs, titles, and the current playing index.
+ */
 data class VideoQueue(
     val itemIds: ArrayList<String>,
     val itemTitles: ArrayList<String>,
     val currentIndex: Int
 )
 
+/**
+ * Navigator object for handling app-wide navigation between activities.
+ * Provides helper methods for opening different screens with proper intent extras.
+ */
 object AppNavigator {
+    /**
+     * Opens the home screen activity.
+     */
     fun openHome(activity: AppCompatActivity) {
         activity.startActivity(Intent(activity, HomeTabsActivity::class.java))
     }
 
+    /**
+     * Opens the search activity with server connection.
+     */
     fun openSearch(activity: AppCompatActivity, connection: ServerConnection) {
         activity.startActivity(
             Intent(activity, SearchActivity::class.java)
@@ -22,6 +36,9 @@ object AppNavigator {
         )
     }
 
+    /**
+     * Opens the playback history activity with server connection.
+     */
     fun openPlaybackHistory(activity: AppCompatActivity, connection: ServerConnection) {
         activity.startActivity(
             Intent(activity, PlaybackHistoryActivity::class.java)
@@ -29,6 +46,9 @@ object AppNavigator {
         )
     }
 
+    /**
+     * Opens the favorite items activity with server connection.
+     */
     fun openFavoriteItems(activity: AppCompatActivity, connection: ServerConnection) {
         activity.startActivity(
             Intent(activity, FavoriteItemsActivity::class.java)
@@ -36,6 +56,9 @@ object AppNavigator {
         )
     }
 
+    /**
+     * Opens the settings activity with server connection.
+     */
     fun openSettings(activity: AppCompatActivity, connection: ServerConnection) {
         activity.startActivity(
             Intent(activity, SettingsActivity::class.java)
@@ -43,6 +66,9 @@ object AppNavigator {
         )
     }
 
+    /**
+     * Opens the home settings activity with server connection.
+     */
     fun openHomeSettings(activity: AppCompatActivity, connection: ServerConnection) {
         activity.startActivity(
             Intent(activity, HomeSettingsActivity::class.java)
@@ -50,6 +76,9 @@ object AppNavigator {
         )
     }
 
+    /**
+     * Opens the music settings activity with server connection.
+     */
     fun openMusicSettings(activity: AppCompatActivity, connection: ServerConnection) {
         activity.startActivity(
             Intent(activity, MusicSettingsActivity::class.java)
@@ -57,6 +86,9 @@ object AppNavigator {
         )
     }
 
+    /**
+     * Opens the music library activity with server connection.
+     */
     fun openMusicLibrary(activity: AppCompatActivity, connection: ServerConnection) {
         activity.startActivity(
             Intent(activity, MusicLibraryActivity::class.java)
@@ -64,6 +96,9 @@ object AppNavigator {
         )
     }
 
+    /**
+     * Opens the music list activity with browse type and optional container info.
+     */
     fun openMusicList(
         activity: AppCompatActivity,
         connection: ServerConnection,
@@ -80,6 +115,9 @@ object AppNavigator {
         )
     }
 
+    /**
+     * Opens the music player activity with queue information.
+     */
     fun openMusicPlayer(
         activity: AppCompatActivity,
         connection: ServerConnection,
@@ -104,6 +142,9 @@ object AppNavigator {
         )
     }
 
+    /**
+     * Opens the library items activity for a specific library.
+     */
     fun openLibrary(
         activity: AppCompatActivity,
         connection: ServerConnection,
@@ -118,6 +159,9 @@ object AppNavigator {
         )
     }
 
+    /**
+     * Opens either a library or video detail based on item type.
+     */
     fun openPosterItem(
         activity: AppCompatActivity,
         connection: ServerConnection,
@@ -132,6 +176,9 @@ object AppNavigator {
         openVideoDetail(activity, connection, item.id, buildPosterVideoQueue(sourceItems, item.id))
     }
 
+    /**
+     * Opens the video detail activity with queue information.
+     */
     fun openVideoDetail(
         activity: AppCompatActivity,
         connection: ServerConnection,
@@ -148,6 +195,9 @@ object AppNavigator {
         )
     }
 
+    /**
+     * Creates an intent for launching the video player with playback details.
+     */
     fun videoPlayerIntent(
         context: Context,
         connection: ServerConnection,
@@ -169,6 +219,10 @@ object AppNavigator {
             .putExtra(PlayerActivity.EXTRA_PLAYLIST_INDEX, queue.currentIndex)
     }
 
+    /**
+     * Builds a video queue from a list of media poster items.
+     * Filters out folders and non-playable items.
+     */
     fun buildPosterVideoQueue(items: List<MediaPosterUiModel>, selectedId: String): VideoQueue {
         val playableItems = items.filter { !it.isFolder && it.itemType != "BoxSet" && it.itemType != "Folder" }
         return VideoQueue(
@@ -178,6 +232,9 @@ object AppNavigator {
         )
     }
 
+    /**
+     * Builds a video queue from playback history items.
+     */
     fun buildHistoryVideoQueue(items: List<PlaybackHistoryItemUiModel>, selectedId: String): VideoQueue {
         return VideoQueue(
             itemIds = ArrayList(items.map { it.itemId }),

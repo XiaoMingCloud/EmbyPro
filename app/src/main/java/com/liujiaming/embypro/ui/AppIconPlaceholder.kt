@@ -4,7 +4,18 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.widget.ImageView
 
+/**
+ * Utility for applying placeholder drawable to ImageViews.
+ * Shows app icon with rounded corner background when image fails to load.
+ */
 object AppIconPlaceholder {
+    /**
+     * Applies placeholder to an ImageView with rounded corners.
+     *
+     * @param imageView Target ImageView
+     * @param cornerRadiusDp Corner radius in dp (default 14dp)
+     * @param backgroundColor Background color (default semi-transparent gray)
+     */
     fun apply(
         imageView: ImageView,
         cornerRadiusDp: Float = 14f,

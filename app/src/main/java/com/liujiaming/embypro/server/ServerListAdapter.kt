@@ -1,4 +1,4 @@
-﻿package com.liujiaming.embypro
+package com.liujiaming.embypro
 
 import android.graphics.Color
 import android.view.LayoutInflater
@@ -10,6 +10,10 @@ import android.widget.TextView
 import androidx.appcompat.widget.PopupMenu
 import androidx.recyclerview.widget.RecyclerView
 
+/**
+ * Data class representing server information for UI display.
+ * Contains server connection details, user info, and avatar data.
+ */
 data class ServerUiModel(
     val id: Long,
     val name: String,
@@ -25,6 +29,9 @@ data class ServerUiModel(
     val userId: String
 )
 
+/**
+ * Enum representing different server icon styles with colors and icons.
+ */
 enum class ServerIconStyle(
     val fillColor: String,
     val iconRes: Int
@@ -35,6 +42,9 @@ enum class ServerIconStyle(
     SLATE("#FF8D91A8", android.R.drawable.ic_menu_view)
 }
 
+/**
+ * Interface for handling server item actions.
+ */
 interface ServerActionListener {
     fun onOpen(server: ServerUiModel)
     fun onRelogin(server: ServerUiModel)
@@ -44,6 +54,10 @@ interface ServerActionListener {
     fun onDelete(server: ServerUiModel)
 }
 
+/**
+ * RecyclerView adapter for displaying server list.
+ * Supports server management actions through popup menu.
+ */
 class ServerListAdapter(
     items: List<ServerUiModel>,
     private val actionListener: ServerActionListener

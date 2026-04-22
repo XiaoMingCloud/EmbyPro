@@ -10,6 +10,10 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
 
+/**
+ * RecyclerView adapter for displaying theme options.
+ * Shows theme swatches with selection indicators.
+ */
 class ThemeOptionAdapter(
     private val items: List<GlobalThemeOption>,
     private var selectedTheme: GlobalThemeOption,

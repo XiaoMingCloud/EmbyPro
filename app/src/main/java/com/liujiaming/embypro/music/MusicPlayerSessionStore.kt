@@ -3,9 +3,25 @@ package com.liujiaming.embypro
 import android.content.Context
 import android.content.Intent
 
+/**
+ * Singleton store for managing music player session state.
+ * Records playback queue information and creates intents to launch the music player.
+ */
 object MusicPlayerSessionStore {
     private var launchState: MusicPlayerLaunchState? = null
 
+    /**
+     * Records the current music player launch state with queue information.
+     *
+     * @param connection Server connection credentials
+     * @param libraryId Music library ID
+     * @param queueTitle Display title for the queue
+     * @param queueIds List of item IDs in the queue
+     * @param queueTitles List of item titles in the queue
+     * @param queueSubtitles List of item subtitles in the queue
+     * @param queueImages List of item image URLs in the queue
+     * @param queueIndex Current playing item index in the queue
+     */
     fun record(
         connection: ServerConnection,
         libraryId: String?,
@@ -28,6 +44,9 @@ object MusicPlayerSessionStore {
         )
     }
 
+    /**
+     * Updates the current playing item index in the queue.
+     */
     fun updateCurrentItem(itemId: String?) {
         if (itemId.isNullOrBlank()) return
         val state = launchState ?: return
@@ -37,8 +56,15 @@ object MusicPlayerSessionStore {
         }
     }
 
+    /**
+     * Returns the current server connection from the launch state.
+     */
     fun currentConnection(): ServerConnection? = launchState?.connection
 
+    /**
+     * Creates an intent to launch the music player with the recorded session state.
+     * Returns null if no valid session exists.
+     */
     fun createPlayerIntent(context: Context): Intent? {
         val state = launchState ?: return null
         if (state.queueIds.isEmpty()) return null
@@ -53,6 +79,9 @@ object MusicPlayerSessionStore {
             .putExtra(MusicPlayerActivity.EXTRA_QUEUE_INDEX, state.queueIndex)
     }
 
+    /**
+     * Data class holding the complete music player launch state.
+     */
     private data class MusicPlayerLaunchState(
         val connection: ServerConnection,
         val libraryId: String?,

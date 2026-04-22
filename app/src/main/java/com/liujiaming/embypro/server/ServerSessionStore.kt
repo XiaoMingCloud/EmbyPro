@@ -4,10 +4,18 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
+/**
+ * Manages server session storage and active server selection.
+ * Persists server list and active server ID using SharedPreferences with JSON serialization.
+ */
 class ServerSessionStore(context: Context) {
 
     private val preferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 
+    /**
+     * Loads the list of saved servers from preferences.
+     * Parses JSON array into ServerUiModel objects.
+     */
     fun loadServers(): List<ServerUiModel> {
         val raw = preferences.getString(KEY_SERVERS, null).orEmpty()
         if (raw.isBlank()) return emptyList()
@@ -40,6 +48,10 @@ class ServerSessionStore(context: Context) {
         }.getOrDefault(emptyList())
     }
 
+    /**
+     * Saves the server list to preferences.
+     * Updates active server ID if current active server was removed.
+     */
     fun saveServers(servers: List<ServerUiModel>) {
         val array = JSONArray()
         servers.forEach { server ->
@@ -68,6 +80,10 @@ class ServerSessionStore(context: Context) {
         }
     }
 
+    /**
+     * Loads the currently active server.
+     * Returns the active server by ID, or the first server if no active ID is set.
+     */
     fun loadCurrentServer(): ServerUiModel? {
         val servers = loadServers()
         if (servers.isEmpty()) return null
@@ -75,6 +91,10 @@ class ServerSessionStore(context: Context) {
         return servers.firstOrNull { it.id == activeId } ?: servers.first()
     }
 
+    /**
+     * Saves the active server ID to preferences.
+     * Removes the key if serverId is null.
+     */
     fun saveActiveServerId(serverId: Long?) {
         if (serverId == null) {
             preferences.edit().remove(KEY_ACTIVE_SERVER_ID).apply()
@@ -83,10 +103,21 @@ class ServerSessionStore(context: Context) {
         }
     }
 
+    /**
+     * Activates a server by saving its ID as the active server.
+     */
     fun activateServer(server: ServerUiModel) {
         saveActiveServerId(server.id)
     }
 
+    /**
+     * Resolves server connection from intent extras or current active server.
+     * First tries to read direct connection from intent, falls back to active server.
+     *
+     * @param intent The intent that may contain connection data
+     * @param serverRepository Repository for building base URLs
+     * @return Valid ServerConnection or null if unavailable
+     */
     fun resolveConnection(
         intent: android.content.Intent,
         serverRepository: ServerRepository
@@ -104,6 +135,10 @@ class ServerSessionStore(context: Context) {
         )
     }
 
+    /**
+     * Loads the active server ID from preferences.
+     * Returns null if not set.
+     */
     private fun loadActiveServerId(): Long? {
         return if (preferences.contains(KEY_ACTIVE_SERVER_ID)) {
             preferences.getLong(KEY_ACTIVE_SERVER_ID, 0L)

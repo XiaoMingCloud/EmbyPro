@@ -10,6 +10,10 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import java.util.concurrent.ExecutorService
 
+/**
+ * Settings activity for managing home screen library visibility.
+ * Allows users to show/hide specific libraries from the home screen.
+ */
 class HomeSettingsActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
     private val mediaRepository by lazy { MediaRepository(this) }

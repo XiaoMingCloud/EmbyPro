@@ -7,6 +7,10 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
+/**
+ * RecyclerView adapter for displaying music items in a list.
+ * Shows artwork, title, subtitle, and detail information for each music entry.
+ */
 class MusicListAdapter(
     private val items: MutableList<MusicListEntryUiModel>,
     private val accessToken: String?,
@@ -25,12 +29,19 @@ class MusicListAdapter(
 
     override fun getItemCount(): Int = items.size
 
+    /**
+     * Replaces all items in the adapter and refreshes the display.
+     */
     fun submitItems(newItems: List<MusicListEntryUiModel>) {
         items.clear()
         items.addAll(newItems)
         notifyDataSetChanged()
     }
 
+    /**
+     * ViewHolder for music list items.
+     * Binds music entry data to artwork, title, subtitle, and detail views.
+     */
     class MusicListViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val artworkView: ImageView = itemView.findViewById(R.id.musicListArtwork)
         private val titleView: TextView = itemView.findViewById(R.id.musicListTitle)
@@ -38,6 +49,10 @@ class MusicListAdapter(
         private val detailView: TextView = itemView.findViewById(R.id.musicListDetail)
         private val actionIconView: ImageView = itemView.findViewById(R.id.musicListActionIcon)
 
+        /**
+         * Binds music entry data to the view.
+         * Shows play icon for songs, next icon for containers.
+         */
         fun bind(
             item: MusicListEntryUiModel,
             accessToken: String?,
@@ -67,6 +82,9 @@ class MusicListAdapter(
             itemView.setDebouncedClickListener { onItemClick(item) }
         }
 
+        /**
+         * Applies placeholder drawable to artwork image.
+         */
         private fun applyPlaceholder() {
             AppIconPlaceholder.apply(
                 imageView = artworkView,

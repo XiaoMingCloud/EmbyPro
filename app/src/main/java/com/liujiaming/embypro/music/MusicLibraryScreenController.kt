@@ -6,6 +6,11 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.updatePadding
 
+/**
+ * Controller for managing the music library screen UI.
+ * Handles state rendering, library selection, and navigation to music lists.
+ * Can be used as a standalone activity or embedded with bottom navigation.
+ */
 class MusicLibraryScreenController(
     private val activity: AppCompatActivity,
     private val root: View,

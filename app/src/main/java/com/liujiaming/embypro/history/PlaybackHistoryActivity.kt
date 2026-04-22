@@ -16,6 +16,10 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import java.util.concurrent.ExecutorService
 
+/**
+ * Activity displaying playback history with category filtering.
+ * Supports video/live/column categories and batch management operations.
+ */
 class PlaybackHistoryActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
     private val mediaRepository by lazy { MediaRepository(this) }
@@ -125,6 +129,10 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         loadFirstPage()
     }
 
+    /**
+     * Switches to a different playback history category.
+     * @param category The category to switch to
+     */
     private fun switchCategory(category: PlaybackHistoryCategory) {
         if (currentCategory == category) return
         currentCategory = category
@@ -132,15 +140,26 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         loadFirstPage()
     }
 
+    /**
+     * Updates the visual state of category selection buttons.
+     */
     private fun updateCategorySelection() {
         updateCategoryButton(videoButton, currentCategory == PlaybackHistoryCategory.VIDEO)
     }
 
+    /**
+     * Updates the appearance of a category button based on selection state.
+     * @param button The button to update
+     * @param selected Whether the button is selected
+     */
     private fun updateCategoryButton(button: MaterialButton, selected: Boolean) {
         button.isChecked = selected
         button.alpha = if (selected) 1f else 0.72f
     }
 
+    /**
+     * Loads the first page of playback history, clearing existing data and exiting selection mode.
+     */
     private fun loadFirstPage() {
         exitSelectionMode()
         items.clear()
@@ -151,6 +170,10 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         loadNextPage(showLoading = true)
     }
 
+    /**
+     * Loads the next page of playback history with pagination support.
+     * @param showLoading Whether to show loading indicator
+     */
     private fun loadNextPage(showLoading: Boolean = false) {
         if (isLoading) return
         isLoading = true
@@ -194,6 +217,10 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Opens video player directly for a history item with resume position.
+     * @param item The playback history item to play
+     */
     private fun openVideoDirectly(item: PlaybackHistoryItemUiModel) {
         val preferredStartPositionMs = if (item.played) 0L else item.playbackPositionTicks / 10_000L
         playVideoDirectly(
@@ -205,17 +232,26 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         )
     }
 
+    /**
+     * Enters selection mode for batch operations.
+     */
     private fun enterSelectionMode() {
         if (items.isEmpty()) return
         adapter.setSelectionMode(true)
         updateSelectionUi()
     }
 
+    /**
+     * Exits selection mode and clears all selections.
+     */
     private fun exitSelectionMode() {
         adapter.setSelectionMode(false)
         updateSelectionUi()
     }
 
+    /**
+     * Updates the UI elements based on current selection mode state.
+     */
     private fun updateSelectionUi() {
         val inSelectionMode = adapter.isSelectionMode()
         val selectedCount = adapter.selectedIds().size
@@ -236,6 +272,9 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         videoButton.visibility = if (inSelectionMode) View.GONE else View.VISIBLE
     }
 
+    /**
+     * Shows confirmation dialog before clearing played state.
+     */
     private fun confirmClearPlayedState() {
         val selectedIds = adapter.selectedIds()
         if (selectedIds.isEmpty() || isClearing) return
@@ -262,6 +301,10 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         dialog.show()
     }
 
+    /**
+     * Clears played state for selected items and removes them from the list.
+     * @param selectedIds Set of item IDs to clear played state for
+     */
     private fun clearPlayedState(selectedIds: Set<String>) {
         if (selectedIds.isEmpty()) return
         isClearing = true

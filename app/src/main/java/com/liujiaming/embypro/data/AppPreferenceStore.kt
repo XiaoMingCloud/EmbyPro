@@ -3,9 +3,18 @@ package com.liujiaming.embypro
 import android.content.Context
 import org.json.JSONArray
 
+/**
+ * Manages application-level preferences including search history,
+ * home library exclusions, and music library settings.
+ * Uses scoped keys to isolate preferences per server and user.
+ */
 class AppPreferenceStore(context: Context) {
     private val preferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 
+    /**
+     * Loads search history from preferences.
+     * Returns a list of recent search queries, most recent first.
+     */
     fun loadSearchHistory(): List<String> {
         val raw = preferences.getString(KEY_SEARCH_HISTORY, null).orEmpty()
         if (raw.isBlank()) return emptyList()
@@ -18,6 +27,10 @@ class AppPreferenceStore(context: Context) {
         }
     }
 
+    /**
+     * Saves a search query to history.
+     * Removes duplicates and maintains maximum history size.
+     */
     fun saveSearchQuery(query: String) {
         val normalized = query.trim()
         if (normalized.isBlank()) return
@@ -33,6 +46,9 @@ class AppPreferenceStore(context: Context) {
             .apply()
     }
 
+    /**
+     * Deletes a specific query from search history.
+     */
     fun deleteSearchQuery(query: String) {
         preferences.edit()
             .putString(
@@ -42,17 +58,26 @@ class AppPreferenceStore(context: Context) {
             .apply()
     }
 
+    /**
+     * Clears all search history.
+     */
     fun clearSearchHistory() {
         preferences.edit()
             .putString(KEY_SEARCH_HISTORY, JSONArray().toString())
             .apply()
     }
 
+    /**
+     * Loads excluded home library IDs for a specific server and user.
+     */
     fun loadExcludedHomeLibraryIds(baseUrl: String, userId: String): Set<String> {
         return preferences.getStringSet(buildScopedKey(KEY_HOME_EXCLUDED_LIBRARIES, baseUrl, userId), emptySet())
             .orEmpty()
     }
 
+    /**
+     * Sets whether a home library should be excluded from display.
+     */
     fun setHomeLibraryExcluded(baseUrl: String, userId: String, libraryId: String, excluded: Boolean) {
         val key = buildScopedKey(KEY_HOME_EXCLUDED_LIBRARIES, baseUrl, userId)
         val updated = loadExcludedHomeLibraryIds(baseUrl, userId).toMutableSet()
@@ -64,6 +89,9 @@ class AppPreferenceStore(context: Context) {
         preferences.edit().putStringSet(key, updated).apply()
     }
 
+    /**
+     * Loads custom alias for a music library.
+     */
     fun loadMusicLibraryAlias(baseUrl: String, userId: String, libraryId: String): String? {
         return preferences.getString(
             buildScopedKey(KEY_MUSIC_LIBRARY_ALIAS, baseUrl, userId, libraryId),
@@ -71,18 +99,27 @@ class AppPreferenceStore(context: Context) {
         )?.trim()?.ifBlank { null }
     }
 
+    /**
+     * Saves custom alias for a music library.
+     */
     fun saveMusicLibraryAlias(baseUrl: String, userId: String, libraryId: String, alias: String) {
         preferences.edit()
             .putString(buildScopedKey(KEY_MUSIC_LIBRARY_ALIAS, baseUrl, userId, libraryId), alias.trim())
             .apply()
     }
 
+    /**
+     * Clears custom alias for a music library.
+     */
     fun clearMusicLibraryAlias(baseUrl: String, userId: String, libraryId: String) {
         preferences.edit()
             .remove(buildScopedKey(KEY_MUSIC_LIBRARY_ALIAS, baseUrl, userId, libraryId))
             .apply()
     }
 
+    /**
+     * Loads the selected music library ID for a specific server and user.
+     */
     fun loadSelectedMusicLibraryId(baseUrl: String, userId: String): String? {
         return preferences.getString(
             buildScopedKey(KEY_SELECTED_MUSIC_LIBRARY, baseUrl, userId),
@@ -90,12 +127,19 @@ class AppPreferenceStore(context: Context) {
         )?.ifBlank { null }
     }
 
+    /**
+     * Saves the selected music library ID for a specific server and user.
+     */
     fun saveSelectedMusicLibraryId(baseUrl: String, userId: String, libraryId: String) {
         preferences.edit()
             .putString(buildScopedKey(KEY_SELECTED_MUSIC_LIBRARY, baseUrl, userId), libraryId)
             .apply()
     }
 
+    /**
+     * Builds a scoped preference key by combining prefix with server/user/library identifiers.
+     * Uses "::" as separator to create unique keys per context.
+     */
     private fun buildScopedKey(prefix: String, vararg parts: String): String {
         return buildString {
             append(prefix)

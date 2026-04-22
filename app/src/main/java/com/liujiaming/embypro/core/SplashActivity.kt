@@ -11,6 +11,11 @@ import android.view.animation.DecelerateInterpolator
 import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
 
+/**
+ * Splash screen activity displayed on app startup.
+ * Shows an animated logo while preloading home data in the background,
+ * then navigates to the main HomeTabsActivity.
+ */
 class SplashActivity : AppCompatActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var hasNavigated = false
@@ -18,6 +23,10 @@ class SplashActivity : AppCompatActivity() {
     private val serverRepository by lazy { ServerRepository(this) }
     private val preferenceStore by lazy { AppPreferenceStore(this) }
 
+    /**
+     * Runnable that handles navigation from splash to main activity.
+     * Prevents duplicate navigation with hasNavigated flag.
+     */
     private val navigateRunnable = Runnable {
         if (isFinishing || isDestroyed || hasNavigated) return@Runnable
         hasNavigated = true
@@ -33,8 +42,10 @@ class SplashActivity : AppCompatActivity() {
         supportActionBar?.hide()
         GlobalThemeManager.apply(this)
 
+        // Start preloading home data while splash animation plays
         preloadHomeData()
 
+        // Play splash icon animation
         val iconView = findViewById<ImageView>(R.id.splashIconView)
         playIconAnimation(iconView)
         mainHandler.postDelayed(navigateRunnable, SPLASH_DURATION_MS)
@@ -45,6 +56,9 @@ class SplashActivity : AppCompatActivity() {
         mainHandler.removeCallbacks(navigateRunnable)
     }
 
+    /**
+     * Plays fade-in and scale-up animation on the splash icon.
+     */
     private fun playIconAnimation(iconView: View) {
         iconView.alpha = 0f
         iconView.scaleX = 0.86f
@@ -62,6 +76,10 @@ class SplashActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Preloads home screen data in the background during splash screen.
+     * Fetches continue watching items and library data for faster initial load.
+     */
     private fun preloadHomeData() {
         val activeServer = sessionStore.loadCurrentServer() ?: return
         if (activeServer.userId.isBlank() || activeServer.accessToken.isBlank()) return

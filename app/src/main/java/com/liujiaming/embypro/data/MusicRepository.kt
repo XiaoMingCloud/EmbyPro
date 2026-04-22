@@ -2,9 +2,16 @@ package com.liujiaming.embypro
 
 import android.content.Context
 
+/**
+ * Repository for music-related operations (songs, albums, artists, playlists).
+ * Acts as a facade over EmbyApiService, providing connection-aware music API calls.
+ */
 class MusicRepository(context: Context) {
     private val embyApiService = EmbyApiService(context.applicationContext)
 
+    /**
+     * Fetches music libraries for the current server connection.
+     */
     fun fetchMusicLibraries(connection: ServerConnection): Result<List<MediaLibraryUiModel>> {
         return embyApiService.fetchMusicLibraries(
             baseUrl = connection.baseUrl,
@@ -13,6 +20,9 @@ class MusicRepository(context: Context) {
         )
     }
 
+    /**
+     * Fetches statistics for a music library (songs, albums, artists, playlists count).
+     */
     fun fetchMusicLibraryStats(
         connection: ServerConnection,
         libraryId: String
@@ -25,6 +35,9 @@ class MusicRepository(context: Context) {
         )
     }
 
+    /**
+     * Fetches a browsable page of music content based on type (songs, albums, artists, etc.).
+     */
     fun fetchMusicBrowsePage(
         connection: ServerConnection,
         libraryId: String,
@@ -43,6 +56,9 @@ class MusicRepository(context: Context) {
         )
     }
 
+    /**
+     * Fetches playback information for an audio item.
+     */
     fun fetchAudioPlayback(connection: ServerConnection, itemId: String): Result<MusicPlaybackUiModel> {
         return embyApiService.fetchAudioPlayback(
             baseUrl = connection.baseUrl,
@@ -52,6 +68,9 @@ class MusicRepository(context: Context) {
         )
     }
 
+    /**
+     * Searches for music items matching the query within a library.
+     */
     fun searchMusicItems(
         connection: ServerConnection,
         libraryId: String,
@@ -66,6 +85,9 @@ class MusicRepository(context: Context) {
         )
     }
 
+    /**
+     * Updates the favorite state of a music item.
+     */
     fun setFavoriteState(
         connection: ServerConnection,
         itemId: String,
@@ -80,6 +102,9 @@ class MusicRepository(context: Context) {
         )
     }
 
+    /**
+     * Updates playback progress for a music item.
+     */
     fun updatePlaybackProgress(
         connection: ServerConnection,
         itemId: String,

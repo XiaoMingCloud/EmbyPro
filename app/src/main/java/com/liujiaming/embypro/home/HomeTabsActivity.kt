@@ -16,6 +16,10 @@ import com.google.android.material.button.MaterialButton
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import java.util.concurrent.ExecutorService
 
+/**
+ * Main activity with tabbed navigation for home, media, music, and my sections.
+ * Implements swipe gestures for category switching and manages home feed loading.
+ */
 class HomeTabsActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
     private val mediaRepository by lazy { MediaRepository(this) }

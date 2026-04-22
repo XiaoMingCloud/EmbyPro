@@ -46,6 +46,11 @@ import androidx.media3.ui.PlayerView
 import java.util.concurrent.ExecutorService
 import kotlin.math.abs
 
+/**
+ * Full-featured video player activity with ExoPlayer.
+ * Supports gesture controls (brightness, volume, seek), Picture-in-Picture mode,
+ * playlist continuous play, playback speed adjustment, and video rotation.
+ */
 @androidx.annotation.OptIn(UnstableApi::class)
 class PlayerActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
@@ -53,6 +58,7 @@ class PlayerActivity : AppCompatActivity() {
     private val sessionStore by lazy { ServerSessionStore(this) }
     private val serverRepository by lazy { ServerRepository(this) }
 
+    // UI components
     private lateinit var playerView: PlayerView
     private lateinit var coverImageView: ImageView
     private lateinit var progressTimeBar: View
@@ -64,6 +70,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var topBar: View
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    // Player state
     private var player: ExoPlayer? = null
     private lateinit var playbackUrl: String
     private lateinit var accessToken: String
@@ -88,6 +95,7 @@ class PlayerActivity : AppCompatActivity() {
     private var hasRenderedFirstFrame = false
     private var wasInPictureInPictureMode = false
 
+    // Gesture control state
     private lateinit var audioManager: AudioManager
     private var currentBrightness = 0.5f
     private var initialTouchX = 0f

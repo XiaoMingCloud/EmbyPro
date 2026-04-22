@@ -2,9 +2,16 @@ package com.liujiaming.embypro
 
 import android.content.Context
 
+/**
+ * Repository for media-related operations (movies, TV shows, etc.).
+ * Acts as a facade over EmbyApiService, providing connection-aware API calls.
+ */
 class MediaRepository(context: Context) {
     private val embyApiService = EmbyApiService(context.applicationContext)
 
+    /**
+     * Fetches all media libraries for the current server connection.
+     */
     fun fetchMediaLibraries(connection: ServerConnection): Result<List<MediaLibraryUiModel>> {
         return embyApiService.fetchMediaLibraries(
             baseUrl = connection.baseUrl,
@@ -13,6 +20,10 @@ class MediaRepository(context: Context) {
         )
     }
 
+    /**
+     * Fetches a paginated list of items from a media library.
+     * Supports various browse modes, filters, and sorting options.
+     */
     fun fetchLibraryItemsPage(
         connection: ServerConnection,
         parentId: String,
@@ -41,6 +52,9 @@ class MediaRepository(context: Context) {
         }
     }
 
+    /**
+     * Fetches available filter options (genres, tags) for a media library.
+     */
     fun fetchLibraryFilterOptions(
         connection: ServerConnection,
         parentId: String
@@ -53,6 +67,9 @@ class MediaRepository(context: Context) {
         )
     }
 
+    /**
+     * Searches for media items matching the query.
+     */
     fun searchMediaItemsPage(
         connection: ServerConnection,
         query: String,
@@ -69,6 +86,9 @@ class MediaRepository(context: Context) {
         )
     }
 
+    /**
+     * Fetches playback history with optional category filtering.
+     */
     fun fetchPlaybackHistoryPage(
         connection: ServerConnection,
         startIndex: Int,
@@ -85,6 +105,9 @@ class MediaRepository(context: Context) {
         )
     }
 
+    /**
+     * Fetches favorite items for the current user.
+     */
     fun fetchFavoriteItemsPage(
         connection: ServerConnection,
         startIndex: Int,
@@ -99,6 +122,9 @@ class MediaRepository(context: Context) {
         )
     }
 
+    /**
+     * Fetches detailed information for a specific video item.
+     */
     fun fetchVideoDetail(connection: ServerConnection, itemId: String): Result<VideoDetailUiModel> {
         return embyApiService.fetchVideoDetail(
             baseUrl = connection.baseUrl,
@@ -108,6 +134,9 @@ class MediaRepository(context: Context) {
         )
     }
 
+    /**
+     * Updates the favorite state of a media item.
+     */
     fun setFavoriteState(
         connection: ServerConnection,
         itemId: String,
@@ -122,6 +151,9 @@ class MediaRepository(context: Context) {
         )
     }
 
+    /**
+     * Clears the played state for a media item.
+     */
     fun clearPlayedState(connection: ServerConnection, itemId: String): Result<Unit> {
         return embyApiService.clearPlayedState(
             baseUrl = connection.baseUrl,
@@ -131,6 +163,9 @@ class MediaRepository(context: Context) {
         )
     }
 
+    /**
+     * Deletes a media item from the server.
+     */
     fun deleteItem(connection: ServerConnection, itemId: String): Result<Unit> {
         return embyApiService.deleteItem(
             baseUrl = connection.baseUrl,
@@ -139,6 +174,9 @@ class MediaRepository(context: Context) {
         )
     }
 
+    /**
+     * Updates playback progress for a media item.
+     */
     fun updatePlaybackProgress(
         connection: ServerConnection,
         itemId: String,

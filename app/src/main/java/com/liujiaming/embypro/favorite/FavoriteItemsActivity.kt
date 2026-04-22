@@ -13,6 +13,10 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import java.util.concurrent.ExecutorService
 
+/**
+ * Activity displaying the user's favorite media items.
+ * Supports pagination and allows users to remove items from favorites.
+ */
 class FavoriteItemsActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
     private val mediaRepository by lazy { MediaRepository(this) }
@@ -74,6 +78,9 @@ class FavoriteItemsActivity : AppCompatActivity() {
         loadFirstPage()
     }
 
+    /**
+     * Loads the first page of favorite items, clearing existing data.
+     */
     private fun loadFirstPage() {
         items.clear()
         adapter.notifyDataSetChanged()
@@ -83,6 +90,10 @@ class FavoriteItemsActivity : AppCompatActivity() {
         loadNextPage(showLoading = true)
     }
 
+    /**
+     * Loads the next page of favorite items with pagination support.
+     * @param showLoading Whether to show loading indicator
+     */
     private fun loadNextPage(showLoading: Boolean = false) {
         if (isLoading) return
         isLoading = true
@@ -126,6 +137,10 @@ class FavoriteItemsActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Opens video player directly for a favorite item.
+     * @param item The playback history item to play
+     */
     private fun openVideoDirectly(item: PlaybackHistoryItemUiModel) {
         playVideoDirectly(
             connection = connection,
@@ -135,6 +150,10 @@ class FavoriteItemsActivity : AppCompatActivity() {
         )
     }
 
+    /**
+     * Removes an item from favorites and updates the UI.
+     * @param item The item to remove from favorites
+     */
     private fun removeFavorite(item: PlaybackHistoryItemUiModel) {
         networkExecutor.execute {
             val result = mediaRepository.setFavoriteState(connection, item.itemId, false)

@@ -10,6 +10,10 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 
+/**
+ * Settings activity for application-level configurations.
+ * Allows users to customize theme, background image, and access music/home settings.
+ */
 class SettingsActivity : AppCompatActivity() {
     private lateinit var topBar: View
     private val sessionStore by lazy { ServerSessionStore(this) }

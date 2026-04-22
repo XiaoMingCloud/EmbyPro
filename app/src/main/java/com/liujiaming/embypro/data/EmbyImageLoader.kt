@@ -11,6 +11,11 @@ import android.widget.ImageView
 import okhttp3.Request
 import java.util.concurrent.Executors
 
+/**
+ * Image loading utility with two-level caching (memory and disk).
+ * Loads images from network or local URIs and displays them in ImageViews.
+ * Uses LRU cache for memory and LocalMediaCache for disk storage.
+ */
 object EmbyImageLoader {
     private val client = NetworkClientProvider.client
     private val memoryCache = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 1024 / 8).toInt()) {
@@ -19,6 +24,16 @@ object EmbyImageLoader {
     private val executor = Executors.newFixedThreadPool(4)
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    /**
+     * Loads an image from URL or local URI into an ImageView.
+     * Checks memory cache first, then disk cache, then downloads if needed.
+     *
+     * @param imageView The target ImageView to display the image
+     * @param url Image URL or local URI
+     * @token Authentication token for Emby API requests
+     * @param onFailure Callback invoked when image loading fails
+     * @param onSuccess Callback invoked with the loaded bitmap on success
+     */
     fun load(
         imageView: ImageView,
         url: String?,
@@ -98,6 +113,9 @@ object EmbyImageLoader {
         }
     }
 
+    /**
+     * Checks if a URI is a local resource (content, file, or android.resource scheme).
+     */
     private fun isLocalUri(uri: Uri): Boolean {
         return when (uri.scheme) {
             ContentResolver.SCHEME_CONTENT,

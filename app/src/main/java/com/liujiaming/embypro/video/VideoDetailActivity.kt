@@ -26,6 +26,10 @@ import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.android.material.shape.ShapeAppearanceModel
 import java.util.concurrent.ExecutorService
 
+/**
+ * Activity displaying detailed information about a video item.
+ * Shows metadata, media info, chapters, and provides playback controls.
+ */
 class VideoDetailActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
     private val mediaRepository by lazy { MediaRepository(this) }

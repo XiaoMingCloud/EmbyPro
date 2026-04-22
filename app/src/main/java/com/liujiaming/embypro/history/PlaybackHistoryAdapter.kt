@@ -10,6 +10,10 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.imageview.ShapeableImageView
 import kotlin.math.roundToInt
 
+/**
+ * RecyclerView adapter for displaying playback history items.
+ * Supports selection mode for batch operations and shows playback progress.
+ */
 class PlaybackHistoryAdapter(
     private val items: List<PlaybackHistoryItemUiModel>,
     private val accessToken: String,
@@ -41,6 +45,10 @@ class PlaybackHistoryAdapter(
 
     override fun getItemCount(): Int = items.size
 
+    /**
+     * Enables or disables selection mode for batch operations.
+     * Clears selections when disabled.
+     */
     fun setSelectionMode(enabled: Boolean) {
         if (selectionMode == enabled) return
         selectionMode = enabled
@@ -50,8 +58,14 @@ class PlaybackHistoryAdapter(
         notifyDataSetChanged()
     }
 
+    /**
+     * Returns whether selection mode is currently active.
+     */
     fun isSelectionMode(): Boolean = selectionMode
 
+    /**
+     * Toggles selection state for a specific item.
+     */
     fun toggleSelection(itemId: String) {
         if (selectedItemIds.contains(itemId)) {
             selectedItemIds.remove(itemId)
@@ -62,27 +76,46 @@ class PlaybackHistoryAdapter(
         if (index >= 0) notifyItemChanged(index)
     }
 
+    /**
+     * Returns set of currently selected item IDs.
+     */
     fun selectedIds(): Set<String> = selectedItemIds.toSet()
 
+    /**
+     * Clears all selections.
+     */
     fun clearSelection() {
         selectedItemIds.clear()
         notifyDataSetChanged()
     }
 
+    /**
+     * Selects all items in the list.
+     */
     fun selectAll() {
         selectedItemIds.clear()
         selectedItemIds.addAll(items.map { it.itemId })
         notifyDataSetChanged()
     }
 
+    /**
+     * Checks if all items are currently selected.
+     */
     fun areAllSelected(): Boolean = items.isNotEmpty() && selectedItemIds.size == items.size
 
+    /**
+     * Removes items from the adapter by their IDs.
+     */
     fun removeItems(itemIds: Set<String>) {
         if (itemIds.isEmpty()) return
         selectedItemIds.removeAll(itemIds)
         notifyDataSetChanged()
     }
 
+    /**
+     * ViewHolder for playback history items.
+     * Displays poster, title, library name, time, and playback progress.
+     */
     class PlaybackHistoryViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val posterImage: ShapeableImageView = itemView.findViewById(R.id.playbackHistoryPosterImage)
         private val titleText: TextView = itemView.findViewById(R.id.playbackHistoryTitleText)
@@ -94,6 +127,10 @@ class PlaybackHistoryAdapter(
         private val progressFill: View = itemView.findViewById(R.id.playbackHistoryProgressFill)
         private val durationBadge: TextView = itemView.findViewById(R.id.playbackHistoryDurationBadge)
 
+        /**
+         * Binds playback history item data to the view.
+         * Handles selection mode, favorites, and playback progress display.
+         */
         fun bind(
             item: PlaybackHistoryItemUiModel,
             accessToken: String,
@@ -132,6 +169,9 @@ class PlaybackHistoryAdapter(
             }
         }
 
+        /**
+         * Applies placeholder drawable to poster image.
+         */
         private fun applyPlaceholder() {
             AppIconPlaceholder.apply(
                 imageView = posterImage,
@@ -139,6 +179,10 @@ class PlaybackHistoryAdapter(
             )
         }
 
+        /**
+         * Binds playback progress information to the progress bar and duration badge.
+         * Shows played/total time and visual progress indicator.
+         */
         private fun bindPlaybackProgress(item: PlaybackHistoryItemUiModel) {
             val runtimeTicks = item.runtimeTicks.coerceAtLeast(0L)
             val playedTicks = when {
@@ -170,6 +214,9 @@ class PlaybackHistoryAdapter(
             }
         }
 
+        /**
+         * Formats ticks (100-nanosecond units) to HH:MM:SS or MM:SS string.
+         */
         private fun formatTicks(ticks: Long): String {
             if (ticks <= 0L) return "00:00"
             val totalSeconds = ticks / 10_000_000L

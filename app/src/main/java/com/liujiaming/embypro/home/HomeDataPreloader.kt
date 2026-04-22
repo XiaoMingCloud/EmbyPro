@@ -3,6 +3,10 @@ package com.liujiaming.embypro
 import android.content.Context
 import java.util.concurrent.Future
 
+/**
+ * Data class holding preloaded home screen data.
+ * Contains all necessary information to display the home feed immediately.
+ */
 data class PreloadedHomeData(
     val baseUrl: String,
     val userId: String,
@@ -17,6 +21,10 @@ data class PreloadedHomeData(
     val homeSeenItemIds: Set<String>
 )
 
+/**
+ * Manages background preloading of home screen data during splash screen.
+ * Prevents duplicate requests and allows taking the preloaded task when ready.
+ */
 object HomeDataPreloader {
     private val executor = AppExecutors.io
     private val lock = Any()
@@ -24,6 +32,17 @@ object HomeDataPreloader {
     private var activeRequest: HomePreloadRequest? = null
     private var activeTask: Future<Result<PreloadedHomeData>>? = null
 
+    /**
+     * Starts preloading home data in the background.
+     * Cancels previous request if parameters changed.
+     *
+     * @param context Application context
+     * @param baseUrl Server base URL
+     * @param userId User ID
+     * @param accessToken Access token
+     * @param excludedLibraryIds Set of library IDs to exclude from home
+     * @param primaryCategoryKey Primary content category (video/audio)
+     */
     fun preload(
         context: Context,
         baseUrl: String,
@@ -60,6 +79,12 @@ object HomeDataPreloader {
         }
     }
 
+    /**
+     * Takes the active preload task if it matches the expected request.
+     * Clears the active request after taking.
+     *
+     * @return Future containing preloaded data or null if no matching task
+     */
     fun takeTask(
         baseUrl: String,
         userId: String,
@@ -84,6 +109,9 @@ object HomeDataPreloader {
         }
     }
 
+    /**
+     * Builds preloaded home data by fetching from the repository.
+     */
     private fun buildPreloadedHomeData(
         context: Context,
         request: HomePreloadRequest,
@@ -103,12 +131,19 @@ object HomeDataPreloader {
         )
     }
 
+    /**
+     * Builds a signature string from excluded library IDs for request comparison.
+     */
     private fun buildExcludedSignature(excludedLibraryIds: Set<String>): String {
         return excludedLibraryIds.toList()
             .sorted()
             .joinToString("|")
     }
 
+    /**
+     * Data class representing a unique home preload request.
+     * Used to detect duplicate requests and prevent redundant loading.
+     */
     private data class HomePreloadRequest(
         val baseUrl: String,
         val userId: String,

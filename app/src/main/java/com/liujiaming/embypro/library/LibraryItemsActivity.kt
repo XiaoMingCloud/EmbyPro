@@ -14,6 +14,11 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
 import java.util.concurrent.ExecutorService
 
+/**
+ * Activity displaying items in a media library with browsing, filtering, and sorting capabilities.
+ * Supports multiple browse modes (all, continue watching, favorites, genres, tags, etc.)
+ * and implements pagination for loading items.
+ */
 class LibraryItemsActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
     private val mediaRepository by lazy { MediaRepository(this) }

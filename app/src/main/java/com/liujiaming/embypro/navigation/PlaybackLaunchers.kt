@@ -3,6 +3,16 @@ package com.liujiaming.embypro
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
+/**
+ * Extension function to launch video player directly.
+ * Fetches video details in background, then starts PlayerActivity.
+ *
+ * @param connection Server connection credentials
+ * @param mediaRepository Media repository for fetching video details
+ * @param itemId Video item ID to play
+ * @param queue Video queue information
+ * @param preferredStartPositionMs Preferred start position in milliseconds (defaults to saved position)
+ */
 fun AppCompatActivity.playVideoDirectly(
     connection: ServerConnection,
     mediaRepository: MediaRepository,

@@ -16,23 +16,45 @@ import androidx.core.graphics.ColorUtils
 import androidx.core.view.WindowCompat
 import com.google.android.material.card.MaterialCardView
 
+/**
+ * Manages global theme application across activities.
+ * Handles background colors, text colors, card styling, and custom background images.
+ */
 object GlobalThemeManager {
+    /**
+     * Returns the primary text color based on the current theme.
+     */
     fun primaryTextColor(context: Context): Int {
         return resolvePrimaryTextColor(GlobalThemeStore(context).loadTheme())
     }
 
+    /**
+     * Returns the secondary text color based on the current theme.
+     */
     fun secondaryTextColor(context: Context): Int {
         return resolveSecondaryTextColor(GlobalThemeStore(context).loadTheme())
     }
 
+    /**
+     * Returns the card background color based on the current theme.
+     */
     fun cardBackgroundColor(context: Context): Int {
         return resolveCardBackgroundColor(GlobalThemeStore(context).loadTheme())
     }
 
+    /**
+     * Returns the card stroke (border) color based on the current theme.
+     */
     fun cardStrokeColor(context: Context): Int {
         return resolveCardStrokeColor(GlobalThemeStore(context).loadTheme())
     }
 
+    /**
+     * Applies the current theme to the activity's root view hierarchy.
+     * Sets background, configures system bars, and applies foreground colors to all child views.
+     *
+     * @param activity The activity to theme
+     */
     fun apply(activity: Activity) {
         val themeStore = GlobalThemeStore(activity)
         val option = themeStore.loadTheme()
@@ -49,6 +71,10 @@ object GlobalThemeManager {
         applyForegroundColors(root, option)
     }
 
+    /**
+     * Resolves the background drawable for the activity.
+     * Returns custom background image if set, otherwise falls back to theme color.
+     */
     private fun resolveBackgroundDrawable(
         activity: Activity,
         themeStore: GlobalThemeStore,
@@ -70,11 +96,18 @@ object GlobalThemeManager {
         }
     }
 
+    /**
+     * Returns the display name of the current theme.
+     */
     fun currentThemeLabel(activity: Activity): String {
         val option = GlobalThemeStore(activity).loadTheme()
         return activity.getString(option.labelRes)
     }
 
+    /**
+     * Recursively applies foreground colors (text, tint, card colors) to a view and its children.
+     * Intelligently detects secondary text tones to apply appropriate color.
+     */
     private fun applyForegroundColors(view: View, option: GlobalThemeOption) {
         val primaryColor = resolvePrimaryTextColor(option)
         val secondaryColor = resolveSecondaryTextColor(option)
@@ -115,6 +148,10 @@ object GlobalThemeManager {
         }
     }
 
+    /**
+     * Resolves card background color based on theme option.
+     * Black theme uses darker semi-transparent white, others use lighter transparency.
+     */
     private fun resolveCardBackgroundColor(option: GlobalThemeOption): Int {
         return if (option == GlobalThemeOption.BLACK) {
             Color.parseColor("#33FFFFFF")
@@ -123,6 +160,9 @@ object GlobalThemeManager {
         }
     }
 
+    /**
+     * Resolves card stroke (border) color based on theme option.
+     */
     private fun resolveCardStrokeColor(option: GlobalThemeOption): Int {
         return if (option == GlobalThemeOption.BLACK) {
             Color.parseColor("#66FFFFFF")
@@ -131,14 +171,24 @@ object GlobalThemeManager {
         }
     }
 
+    /**
+     * Resolves primary text color. Dark color for light system bars, white for dark bars.
+     */
     private fun resolvePrimaryTextColor(option: GlobalThemeOption): Int {
         return if (option.lightSystemBars) Color.parseColor("#FF272336") else Color.WHITE
     }
 
+    /**
+     * Resolves secondary text color. Muted color for light system bars, semi-transparent white for dark.
+     */
     private fun resolveSecondaryTextColor(option: GlobalThemeOption): Int {
         return if (option.lightSystemBars) Color.parseColor("#FF7E748E") else Color.parseColor("#CCFFFFFF")
     }
 
+    /**
+     * Determines if a color is closer to the secondary tone than primary tone.
+     * Uses RGB color distance calculation.
+     */
     private fun isSecondaryTone(color: Int): Boolean {
         val secondary = Color.parseColor("#FF7E748E")
         val primary = Color.parseColor("#FF272336")
@@ -147,6 +197,9 @@ object GlobalThemeManager {
         return distanceToSecondary < distanceToPrimary
     }
 
+    /**
+     * Calculates Euclidean distance between two RGB colors.
+     */
     private fun colorDistance(first: Int, second: Int): Double {
         val r = Color.red(first) - Color.red(second)
         val g = Color.green(first) - Color.green(second)
@@ -154,6 +207,10 @@ object GlobalThemeManager {
         return kotlin.math.sqrt((r * r + g * g + b * b).toDouble())
     }
 
+    /**
+     * Cache object for theme-specific background colors.
+     * Provides pre-defined color values for each theme option.
+     */
     private object GlobalThemeStoreColorCache {
         fun colorFor(option: GlobalThemeOption): Int {
             return when (option) {

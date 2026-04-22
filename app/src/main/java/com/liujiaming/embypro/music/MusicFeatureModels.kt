@@ -1,5 +1,9 @@
 package com.liujiaming.embypro
 
+/**
+ * Enum representing different music browsing categories.
+ * Used to navigate between songs, albums, artists, playlists, favorites, and folders.
+ */
 enum class MusicBrowseType {
     SONGS,
     ALBUMS,
@@ -9,11 +13,19 @@ enum class MusicBrowseType {
     FOLDERS
 }
 
+/**
+ * Enum representing the type of music list entry.
+ * SONG represents individual tracks, CONTAINER represents collections (albums, artists, etc.).
+ */
 enum class MusicEntryKind {
     SONG,
     CONTAINER
 }
 
+/**
+ * UI model representing a single item in a music list.
+ * Can be either a song or a container (album, artist, playlist, etc.).
+ */
 data class MusicListEntryUiModel(
     val id: String,
     val title: String,
@@ -28,6 +40,10 @@ data class MusicListEntryUiModel(
     val artistLine: String = ""
 )
 
+/**
+ * UI model representing a complete music list page.
+ * Contains page metadata and list of music entries.
+ */
 data class MusicListPageUiModel(
     val title: String,
     val subtitle: String,
@@ -37,6 +53,10 @@ data class MusicListPageUiModel(
     val libraryId: String
 )
 
+/**
+ * UI model representing music playback information.
+ * Contains item details, playback URL, and current position.
+ */
 data class MusicPlaybackUiModel(
     val itemId: String,
     val title: String,

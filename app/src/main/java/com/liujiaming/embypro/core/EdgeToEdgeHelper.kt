@@ -9,7 +9,18 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 
+/**
+ * Helper utility for enabling edge-to-edge display and managing window insets.
+ * Provides methods to apply system bar insets as padding or margins to views.
+ */
 object EdgeToEdgeHelper {
+    /**
+     * Enables edge-to-edge display for the given activity.
+     * Makes status and navigation bars transparent and controls their appearance.
+     *
+     * @param activity The activity to configure
+     * @param lightSystemBars Whether to use dark icons for system bars (true for light backgrounds)
+     */
     fun enable(activity: Activity, lightSystemBars: Boolean) {
         WindowCompat.setDecorFitsSystemWindows(activity.window, false)
         activity.window.statusBarColor = android.graphics.Color.TRANSPARENT
@@ -25,6 +36,20 @@ object EdgeToEdgeHelper {
         }
     }
 
+    /**
+     * Applies system bar insets as padding to the target view.
+     * Allows selective application to specific edges with optional extra padding.
+     *
+     * @param target The view to apply insets to
+     * @param applyTop Whether to apply top inset
+     * @param applyBottom Whether to apply bottom inset
+     * @param applyLeft Whether to apply left inset
+     * @param applyRight Whether to apply right inset
+     * @param extraTop Additional top padding in pixels
+     * @param extraBottom Additional bottom padding in pixels
+     * @param extraLeft Additional left padding in pixels
+     * @param extraRight Additional right padding in pixels
+     */
     fun applyInsets(
         target: View,
         applyTop: Boolean = false,
@@ -54,6 +79,14 @@ object EdgeToEdgeHelper {
         ViewCompat.requestApplyInsets(target)
     }
 
+    /**
+     * Applies system bar insets as margins to the target view.
+     * Only supports top and bottom margins.
+     *
+     * @param target The view to apply margins to
+     * @param applyTop Whether to apply top inset as margin
+     * @param applyBottom Whether to apply bottom inset as margin
+     */
     fun applyMargins(
         target: View,
         applyTop: Boolean = false,

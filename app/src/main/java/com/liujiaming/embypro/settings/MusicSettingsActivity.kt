@@ -10,6 +10,10 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 
+/**
+ * Settings activity for music library configuration.
+ * Displays library statistics and allows partition selection and alias customization.
+ */
 class MusicSettingsActivity : AppCompatActivity() {
     private val sessionStore by lazy { ServerSessionStore(this) }
     private val serverRepository by lazy { ServerRepository(this) }

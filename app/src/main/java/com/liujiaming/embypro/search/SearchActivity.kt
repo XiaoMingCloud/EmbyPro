@@ -19,6 +19,10 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import java.util.concurrent.ExecutorService
 
+/**
+ * Activity for searching media items with history support.
+ * Displays search results in a grid layout and maintains search history.
+ */
 class SearchActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
     private val mediaRepository by lazy { MediaRepository(this) }

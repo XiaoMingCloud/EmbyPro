@@ -15,39 +15,67 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
+/**
+ * Data class representing basic server information.
+ * Contains server ID, name, and version details.
+ */
 data class ServerInfo(
     val serverId: String,
     val serverName: String,
     val version: String
 )
 
+/**
+ * Data class representing the result of a login operation.
+ * Contains access token, user ID, and user name.
+ */
 data class LoginResult(
     val accessToken: String,
     val userId: String,
     val userName: String
 )
 
+/**
+ * Data class representing a library section with its UI model and items.
+ * Combines library metadata with a list of media posters.
+ */
 data class LibrarySectionUiModel(
     val library: MediaLibraryUiModel,
     val items: List<MediaPosterUiModel>
 )
 
+/**
+ * Data class representing the home screen UI model.
+ * Contains continue watching items, media libraries, and library sections.
+ */
 data class ServerHomeUiModel(
     val continueWatching: List<MediaPosterUiModel>,
     val mediaLibraries: List<MediaLibraryUiModel>,
     val librarySections: Map<String, List<MediaPosterUiModel>>
 )
 
+/**
+ * Data class representing a paginated list of library items.
+ * Contains the items and total count for pagination.
+ */
 data class LibraryItemsPageUiModel(
     val items: List<MediaPosterUiModel>,
     val totalCount: Int
 )
 
+/**
+ * Data class representing filter options for a library.
+ * Contains available genres and tags for filtering.
+ */
 data class LibraryFilterOptionsUiModel(
     val genres: List<String>,
     val tags: List<String>
 )
 
+/**
+ * Data class representing a playback history item.
+ * Contains item details, playback position, and library information.
+ */
 data class PlaybackHistoryItemUiModel(
     val itemId: String,
     val title: String,
@@ -60,16 +88,28 @@ data class PlaybackHistoryItemUiModel(
     val played: Boolean = false
 )
 
+/**
+ * Data class representing a paginated list of playback history items.
+ * Contains the items and total count for pagination.
+ */
 data class PlaybackHistoryPageUiModel(
     val items: List<PlaybackHistoryItemUiModel>,
     val totalCount: Int
 )
 
+/**
+ * Data class representing a paginated list of favorite items.
+ * Contains the items and total count for pagination.
+ */
 data class FavoriteItemsPageUiModel(
     val items: List<PlaybackHistoryItemUiModel>,
     val totalCount: Int
 )
 
+/**
+ * Data class representing music library statistics.
+ * Contains counts for songs, albums, artists, and playlists.
+ */
 data class MusicLibraryStatsUiModel(
     val songsCount: Int,
     val albumsCount: Int,
@@ -77,6 +117,10 @@ data class MusicLibraryStatsUiModel(
     val playlistsCount: Int
 )
 
+/**
+ * Enum representing different library browsing modes.
+ * Used to filter and display library items in various ways.
+ */
 enum class LibraryBrowseMode {
     ALL,
     CONTINUE,
@@ -87,6 +131,10 @@ enum class LibraryBrowseMode {
     FOLDERS
 }
 
+/**
+ * Enum representing playback history categories.
+ * Each category defines which item types to include and has a corresponding label resource.
+ */
 enum class PlaybackHistoryCategory(val includeItemTypes: String, val labelRes: Int) {
     ALL("Movie,Episode,Video,MusicVideo,Series,Season,BoxSet,Program,TvChannel", R.string.tab_all),
     VIDEO("Movie,Episode,Video,MusicVideo", R.string.playback_history_tab_video),
@@ -94,6 +142,10 @@ enum class PlaybackHistoryCategory(val includeItemTypes: String, val labelRes: I
     COLUMN("Series,Season,BoxSet", R.string.playback_history_tab_column)
 }
 
+/**
+ * Enum representing library sort fields.
+ * Each field defines the API value and has a corresponding label resource.
+ */
 enum class LibrarySortField(val apiValue: String, val labelRes: Int) {
     DATE_MODIFIED("DateModified", R.string.sort_date_modified),
     DATE_CREATED("DateCreated", R.string.sort_date_created),
@@ -108,17 +160,30 @@ enum class LibrarySortField(val apiValue: String, val labelRes: Int) {
     RANDOM("Random", R.string.sort_random)
 }
 
+/**
+ * Data class representing a chapter in a media item.
+ * Contains chapter title, start time label, and optional image URL.
+ */
 data class ChapterUiModel(
     val title: String,
     val startLabel: String,
     val imageUrl: String?
 )
 
+/**
+ * Data class representing a media information card.
+ * Contains a title and list of information lines.
+ */
 data class MediaInfoCardUiModel(
     val title: String,
     val lines: List<String>
 )
 
+/**
+ * Data class representing video detail UI model.
+ * Contains comprehensive information about a video item including metadata,
+ * media sources, chapters, and playback information.
+ */
 data class VideoDetailUiModel(
     val itemId: String,
     val title: String,
@@ -138,6 +203,11 @@ data class VideoDetailUiModel(
     val playSessionId: String
 )
 
+/**
+ * Service class for interacting with the Emby API.
+ * Provides methods for authentication, media retrieval, playback, and user management.
+ * Implements caching strategies to improve performance and offline support.
+ */
 class EmbyApiService(
     private val context: Context
 ) {
@@ -145,6 +215,10 @@ class EmbyApiService(
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val localMediaCache = LocalMediaCache(context.applicationContext)
 
+    /**
+     * Builds a normalized base URL from address and port.
+     * Adds HTTPS scheme if not present and properly formats the port.
+     */
     fun buildBaseUrl(address: String, port: String): String {
         val trimmedAddress = address.trim().removeSuffix("/")
         val hasScheme = trimmedAddress.contains(Regex("^https?://", RegexOption.IGNORE_CASE))
@@ -176,6 +250,10 @@ class EmbyApiService(
         }.removeSuffix("/")
     }
 
+    /**
+     * Parses a base URL into address and port components.
+     * Returns a pair of (address, port), with port being empty if using default.
+     */
     fun parseBaseUrl(baseUrl: String): Pair<String, String> {
         val httpUrl = baseUrl.toHttpUrlOrNull() ?: return baseUrl to ""
         val defaultPort = if (httpUrl.isHttps) 443 else 80

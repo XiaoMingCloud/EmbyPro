@@ -30,6 +30,11 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 
+/**
+ * Activity for music playback with queue management.
+ * Provides play/pause, seek, previous/next controls and favorite toggle.
+ * Integrates with MusicPlaybackService for background playback.
+ */
 class MusicPlayerActivity : AppCompatActivity() {
     private val musicRepository by lazy { MusicRepository(this) }
     private val sessionStore by lazy { ServerSessionStore(this) }

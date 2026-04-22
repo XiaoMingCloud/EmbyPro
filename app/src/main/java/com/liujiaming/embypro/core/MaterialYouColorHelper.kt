@@ -5,12 +5,20 @@ import android.graphics.Color
 import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
 
+/**
+ * Data class holding Material You inspired button colors.
+ * Contains seed color, container background, and content (text/icon) color.
+ */
 data class MaterialYouButtonColors(
     val seed: Int,
     val container: Int,
     val content: Int
 )
 
+/**
+ * Data class holding Material You inspired backdrop (background) colors.
+ * Provides gradient colors for page background and hero section blending.
+ */
 data class MaterialYouBackdropColors(
     val pageTop: Int,
     val pageMid: Int,
@@ -19,8 +27,20 @@ data class MaterialYouBackdropColors(
     val heroBlendBottom: Int
 )
 
+/**
+ * Utility for extracting Material You inspired color palettes from images.
+ * Uses Android Palette library to analyze bitmaps and generate harmonious color schemes.
+ */
 object MaterialYouColorHelper {
 
+    /**
+     * Extracts button colors from a bitmap image.
+     * Analyzes the image to find an optimal seed color, then creates container and content colors.
+     *
+     * @param bitmap The source image to analyze
+     * @param fallbackSeed Fallback color if palette extraction fails
+     * @return MaterialYouButtonColors with seed, container, and content colors
+     */
     fun extractButtonColors(bitmap: Bitmap, fallbackSeed: Int): MaterialYouButtonColors {
         val palette = Palette.from(bitmap)
             .clearFilters()
@@ -33,6 +53,13 @@ object MaterialYouColorHelper {
         return MaterialYouButtonColors(seed = seed, container = container, content = content)
     }
 
+    /**
+     * Generates backdrop colors from a seed color.
+     * Creates a harmonious gradient by adjusting HSL lightness values.
+     *
+     * @param seed The base color to derive the palette from
+     * @return MaterialYouBackdropColors with page gradient and hero blend colors
+     */
     fun extractBackdropColors(seed: Int): MaterialYouBackdropColors {
         val hsl = FloatArray(3)
         ColorUtils.colorToHSL(seed, hsl)
@@ -55,6 +82,10 @@ object MaterialYouColorHelper {
         )
     }
 
+    /**
+     * Selects the best seed color from a palette.
+     * Scores colors based on saturation, lightness, and population (frequency in image).
+     */
     private fun pickSeedColor(palette: Palette, fallbackSeed: Int): Int {
         val swatches = palette.swatches
         if (swatches.isEmpty()) return fallbackSeed
@@ -70,6 +101,10 @@ object MaterialYouColorHelper {
         return best?.rgb ?: fallbackSeed
     }
 
+    /**
+     * Creates a container color from a seed color.
+     * Adjusts saturation and lightness to create a softer, Material You inspired tone.
+     */
     private fun createContainerColor(seed: Int): Int {
         val hsl = FloatArray(3)
         ColorUtils.colorToHSL(seed, hsl)
@@ -81,6 +116,9 @@ object MaterialYouColorHelper {
         return ColorUtils.blendARGB(tonedSeed, Color.WHITE, 0.10f)
     }
 
+    /**
+     * Normalizes a value to a 0-1 range within given min/max bounds.
+     */
     private fun normalize(value: Float, min: Float, max: Float): Float {
         return ((value - min) / (max - min)).coerceIn(0f, 1f)
     }
