@@ -57,4 +57,15 @@
     <color name="music_library_search_stroke">#2ECAEEFF</color>
     <color name="music_library_search_icon">#D3E2E9F2</color>
     <color name="music_library_search_hint">#89E2E9F2</color>
+    <color name="partition_dialog_surface">#73FCF8FF</color>
+    <color name="partition_dialog_surface_elevated">#59F7F2FF</color>
+    <color name="partition_dialog_stroke">#4DFFFFFF</color>
+    <color name="partition_dialog_text">#FF272336</color>
+    <color name="partition_dialog_text_secondary">#FF7E748E</color>
+    <color name="partition_dialog_option">#40FFFFFF</color>
+    <color name="partition_dialog_option_stroke">#26FFFFFF</color>
+    <color name="partition_dialog_option_selected">#73F0EAF7</color>
+    <color name="partition_dialog_option_selected_stroke">#66B68AF9</color>
+    <color name="partition_dialog_check">#FF6A6FB2</color>
+    <color name="partition_dialog_cancel_surface">#33FFFFFF</color>
 </resources>

@@ -2,7 +2,6 @@ package com.liujiaming.embypro
 
 import android.view.View
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.updatePadding
 
@@ -133,17 +132,12 @@ class MusicLibraryScreenController(
         val state = MusicLibraryRepository.currentState()
         if (state.musicLibraries.isEmpty()) return
 
-        val labels = state.musicLibraries.map { MusicLibraryRepository.displayName(it) }.toTypedArray()
+        val labels = state.musicLibraries.map { MusicLibraryRepository.displayName(it) }
         val selectedIndex = state.musicLibraries.indexOfFirst { it.id == state.currentLibraryId }.coerceAtLeast(0)
 
-        AlertDialog.Builder(activity)
-            .setTitle(R.string.music_settings_partition_dialog_title)
-            .setSingleChoiceItems(labels, selectedIndex) { dialog, which ->
-                MusicLibraryRepository.selectLibrary(state.musicLibraries[which].id)
-                dialog.dismiss()
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        activity.showMusicPartitionPickerDialog(labels, selectedIndex) { which ->
+            MusicLibraryRepository.selectLibrary(state.musicLibraries[which].id)
+        }
     }
 
     private fun showLoading() {

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="partition_dialog_surface">#5A192333</color>
+    <color name="partition_dialog_surface_elevated">#401E2A3D</color>
+    <color name="partition_dialog_stroke">#4DFFFFFF</color>
+    <color name="partition_dialog_text">#FFF4F0F7</color>
+    <color name="partition_dialog_text_secondary">#BFD3E2E9</color>
+    <color name="partition_dialog_option">#33384558</color>
+    <color name="partition_dialog_option_stroke">#2EFFFFFF</color>
+    <color name="partition_dialog_option_selected">#595A5A92</color>
+    <color name="partition_dialog_option_selected_stroke">#80D2BBEE</color>
+    <color name="partition_dialog_check">#FFD2BBEE</color>
+    <color name="partition_dialog_cancel_surface">#29384558</color>
+</resources>

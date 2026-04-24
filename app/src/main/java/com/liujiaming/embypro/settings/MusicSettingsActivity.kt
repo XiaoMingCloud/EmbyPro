@@ -1,13 +1,13 @@
 package com.liujiaming.embypro
 
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
-import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.button.MaterialButton
 
 /**
@@ -160,45 +160,46 @@ class MusicSettingsActivity : AppCompatActivity() {
         val selectedIndex = state.musicLibraries.indexOfFirst { it.id == state.currentLibraryId }.coerceAtLeast(0)
         val labels = state.musicLibraries.map { library ->
             MusicLibraryRepository.displayName(library)
-        }.toTypedArray()
+        }
 
-        AlertDialog.Builder(this)
-            .setTitle(R.string.music_settings_partition_dialog_title)
-            .setSingleChoiceItems(labels, selectedIndex) { dialog, which ->
-                MusicLibraryRepository.selectLibrary(state.musicLibraries[which].id)
-                dialog.dismiss()
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        showMusicPartitionPickerDialog(labels, selectedIndex) { which ->
+            MusicLibraryRepository.selectLibrary(state.musicLibraries[which].id)
+        }
     }
 
     private fun showAliasEditor() {
         val currentState = MusicLibraryRepository.currentState()
         val library = currentState.currentMusicLibrary ?: return
         val currentAlias = currentState.aliasMap[library.id].orEmpty()
-        val editText = EditText(this).apply {
-            setSingleLine()
-            setText(currentAlias)
-            setSelection(text.length)
-            hint = getString(R.string.music_settings_alias_hint)
-        }
+        val dialogView = LayoutInflater.from(this)
+            .inflate(R.layout.dialog_music_library_alias_editor, null)
+        val aliasInput = dialogView.findViewById<TextInputEditText>(R.id.musicAliasInput)
+        val saveButton = dialogView.findViewById<TextView>(R.id.musicAliasSaveButton)
+        val clearButton = dialogView.findViewById<TextView>(R.id.musicAliasClearButton)
+        val cancelButton = dialogView.findViewById<TextView>(R.id.musicAliasCancelButton)
 
-        AlertDialog.Builder(this)
-            .setTitle(R.string.music_settings_alias_dialog_title)
-            .setView(editText)
-            .setPositiveButton(R.string.save_changes) { _, _ ->
-                val alias = editText.text?.toString().orEmpty().trim()
-                if (alias.isBlank()) {
-                    MusicLibraryRepository.clearAlias(library.id)
-                } else {
-                    MusicLibraryRepository.saveAlias(library.id, alias)
-                }
-            }
-            .setNeutralButton(R.string.music_settings_clear_alias) { _, _ ->
+        aliasInput.setText(currentAlias)
+        aliasInput.setSelection(aliasInput.text?.length ?: 0)
+
+        val dialog = createMusicGlassDialog(dialogView)
+
+        saveButton.setDebouncedClickListener {
+            val alias = aliasInput.text?.toString().orEmpty().trim()
+            dialog.dismiss()
+            if (alias.isBlank()) {
                 MusicLibraryRepository.clearAlias(library.id)
+            } else {
+                MusicLibraryRepository.saveAlias(library.id, alias)
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        }
+        clearButton.setDebouncedClickListener {
+            dialog.dismiss()
+            MusicLibraryRepository.clearAlias(library.id)
+        }
+        cancelButton.setDebouncedClickListener { dialog.dismiss() }
+
+        dialog.applyMusicGlassWindow(this)
+        aliasInput.requestFocus()
     }
 
     private fun showLoadingState() {
