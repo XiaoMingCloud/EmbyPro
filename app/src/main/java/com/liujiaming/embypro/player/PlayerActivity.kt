@@ -27,7 +27,6 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.PopupMenu
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -377,51 +376,23 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun showPlayerMenu() {
-        val popupMenu = PopupMenu(this, moreButton)
-        popupMenu.menuInflater.inflate(R.menu.player_more_menu, popupMenu.menu)
-        popupMenu.menu.findItem(R.id.actionToggleContinuous)?.title =
-            getString(if (isContinuousPlayEnabled) R.string.continuous_on else R.string.continuous_off)
-        popupMenu.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                R.id.actionToggleContinuous -> {
-                    toggleContinuousPlay()
-                    true
-                }
-
-                R.id.actionRotateVideo -> {
-                    rotateVideo()
-                    true
-                }
-
-                R.id.actionPictureInPicture -> {
-                    maybeEnterPictureInPicture(autoEnter = false)
-                    true
-                }
-
-                R.id.actionSpeed1x -> {
-                    applySpeed(0)
-                    true
-                }
-
-                R.id.actionSpeed125x -> {
-                    applySpeed(1)
-                    true
-                }
-
-                R.id.actionSpeed15x -> {
-                    applySpeed(2)
-                    true
-                }
-
-                R.id.actionSpeed2x -> {
-                    applySpeed(3)
-                    true
-                }
-
-                else -> false
+        showPlayerMoreMenuPopup(
+            anchor = moreButton,
+            state = PlayerMoreMenuState(
+                isContinuousPlayEnabled = isContinuousPlayEnabled,
+                currentSpeedIndex = currentSpeedIndex
+            )
+        ) { action ->
+            when (action) {
+                PlayerMoreMenuAction.TOGGLE_CONTINUOUS -> toggleContinuousPlay()
+                PlayerMoreMenuAction.ROTATE_VIDEO -> rotateVideo()
+                PlayerMoreMenuAction.PICTURE_IN_PICTURE -> maybeEnterPictureInPicture(autoEnter = false)
+                PlayerMoreMenuAction.SPEED_1X -> applySpeed(0)
+                PlayerMoreMenuAction.SPEED_1_25X -> applySpeed(1)
+                PlayerMoreMenuAction.SPEED_1_5X -> applySpeed(2)
+                PlayerMoreMenuAction.SPEED_2X -> applySpeed(3)
             }
         }
-        popupMenu.show()
     }
 
     private fun rotateVideo() {
