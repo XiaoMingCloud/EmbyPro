@@ -38,6 +38,11 @@ class VideoDetailActivity : AppCompatActivity() {
     private val playerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode != RESULT_OK) return@registerForActivityResult
         val data = result.data ?: return@registerForActivityResult
+        if (data.getBooleanExtra(PlayerActivity.RESULT_ITEM_DELETED, false)) {
+            setResult(RESULT_OK)
+            finish()
+            return@registerForActivityResult
+        }
         itemId = data.getStringExtra(PlayerActivity.RESULT_ITEM_ID).orEmpty().ifBlank { itemId }
         playlistIndex = data.getIntExtra(PlayerActivity.RESULT_PLAYLIST_INDEX, playlistIndex)
         loadVideoDetail()

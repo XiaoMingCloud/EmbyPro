@@ -21,7 +21,8 @@ internal enum class PlayerMoreMenuAction {
     SPEED_1X,
     SPEED_1_25X,
     SPEED_1_5X,
-    SPEED_2X
+    SPEED_2X,
+    DELETE_VIDEO
 }
 
 internal fun Context.showPlayerMoreMenuPopup(
@@ -100,6 +101,14 @@ internal fun Context.showPlayerMoreMenuPopup(
     ) {
         popupWindow.dismiss()
         onAction(PlayerMoreMenuAction.SPEED_2X)
+    }
+    bindMenuItem(
+        contentView.findViewById(R.id.playerMenuDeleteOption),
+        getString(R.string.action_delete_video),
+        false
+    ) {
+        popupWindow.dismiss()
+        onAction(PlayerMoreMenuAction.DELETE_VIDEO)
     }
 
     popupWindow.showAsDropDown(anchor, 0, popupDp(10), Gravity.END)

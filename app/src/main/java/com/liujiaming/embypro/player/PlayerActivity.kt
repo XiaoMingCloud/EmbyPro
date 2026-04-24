@@ -16,6 +16,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Rational
+import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -26,6 +27,7 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -89,10 +91,12 @@ class PlayerActivity : AppCompatActivity() {
     private var playlistIndex = -1
     private var isSwitchingItem = false
     private var isContinuousPlayEnabled = false
+    private var deleteRequestInFlight = false
     private var pendingLoadingVisible = false
     private var loadingAnimator: AnimatorSet? = null
     private var hasRenderedFirstFrame = false
     private var wasInPictureInPictureMode = false
+    private var shouldReturnDeletedItem = false
 
     // Gesture control state
     private lateinit var audioManager: AudioManager
@@ -247,6 +251,7 @@ class PlayerActivity : AppCompatActivity() {
             Intent()
                 .putExtra(RESULT_ITEM_ID, itemId)
                 .putExtra(RESULT_PLAYLIST_INDEX, playlistIndex)
+                .putExtra(RESULT_ITEM_DELETED, shouldReturnDeletedItem)
         )
         super.finish()
     }
@@ -391,6 +396,139 @@ class PlayerActivity : AppCompatActivity() {
                 PlayerMoreMenuAction.SPEED_1_25X -> applySpeed(1)
                 PlayerMoreMenuAction.SPEED_1_5X -> applySpeed(2)
                 PlayerMoreMenuAction.SPEED_2X -> applySpeed(3)
+                PlayerMoreMenuAction.DELETE_VIDEO -> showDeleteVideoConfirmDialog()
+            }
+        }
+    }
+
+    private fun showDeleteVideoConfirmDialog() {
+        if (itemId.isBlank() || deleteRequestInFlight) return
+
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_clear_played_state, null)
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogTitle)
+            .text = getString(R.string.delete_video_confirm_title)
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogMessage)
+            .text = getString(R.string.delete_video_confirm_message)
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogConfirmButton)
+            .text = getString(R.string.action_delete_video)
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        dialog.window?.attributes = dialog.window?.attributes?.apply {
+            dimAmount = 0.22f
+        }
+
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogCancelButton)
+            .setDebouncedClickListener { dialog.dismiss() }
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogConfirmButton)
+            .setDebouncedClickListener {
+                dialog.dismiss()
+                deleteCurrentVideo()
+            }
+        dialog.show()
+    }
+
+    private fun deleteCurrentVideo() {
+        if (itemId.isBlank() || deleteRequestInFlight) return
+
+        deleteRequestInFlight = true
+        networkExecutor.execute {
+            val deletingItemId = itemId
+            val result = mediaRepository.deleteItem(connection, deletingItemId)
+            runOnUiThread {
+                deleteRequestInFlight = false
+                result.onSuccess {
+                    Toast.makeText(this, getString(R.string.delete_video_success), Toast.LENGTH_SHORT).show()
+                    handleDeletedVideo(deletingItemId)
+                }.onFailure { error ->
+                    Toast.makeText(
+                        this,
+                        userFriendlyErrorMessage(error, R.string.delete_video_failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun handleDeletedVideo(deletedItemId: String) {
+        val removedIndex = playlistItemIds.indexOf(deletedItemId)
+        if (removedIndex >= 0) {
+            playlistItemIds.removeAt(removedIndex)
+        }
+        if (removedIndex >= 0 && removedIndex < playlistItemTitles.size) {
+            playlistItemTitles.removeAt(removedIndex)
+        }
+
+        if (playlistItemIds.isEmpty()) {
+            shouldReturnDeletedItem = true
+            itemId = ""
+            playlistIndex = -1
+            player?.pause()
+            finish()
+            return
+        }
+
+        val targetIndex = if (removedIndex >= 0) {
+            removedIndex.coerceAtMost(playlistItemIds.lastIndex)
+        } else {
+            playlistIndex.coerceIn(0, playlistItemIds.lastIndex)
+        }
+        val shouldKeepPlaying = player?.playWhenReady ?: true
+        loadPlaylistItemAt(targetIndex, shouldKeepPlaying)
+    }
+
+    private fun loadPlaylistItemAt(targetIndex: Int, shouldPlayWhenReady: Boolean) {
+        if (targetIndex !in playlistItemIds.indices) return
+
+        isSwitchingItem = true
+        val targetItemId = playlistItemIds[targetIndex]
+        val prefetchedPlayback = PlayerCache.takePrefetchedPlayback(targetItemId)
+        if (prefetchedPlayback != null) {
+            isSwitchingItem = false
+            playlistIndex = targetIndex
+            itemId = prefetchedPlayback.itemId
+            playbackUrl = prefetchedPlayback.playbackUrl
+            title = prefetchedPlayback.title.ifBlank {
+                playlistItemTitles.getOrNull(targetIndex).orEmpty()
+            }
+            titleText.text = title
+            playbackPosition = prefetchedPlayback.playbackPositionMs
+            playWhenReady = shouldPlayWhenReady
+            swapToMedia(prefetchedPlayback.playbackUrl, shouldPlayWhenReady)
+            PlayerCache.markPlayed(this, itemId)
+            prefetchUpcomingVideosIfNeeded()
+            return
+        }
+
+        networkExecutor.execute {
+            val result = mediaRepository.fetchVideoDetail(connection, targetItemId)
+            runOnUiThread {
+                isSwitchingItem = false
+                result.onSuccess { detail ->
+                    playlistIndex = targetIndex
+                    itemId = detail.itemId
+                    playbackUrl = detail.playbackUrl.orEmpty()
+                    title = detail.title
+                    titleText.text = title
+                    playbackPosition = detail.playbackPositionTicks / 10_000L
+                    playWhenReady = shouldPlayWhenReady
+                    swapToMedia(detail.playbackUrl.orEmpty(), shouldPlayWhenReady)
+                    PlayerCache.markPlayed(this, itemId)
+                    prefetchUpcomingVideosIfNeeded()
+                }.onFailure { error ->
+                    updateLoadingVisibility(false, immediate = true)
+                    Toast.makeText(
+                        this,
+                        userFriendlyErrorMessage(error, R.string.player_error),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
             }
         }
     }
@@ -583,51 +721,7 @@ class PlayerActivity : AppCompatActivity() {
             )
             return
         }
-
-        isSwitchingItem = true
-        val targetItemId = playlistItemIds[targetIndex]
-        val prefetchedPlayback = PlayerCache.takePrefetchedPlayback(targetItemId)
-        if (prefetchedPlayback != null) {
-            isSwitchingItem = false
-            playlistIndex = targetIndex
-            itemId = prefetchedPlayback.itemId
-            playbackUrl = prefetchedPlayback.playbackUrl
-            title = prefetchedPlayback.title.ifBlank {
-                playlistItemTitles.getOrNull(targetIndex).orEmpty()
-            }
-            titleText.text = title
-            playbackPosition = prefetchedPlayback.playbackPositionMs
-            playWhenReady = true
-            swapToMedia(prefetchedPlayback.playbackUrl)
-            PlayerCache.markPlayed(this, itemId)
-            prefetchUpcomingVideosIfNeeded()
-            return
-        }
-        networkExecutor.execute {
-            val result = mediaRepository.fetchVideoDetail(connection, targetItemId)
-            runOnUiThread {
-                isSwitchingItem = false
-                result.onSuccess { detail ->
-                    playlistIndex = targetIndex
-                    itemId = detail.itemId
-                    playbackUrl = detail.playbackUrl.orEmpty()
-                    title = detail.title
-                    titleText.text = title
-                    playbackPosition = detail.playbackPositionTicks / 10_000L
-                    playWhenReady = true
-                    swapToMedia(detail.playbackUrl.orEmpty())
-                    PlayerCache.markPlayed(this, itemId)
-                    prefetchUpcomingVideosIfNeeded()
-                }.onFailure { error ->
-                    updateLoadingVisibility(false, immediate = true)
-                    Toast.makeText(
-                        this,
-                        userFriendlyErrorMessage(error, R.string.player_error),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
-        }
+        loadPlaylistItemAt(targetIndex, shouldPlayWhenReady = true)
     }
 
     private fun handlePlaybackEnded() {
@@ -648,7 +742,7 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
-    private fun swapToMedia(url: String) {
+    private fun swapToMedia(url: String, shouldPlayWhenReady: Boolean = true) {
         if (url.isBlank()) {
             updateLoadingVisibility(false, immediate = true)
             Toast.makeText(this, getString(R.string.playback_url_missing), Toast.LENGTH_SHORT).show()
@@ -664,8 +758,12 @@ class PlayerActivity : AppCompatActivity() {
         currentPlayer.prepare()
         currentPlayer.seekTo(playbackPosition.coerceAtLeast(0L))
         currentPlayer.playbackParameters = PlaybackParameters(speeds[currentSpeedIndex])
-        currentPlayer.playWhenReady = true
-        playerView.hideController()
+        currentPlayer.playWhenReady = shouldPlayWhenReady
+        if (shouldPlayWhenReady) {
+            playerView.hideController()
+        } else {
+            playerView.showController()
+        }
         syncPlaybackControls()
     }
 
@@ -995,6 +1093,7 @@ class PlayerActivity : AppCompatActivity() {
         const val EXTRA_PLAYLIST_INDEX = "extra_playlist_index"
         const val RESULT_ITEM_ID = "result_item_id"
         const val RESULT_PLAYLIST_INDEX = "result_playlist_index"
+        const val RESULT_ITEM_DELETED = "result_item_deleted"
         private const val STATE_PLAYBACK_POSITION = "state_playback_position"
         private const val STATE_PLAY_WHEN_READY = "state_play_when_ready"
         private const val STATE_SPEED_INDEX = "state_speed_index"
