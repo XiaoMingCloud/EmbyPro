@@ -83,6 +83,113 @@ class MusicOfflineCache(context: Context) {
         readEntriesLocked().count { it.baseUrl == connection.baseUrl && it.userId == connection.userId }
     }
 
+    /**
+     * Checks whether the given item has been cached locally.
+     * Returns true only if the index entry exists and the audio file is present.
+     */
+    fun isCached(connection: ServerConnection, itemId: String): Boolean = synchronized(lock) {
+        val entry = readEntriesLocked()
+            .firstOrNull { it.baseUrl == connection.baseUrl && it.userId == connection.userId && it.itemId == itemId }
+            ?: return false
+        File(entry.localPath).exists()
+    }
+
+    /**
+     * Proactively caches a track to local storage with a completion callback.
+     * Unlike [cachePlayback], this reports success or failure so the UI can react.
+     */
+    fun cachePlaybackProactively(
+        connection: ServerConnection,
+        libraryId: String?,
+        playback: MusicPlaybackUiModel,
+        onResult: (Result<Unit>) -> Unit
+    ) {
+        if (playback.itemId.isBlank() || playback.playbackUrl.isBlank()) {
+            onResult(Result.failure(IllegalArgumentException("Missing playback info")))
+            return
+        }
+        if (playback.isOfflineCached) {
+            onResult(Result.success(Unit))
+            return
+        }
+        val entryKey = buildEntryKey(connection, playback.itemId)
+        synchronized(lock) {
+            if (!inFlightDownloads.add(entryKey)) {
+                onResult(Result.failure(IllegalStateException("Download already in progress")))
+                return
+            }
+        }
+        downloadExecutor.execute {
+            try {
+                val targetFile = File(audioDir, "${hashKey(entryKey)}.audio")
+                if (!targetFile.exists() || targetFile.length() <= 0L) {
+                    val tempFile = File(audioDir, "${hashKey(entryKey)}.tmp")
+                    val request = okhttp3.Request.Builder()
+                        .url(playback.playbackUrl)
+                        .header("X-Emby-Token", connection.accessToken)
+                        .get()
+                        .build()
+                    client.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            throw RuntimeException("Server returned ${response.code}")
+                        }
+                        response.body?.byteStream()?.use { input ->
+                            FileOutputStream(tempFile).use { output ->
+                                input.copyTo(output)
+                            }
+                        } ?: throw RuntimeException("Empty response body")
+                    }
+                    if (tempFile.exists() && tempFile.length() > 0L) {
+                        if (targetFile.exists()) {
+                            targetFile.delete()
+                        }
+                        tempFile.renameTo(targetFile)
+                    } else {
+                        tempFile.delete()
+                        throw RuntimeException("Downloaded file is empty")
+                    }
+                }
+                if (!targetFile.exists() || targetFile.length() <= 0L) {
+                    throw RuntimeException("Audio file not available after download")
+                }
+
+                synchronized(lock) {
+                    val entries = readEntriesLocked().toMutableList()
+                    entries.removeAll {
+                        it.baseUrl == connection.baseUrl &&
+                            it.userId == connection.userId &&
+                            it.itemId == playback.itemId
+                    }
+                    entries.add(
+                        CachedMusicEntry(
+                            baseUrl = connection.baseUrl,
+                            userId = connection.userId,
+                            libraryId = libraryId.orEmpty(),
+                            itemId = playback.itemId,
+                            title = playback.title,
+                            subtitle = playback.subtitle,
+                            coverImageUrl = playback.coverImageUrl,
+                            localPath = targetFile.absolutePath,
+                            playbackPositionMs = playback.playbackPositionMs,
+                            isFavorite = playback.isFavorite,
+                            runtimeMs = playback.runtimeMs,
+                            cachedAtMs = System.currentTimeMillis()
+                        )
+                    )
+                    trimToSizeLocked(entries)
+                    writeEntriesLocked(entries)
+                }
+                onResult(Result.success(Unit))
+            } catch (e: Exception) {
+                onResult(Result.failure(e))
+            } finally {
+                synchronized(lock) {
+                    inFlightDownloads.remove(entryKey)
+                }
+            }
+        }
+    }
+
     fun cachePlayback(connection: ServerConnection, libraryId: String?, playback: MusicPlaybackUiModel) {
         if (playback.itemId.isBlank() || playback.playbackUrl.isBlank() || playback.isOfflineCached) return
         val entryKey = buildEntryKey(connection, playback.itemId)

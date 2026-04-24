@@ -117,6 +117,17 @@
                         android:src="@drawable/ic_favorite_heart_outline" />
 
                     <ImageButton
+                        android:id="@+id/musicPlayerCacheButton"
+                        android:layout_width="46dp"
+                        android:layout_height="46dp"
+                        android:layout_marginStart="12dp"
+                        android:background="@drawable/bg_music_player_favorite_button"
+                        android:contentDescription="@string/music_player_cache"
+                        android:padding="11dp"
+                        android:src="@drawable/ic_music_library_download"
+                        android:tint="@color/music_library_title" />
+
+                    <ImageButton
                         android:id="@+id/musicPlayerDeleteButton"
                         android:layout_width="46dp"
                         android:layout_height="46dp"

@@ -295,4 +295,10 @@
     <string name="playlist_unavailable">当前没有可切换的视频列表</string>
     <string name="long_press_fast_forward">快进到 %1$s</string>
     <string name="long_press_rewind">快退到 %1$s</string>
+    <string name="music_player_cache">缓存到本地</string>
+    <string name="music_player_cache_caching">正在缓存…</string>
+    <string name="music_player_cache_cached">已缓存</string>
+    <string name="music_player_cache_success">已缓存到本地</string>
+    <string name="music_player_cache_failed">缓存失败，请稍后重试</string>
+    <string name="music_player_cache_already">该歌曲已缓存到本地</string>
 </resources>

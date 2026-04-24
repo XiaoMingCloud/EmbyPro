@@ -53,6 +53,7 @@ class MusicPlayerActivity : AppCompatActivity() {
     private lateinit var previousButton: ImageButton
     private lateinit var nextButton: ImageButton
     private lateinit var favoriteButton: ImageButton
+    private lateinit var cacheButton: ImageButton
     private lateinit var deleteButton: ImageButton
     private lateinit var elapsedTextView: TextView
     private lateinit var durationTextView: TextView
@@ -77,8 +78,10 @@ class MusicPlayerActivity : AppCompatActivity() {
     private var shouldResumeAfterLoad = true
     private var isSeekingFromUser = false
     private var isCurrentFavorite = false
+    private var isCurrentCached = false
     private var favoriteRequestInFlight = false
     private var deleteRequestInFlight = false
+    private var cacheRequestInFlight = false
     private var loadingAnimator: AnimatorSet? = null
 
     private val stateListener = MusicLibraryStateListener { state ->
@@ -154,10 +157,12 @@ class MusicPlayerActivity : AppCompatActivity() {
                 currentPlaybackPositionMs = currentPlayer.currentPosition.coerceAtLeast(0L)
                 currentPlaybackIsLocal = activeItem?.localConfiguration?.uri?.scheme == "file"
                 favoriteButton.isEnabled = !currentPlaybackIsLocal
+                cacheButton.isEnabled = !currentPlaybackIsLocal
                 deleteButton.isEnabled = !currentPlaybackIsLocal
                 syncMetadataFromCurrentItem(activeItem)
                 syncControls()
                 refreshFavoriteState(activeItem?.mediaId)
+                refreshCacheState(activeItem?.mediaId)
             }
         }
 
@@ -208,6 +213,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         previousButton = findViewById(R.id.musicPlayerPreviousButton)
         nextButton = findViewById(R.id.musicPlayerNextButton)
         favoriteButton = findViewById(R.id.musicPlayerFavoriteButton)
+        cacheButton = findViewById(R.id.musicPlayerCacheButton)
         deleteButton = findViewById(R.id.musicPlayerDeleteButton)
         elapsedTextView = findViewById(R.id.musicPlayerElapsedText)
         durationTextView = findViewById(R.id.musicPlayerDurationText)
@@ -219,6 +225,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         previousButton.setDebouncedClickListener { switchToIndex(currentIndex - 1, true) }
         nextButton.setDebouncedClickListener { switchToIndex(currentIndex + 1, true) }
         favoriteButton.setDebouncedClickListener { toggleFavorite() }
+        cacheButton.setDebouncedClickListener { triggerProactiveCache() }
         deleteButton.setDebouncedClickListener { showDeleteMusicConfirmDialog() }
         queueTitleTextView.text = queueTitle
         updateFavoriteIcon()
@@ -300,6 +307,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         currentPlaybackIsLocal = false
         syncStaticMetadata()
         favoriteButton.isEnabled = false
+        cacheButton.isEnabled = false
         deleteButton.isEnabled = false
         startLoadingAnimation()
 
@@ -321,8 +329,10 @@ class MusicPlayerActivity : AppCompatActivity() {
                     bindCover(playback.coverImageUrl)
                     isCurrentFavorite = playback.isFavorite
                     favoriteButton.isEnabled = !currentPlaybackIsLocal
+                    cacheButton.isEnabled = !currentPlaybackIsLocal
                     deleteButton.isEnabled = !currentPlaybackIsLocal
                     updateFavoriteIcon()
+                    refreshCacheState(playback.itemId)
 
                     val metadata = MediaMetadata.Builder()
                         .setTitle(playback.title)
@@ -346,6 +356,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                 }.onFailure { error ->
                     stopLoadingAnimation()
                     favoriteButton.isEnabled = !currentPlaybackIsLocal
+                    cacheButton.isEnabled = !currentPlaybackIsLocal
                     deleteButton.isEnabled = !currentPlaybackIsLocal
                     Toast.makeText(
                         this,
@@ -430,6 +441,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         if (itemId.isNullOrBlank()) return
         if (currentPlaybackIsLocal) {
             favoriteButton.isEnabled = false
+            cacheButton.isEnabled = false
             return
         }
         favoriteButton.isEnabled = false
@@ -484,6 +496,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         if (deleteRequestInFlight) return
         deleteRequestInFlight = true
         favoriteButton.isEnabled = false
+        cacheButton.isEnabled = false
         deleteButton.isEnabled = false
 
         AppExecutors.io.execute {
@@ -496,6 +509,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                     handleDeletedQueueItem(itemId)
                 }.onFailure { error ->
                     favoriteButton.isEnabled = true
+                    cacheButton.isEnabled = true
                     deleteButton.isEnabled = true
                     Toast.makeText(
                         this,
@@ -560,6 +574,95 @@ class MusicPlayerActivity : AppCompatActivity() {
             if (isCurrentFavorite) R.drawable.ic_favorite_heart_filled else R.drawable.ic_favorite_heart_outline
         )
         favoriteButton.clearColorFilter()
+    }
+
+    private fun refreshCacheState(itemId: String?) {
+        if (itemId.isNullOrBlank()) return
+        if (currentPlaybackIsLocal) {
+            isCurrentCached = true
+            cacheButton.isEnabled = false
+            updateCacheIcon()
+            return
+        }
+        AppExecutors.io.execute {
+            val cached = offlineCache.isCached(connection, itemId)
+            runOnUiThread {
+                if (currentPlaybackItemId == itemId || player?.currentMediaItem?.mediaId == itemId) {
+                    isCurrentCached = cached
+                    updateCacheIcon()
+                }
+            }
+        }
+    }
+
+    private fun updateCacheIcon() {
+        if (isCurrentCached) {
+            cacheButton.setImageResource(R.drawable.ic_music_player_cached)
+            cacheButton.clearColorFilter()
+            cacheButton.contentDescription = getString(R.string.music_player_cache_cached)
+        } else {
+            cacheButton.setImageResource(R.drawable.ic_music_library_download)
+            cacheButton.clearColorFilter()
+            cacheButton.contentDescription = getString(R.string.music_player_cache)
+        }
+    }
+
+    /**
+     * Triggers proactive caching for the current track.
+     * Fetches playback info if needed, then downloads the audio file to local storage.
+     */
+    private fun triggerProactiveCache() {
+        val itemId = currentPlaybackItemId.ifBlank { queueIds.getOrNull(currentIndex).orEmpty() }
+        if (itemId.isBlank() || cacheRequestInFlight) return
+
+        if (isCurrentCached) {
+            Toast.makeText(this, getString(R.string.music_player_cache_already), Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (currentPlaybackIsLocal) return
+
+        cacheRequestInFlight = true
+        cacheButton.isEnabled = false
+        cacheButton.setImageResource(R.drawable.ic_music_library_download)
+        cacheButton.alpha = 0.5f
+        cacheButton.contentDescription = getString(R.string.music_player_cache_caching)
+
+        AppExecutors.io.execute {
+            val playbackResult = musicRepository.fetchAudioPlayback(connection, itemId)
+            playbackResult.onSuccess { playback ->
+                offlineCache.cachePlaybackProactively(connection, libraryId, playback) { result ->
+                    runOnUiThread {
+                        cacheRequestInFlight = false
+                        cacheButton.alpha = 1f
+                        result.onSuccess {
+                            isCurrentCached = true
+                            updateCacheIcon()
+                            Toast.makeText(this, getString(R.string.music_player_cache_success), Toast.LENGTH_SHORT).show()
+                        }.onFailure { error ->
+                            cacheButton.isEnabled = true
+                            updateCacheIcon()
+                            Toast.makeText(
+                                this,
+                                userFriendlyErrorMessage(error, R.string.music_player_cache_failed),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+            }.onFailure { error ->
+                runOnUiThread {
+                    cacheRequestInFlight = false
+                    cacheButton.alpha = 1f
+                    cacheButton.isEnabled = true
+                    updateCacheIcon()
+                    Toast.makeText(
+                        this,
+                        userFriendlyErrorMessage(error, R.string.music_player_cache_failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
     }
 
     private fun togglePlayPause() {
