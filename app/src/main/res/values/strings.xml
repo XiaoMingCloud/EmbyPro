@@ -301,4 +301,8 @@
     <string name="music_player_cache_success">已缓存到本地</string>
     <string name="music_player_cache_failed">缓存失败，请稍后重试</string>
     <string name="music_player_cache_already">该歌曲已缓存到本地</string>
+    <string name="music_player_lyrics">歌词</string>
+    <string name="music_player_lyrics_no_lyrics">暂无歌词</string>
+    <string name="music_player_lyrics_loading">歌词加载中…</string>
+    <string name="music_player_lyrics_embedded">此音频包含内嵌歌词，暂不支持解析</string>
 </resources>

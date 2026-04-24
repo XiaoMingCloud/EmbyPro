@@ -69,6 +69,24 @@
                         android:layout_height="match_parent"
                         android:scaleType="centerCrop" />
 
+                    <ScrollView
+                        android:id="@+id/musicPlayerLyricsScroll"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:visibility="gone"
+                        android:background="#CC0A2749"
+                        android:padding="16dp"
+                        android:scrollbars="none"
+                        android:fillViewport="true">
+
+                        <LinearLayout
+                            android:id="@+id/musicPlayerLyricsContainer"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:orientation="vertical" />
+                    </ScrollView>
+
                     <ProgressBar
                         android:id="@+id/musicPlayerLoadingIndicator"
                         style="?android:attr/progressBarStyleSmall"
@@ -136,6 +154,17 @@
                         android:contentDescription="@string/action_delete_music"
                         android:padding="11dp"
                         android:src="@drawable/ic_video_action_delete"
+                        android:tint="@color/music_library_title" />
+
+                    <ImageButton
+                        android:id="@+id/musicPlayerLyricsButton"
+                        android:layout_width="46dp"
+                        android:layout_height="46dp"
+                        android:layout_marginStart="12dp"
+                        android:background="@drawable/bg_music_player_favorite_button"
+                        android:contentDescription="@string/music_player_lyrics"
+                        android:padding="10dp"
+                        android:src="@drawable/ic_music_lyrics"
                         android:tint="@color/music_library_title" />
                 </LinearLayout>
 

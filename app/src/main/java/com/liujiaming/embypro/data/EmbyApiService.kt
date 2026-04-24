@@ -705,6 +705,190 @@ class EmbyApiService(
         }
     }
 
+    fun fetchLyrics(
+        baseUrl: String,
+        userId: String,
+        accessToken: String,
+        itemId: String
+    ): Result<LyricsUiModel> {
+        // Strategy 1: Try dedicated lyrics endpoints (Jellyfin format first, then Emby variant)
+        val lyricsEndpoints = listOf(
+            "$baseUrl/emby/Audio/$itemId/Lyrics",
+            "$baseUrl/emby/Items/$itemId/Lyrics"
+        )
+
+        for (endpoint in lyricsEndpoints) {
+            val result = fetchLyricsFromEndpoint(endpoint, accessToken)
+            if (result.isSuccess && result.getOrNull()?.lines?.isNotEmpty() == true) {
+                return result
+            }
+        }
+
+        // Strategy 2: Fetch the audio item metadata and try to extract lyrics from it.
+        // Emby may include a "Lyrics" field or lyrics data within the item response.
+        val itemResult = runCatching {
+            val itemRequest = Request.Builder()
+                .url("$baseUrl/emby/Users/$userId/Items/$itemId?Fields=MediaSources,MediaStreams")
+                .header("X-Emby-Token", accessToken)
+                .get()
+                .build()
+
+            client.newCall(itemRequest).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("获取音频详情失败：${response.code}")
+                }
+                val body = response.body?.string().orEmpty()
+                val parsed = parseAnyLyricsFormat(body)
+                if (parsed.isNotEmpty()) {
+                    return@runCatching LyricsUiModel(lines = parsed)
+                }
+
+                // Also check MediaStreams for embedded lyrics
+                val json = try { JSONObject(body) } catch (_: Exception) { null }
+                if (json != null) {
+                    val mediaStreams = json.optJSONArray("MediaStreams")
+                    if (mediaStreams != null) {
+                        for (i in 0 until mediaStreams.length()) {
+                            val stream = mediaStreams.optJSONObject(i) ?: continue
+                            val codec = stream.optString("Codec", "")
+                            // Some audio files have embedded lyrics as a separate stream
+                            if (codec.equals("lyric", ignoreCase = true) ||
+                                stream.optString("Type", "").equals("Lyric", ignoreCase = true)) {
+                                // Return a non-empty model to indicate lyrics exist but need different fetching
+                                return@runCatching LyricsUiModel(
+                                    lines = listOf(
+                                        LyricLineUiModel(
+                                            text = context.getString(R.string.music_player_lyrics_embedded),
+                                            startMs = 0L
+                                        )
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    // Check for Lyrics field directly on the item
+                    val lyricsField = json.optString("Lyrics", "").ifBlank {
+                        json.optString("lyrics", "")
+                    }
+                    if (lyricsField.isNotBlank()) {
+                        val parsed = parseLrcText(lyricsField)
+                        if (parsed.isNotEmpty()) {
+                            return@runCatching LyricsUiModel(lines = parsed)
+                        }
+                    }
+                }
+
+                LyricsUiModel(lines = emptyList())
+            }
+        }
+
+        if (itemResult.isSuccess && itemResult.getOrNull()?.lines?.isNotEmpty() == true) {
+            return itemResult
+        }
+
+        // All strategies exhausted – return empty (no lyrics available)
+        if (itemResult.isFailure) {
+            return Result.failure(itemResult.exceptionOrNull()!!)
+        }
+        return Result.success(LyricsUiModel(lines = emptyList()))
+    }
+
+    private fun fetchLyricsFromEndpoint(endpoint: String, accessToken: String): Result<LyricsUiModel> {
+        return runCatching {
+            val request = Request.Builder()
+                .url(endpoint)
+                .header("X-Emby-Token", accessToken)
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("读取歌词失败($endpoint)：${response.code}")
+                }
+                val body = response.body?.string().orEmpty()
+                if (body.isBlank()) return@runCatching LyricsUiModel(lines = emptyList())
+                val parsed = parseAnyLyricsFormat(body)
+                LyricsUiModel(lines = parsed)
+            }
+        }
+    }
+
+    /**
+     * Try to parse lyrics from a response body, attempting multiple formats:
+     * JSON array, JSON string field, and raw LRC text.
+     */
+    private fun parseAnyLyricsFormat(body: String): List<LyricLineUiModel> {
+        // 1) Try JSON formats
+        runCatching {
+            val json = JSONObject(body)
+
+            // a) Try JSON array under various field names
+            val lyricsArray = json.optJSONArray("Lyrics")
+                ?: json.optJSONArray("lyrics")
+                ?: json.optJSONArray("Lines")
+                ?: json.optJSONArray("lines")
+                ?: json.optJSONArray("LyricList")
+
+            if (lyricsArray != null) {
+                val parsedLines = buildList {
+                    for (i in 0 until lyricsArray.length()) {
+                        val lineJson = lyricsArray.optJSONObject(i) ?: continue
+                        val text = lineJson.optString("Text", "").ifBlank {
+                            lineJson.optString("text", "")
+                        }.trim()
+                        if (text.isEmpty()) continue
+                        val startTicks = lineJson.optLong("Start", lineJson.optLong("start", 0L))
+                        val startMs = startTicks / 10_000L
+                        add(LyricLineUiModel(text = text, startMs = startMs))
+                    }
+                }
+                if (parsedLines.isNotEmpty()) return parsedLines
+            }
+
+            // b) Try string field "Lyrics" / "lyrics" containing raw LRC text
+            val rawLrc = json.optString("Lyrics", "").ifBlank {
+                json.optString("lyrics", "")
+            }
+            if (rawLrc.isNotBlank()) {
+                val lrcFromJson = parseLrcText(rawLrc)
+                if (lrcFromJson.isNotEmpty()) return lrcFromJson
+            }
+        }
+
+        // 2) Try raw LRC text
+        val lrcLines = parseLrcText(body)
+        if (lrcLines.isNotEmpty()) return lrcLines
+
+        return emptyList()
+    }
+
+    /**
+     * Parses LRC format lyrics text.
+     * Format: [mm:ss.xx]Lyric text or [mm:ss]Lyric text
+     */
+    private fun parseLrcText(body: String): List<LyricLineUiModel> {
+        // LRC line pattern: [mm:ss.xx] or [mm:ss.xxx] or [mm:ss]
+        val lrcLineRegex = Regex("""\[(\d{1,3}):(\d{2})(?:[.:](\d{2,3}))?\](.*)""")
+        val lines = mutableListOf<LyricLineUiModel>()
+
+        for (rawLine in body.lines()) {
+            val match = lrcLineRegex.find(rawLine.trim()) ?: continue
+            val minutes = match.groupValues[1].toLongOrNull() ?: continue
+            val seconds = match.groupValues[2].toLongOrNull() ?: continue
+            val centis = match.groupValues[3].takeIf { it.isNotEmpty() }?.toLongOrNull() ?: 0L
+            val text = match.groupValues[4].trim()
+            if (text.isEmpty()) continue
+
+            // LRC centiseconds: if 2 digits it's cs (10ms), if 3 digits it's ms
+            val centisMs = if (match.groupValues[3].length <= 2) centis * 10L else centis
+            val startMs = (minutes * 60_000L) + (seconds * 1_000L) + centisMs
+            lines.add(LyricLineUiModel(text = text, startMs = startMs))
+        }
+
+        return lines
+    }
+
     fun searchMusicItems(
         baseUrl: String,
         userId: String,

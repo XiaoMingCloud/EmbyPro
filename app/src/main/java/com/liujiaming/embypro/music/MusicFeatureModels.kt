@@ -69,3 +69,19 @@ data class MusicPlaybackUiModel(
     val runtimeMs: Long = 0L,
     val isOfflineCached: Boolean = false
 )
+
+/**
+ * UI model representing a single lyric line with timestamp.
+ */
+data class LyricLineUiModel(
+    val text: String,
+    val startMs: Long
+)
+
+/**
+ * UI model representing the lyrics response from the server.
+ * Contains metadata and a list of timed lyric lines.
+ */
+data class LyricsUiModel(
+    val lines: List<LyricLineUiModel>
+)

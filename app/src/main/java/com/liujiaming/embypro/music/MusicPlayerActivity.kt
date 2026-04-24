@@ -13,12 +13,16 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.view.GestureDetector
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewPropertyAnimator
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -34,7 +38,7 @@ import androidx.media3.common.Player
 
 /**
  * Activity for music playback with queue management.
- * Provides play/pause, seek, previous/next controls and favorite toggle.
+ * Provides play/pause, seek, previous/next controls, favorite toggle, and lyrics display.
  * Integrates with MusicPlaybackService for background playback.
  */
 class MusicPlayerActivity : AppCompatActivity() {
@@ -59,6 +63,9 @@ class MusicPlayerActivity : AppCompatActivity() {
     private lateinit var durationTextView: TextView
     private lateinit var seekBar: SeekBar
     private lateinit var loadingIndicator: ProgressBar
+    private lateinit var lyricsScrollView: ScrollView
+    private lateinit var lyricsContainer: LinearLayout
+    private lateinit var lyricsButton: ImageButton
 
     private lateinit var connection: ServerConnection
     private var libraryId: String? = null
@@ -82,7 +89,15 @@ class MusicPlayerActivity : AppCompatActivity() {
     private var favoriteRequestInFlight = false
     private var deleteRequestInFlight = false
     private var cacheRequestInFlight = false
+    private var isSwitchingTrack = false
+    private var swipeStartX = 0f
+    private var swipeStartY = 0f
     private var loadingAnimator: AnimatorSet? = null
+
+    private var isLyricsVisible = false
+    private var lyricsLines: List<LyricLineUiModel> = emptyList()
+    private var lyricsLoadInFlight = false
+    private var currentLyricIndex = -1
 
     private val stateListener = MusicLibraryStateListener { state ->
         if (libraryId != null && state.currentLibraryId != null && state.currentLibraryId != libraryId) {
@@ -122,6 +137,12 @@ class MusicPlayerActivity : AppCompatActivity() {
             }
             syncMetadataFromCurrentItem(mediaItem)
             syncControls()
+            // Load lyrics for the new track
+            lyricsLines = emptyList()
+            currentLyricIndex = -1
+            if (isLyricsVisible && !itemId.isNullOrBlank()) {
+                loadLyrics(itemId)
+            }
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -215,6 +236,9 @@ class MusicPlayerActivity : AppCompatActivity() {
         favoriteButton = findViewById(R.id.musicPlayerFavoriteButton)
         cacheButton = findViewById(R.id.musicPlayerCacheButton)
         deleteButton = findViewById(R.id.musicPlayerDeleteButton)
+        lyricsScrollView = findViewById(R.id.musicPlayerLyricsScroll)
+        lyricsContainer = findViewById(R.id.musicPlayerLyricsContainer)
+        lyricsButton = findViewById(R.id.musicPlayerLyricsButton)
         elapsedTextView = findViewById(R.id.musicPlayerElapsedText)
         durationTextView = findViewById(R.id.musicPlayerDurationText)
         seekBar = findViewById(R.id.musicPlayerSeekBar)
@@ -227,6 +251,8 @@ class MusicPlayerActivity : AppCompatActivity() {
         favoriteButton.setDebouncedClickListener { toggleFavorite() }
         cacheButton.setDebouncedClickListener { triggerProactiveCache() }
         deleteButton.setDebouncedClickListener { showDeleteMusicConfirmDialog() }
+        lyricsButton.setDebouncedClickListener { toggleLyrics() }
+        lyricsButton.alpha = 0.5f
         queueTitleTextView.text = queueTitle
         updateFavoriteIcon()
 
@@ -272,6 +298,33 @@ class MusicPlayerActivity : AppCompatActivity() {
         super.onStop()
     }
 
+    override fun dispatchTouchEvent(event: MotionEvent?): Boolean {
+        if (event != null && !isSwitchingTrack) {
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    swipeStartX = event.x
+                    swipeStartY = event.y
+                }
+                MotionEvent.ACTION_UP -> {
+                    val diffX = event.x - swipeStartX
+                    val diffY = event.y - swipeStartY
+                    val absDiffX = kotlin.math.abs(diffX)
+                    val absDiffY = kotlin.math.abs(diffY)
+
+                    // Require minimum 120px horizontal movement and horizontal dominance
+                    if (absDiffX > 120 && absDiffX > absDiffY * 2) {
+                        if (diffX < 0) {
+                            switchToIndex(currentIndex + 1, true)
+                        } else {
+                            switchToIndex(currentIndex - 1, true)
+                        }
+                    }
+                }
+            }
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
     private fun attachPlayer(servicePlayer: Player?) {
         if (servicePlayer == null || player === servicePlayer) return
         detachPlayer()
@@ -299,6 +352,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         val previousPosition = currentPlayer.currentPosition.takeIf { it > 0L } ?: currentPlaybackPositionMs
         reportPlaybackProgress(previousPosition)
 
+        isSwitchingTrack = true
         currentIndex = index
         shouldResumeAfterLoad = playWhenReady
         if (resetPosition) {
@@ -310,6 +364,20 @@ class MusicPlayerActivity : AppCompatActivity() {
         cacheButton.isEnabled = false
         deleteButton.isEnabled = false
         startLoadingAnimation()
+
+        // Reset lyrics on track switch
+        lyricsLines = emptyList()
+        currentLyricIndex = -1
+        if (isLyricsVisible) {
+            lyricsContainer.removeAllViews()
+            val loadingText = TextView(this).apply {
+                text = getString(R.string.music_player_lyrics_loading)
+                textSize = 13f
+                setTextColor(ContextCompat.getColor(this@MusicPlayerActivity, R.color.music_library_meta))
+                gravity = android.view.Gravity.CENTER
+            }
+            lyricsContainer.addView(loadingText)
+        }
 
         AppExecutors.io.execute {
             val itemId = queueIds[index]
@@ -352,9 +420,17 @@ class MusicPlayerActivity : AppCompatActivity() {
                     if (!playback.isOfflineCached) {
                         offlineCache.cachePlayback(connection, libraryId, playback)
                     }
+                    isSwitchingTrack = false
                     syncControls()
+                    // Load lyrics for new track
+                    lyricsLines = emptyList()
+                    currentLyricIndex = -1
+                    if (isLyricsVisible) {
+                        loadLyrics(playback.itemId)
+                    }
                 }.onFailure { error ->
                     stopLoadingAnimation()
+                    isSwitchingTrack = false
                     favoriteButton.isEnabled = !currentPlaybackIsLocal
                     cacheButton.isEnabled = !currentPlaybackIsLocal
                     deleteButton.isEnabled = !currentPlaybackIsLocal
@@ -607,6 +683,134 @@ class MusicPlayerActivity : AppCompatActivity() {
         }
     }
 
+    // ─── Lyrics ──────────────────────────────────────────────
+
+    private fun toggleLyrics() {
+        isLyricsVisible = !isLyricsVisible
+        val itemId = currentPlaybackItemId.ifBlank { queueIds.getOrNull(currentIndex).orEmpty() }
+
+        if (isLyricsVisible) {
+            lyricsScrollView.visibility = View.VISIBLE
+            lyricsButton.alpha = 1f
+            if (lyricsLines.isEmpty() && itemId.isNotBlank()) {
+                loadLyrics(itemId)
+            } else {
+                renderLyrics()
+            }
+        } else {
+            lyricsScrollView.visibility = View.GONE
+            lyricsButton.alpha = 0.5f
+            currentLyricIndex = -1
+        }
+    }
+
+    private fun loadLyrics(itemId: String) {
+        if (lyricsLoadInFlight) return
+        lyricsLoadInFlight = true
+        lyricsContainer.removeAllViews()
+        val loadingText = TextView(this).apply {
+            text = getString(R.string.music_player_lyrics_loading)
+            textSize = 13f
+            setTextColor(ContextCompat.getColor(this@MusicPlayerActivity, R.color.music_library_meta))
+            gravity = android.view.Gravity.CENTER
+        }
+        lyricsContainer.addView(loadingText)
+
+        AppExecutors.io.execute {
+            val result = musicRepository.fetchLyrics(connection, itemId)
+            runOnUiThread {
+                lyricsLoadInFlight = false
+                result.onSuccess { lyrics ->
+                    if (currentPlaybackItemId == itemId || queueIds.getOrNull(currentIndex) == itemId) {
+                        lyricsLines = lyrics.lines
+                        renderLyrics()
+                    }
+                }.onFailure { error ->
+                    android.util.Log.e("MusicPlayerLyrics", "歌词加载失败", error)
+                    if (currentPlaybackItemId == itemId || queueIds.getOrNull(currentIndex) == itemId) {
+                        lyricsLines = emptyList()
+                        renderLyrics()
+                        Toast.makeText(
+                            this@MusicPlayerActivity,
+                            "歌词加载失败: ${error.message}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun renderLyrics() {
+        lyricsContainer.removeAllViews()
+        currentLyricIndex = -1
+
+        if (lyricsLines.isEmpty()) {
+            val noLyricsText = TextView(this).apply {
+                text = getString(R.string.music_player_lyrics_no_lyrics)
+                textSize = 14f
+                setTextColor(ContextCompat.getColor(this@MusicPlayerActivity, R.color.music_library_meta))
+                gravity = android.view.Gravity.CENTER
+                setPadding(0, 64, 0, 64)
+            }
+            lyricsContainer.addView(noLyricsText)
+            return
+        }
+
+        for ((index, line) in lyricsLines.withIndex()) {
+            val lineView = TextView(this).apply {
+                text = line.text
+                textSize = 15f
+                gravity = android.view.Gravity.CENTER
+                setPadding(0, 12, 0, 12)
+                setTextColor(ContextCompat.getColor(this@MusicPlayerActivity, R.color.music_library_meta))
+                tag = index
+            }
+            lyricsContainer.addView(lineView)
+        }
+
+        // Update highlight based on current position
+        val currentPlayer = player
+        if (currentPlayer != null) {
+            updateLyricsHighlight(currentPlayer.currentPosition.coerceAtLeast(0L))
+        }
+    }
+
+    private fun updateLyricsHighlight(positionMs: Long) {
+        if (!isLyricsVisible || lyricsLines.isEmpty()) return
+
+        var activeIndex = -1
+        for (i in lyricsLines.indices) {
+            if (positionMs >= lyricsLines[i].startMs) {
+                activeIndex = i
+            } else {
+                break
+            }
+        }
+
+        if (activeIndex == currentLyricIndex) return
+        currentLyricIndex = activeIndex
+
+        val accentColor = ContextCompat.getColor(this, R.color.music_library_accent)
+        val metaColor = ContextCompat.getColor(this, R.color.music_library_meta)
+
+        for (i in 0 until lyricsContainer.childCount) {
+            val child = lyricsContainer.getChildAt(i) as? TextView ?: continue
+            if (i == activeIndex) {
+                child.setTextColor(accentColor)
+                child.textSize = 17f
+                // Scroll to the active line
+                val scrollY = child.top - (lyricsScrollView.height / 2) + (child.height / 2)
+                lyricsScrollView.smoothScrollTo(0, scrollY.coerceAtLeast(0))
+            } else {
+                child.setTextColor(metaColor)
+                child.textSize = 15f
+            }
+        }
+    }
+
+    // ─── End Lyrics ──────────────────────────────────────────
+
     /**
      * Triggers proactive caching for the current track.
      * Fetches playback info if needed, then downloads the audio file to local storage.
@@ -759,6 +963,8 @@ class MusicPlayerActivity : AppCompatActivity() {
     private val progressUpdater = object : Runnable {
         override fun run() {
             syncControls()
+            val currentPos = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
+            updateLyricsHighlight(currentPos)
             mainHandler.postDelayed(this, 500L)
         }
     }

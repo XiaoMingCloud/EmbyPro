@@ -118,4 +118,16 @@ class MusicRepository(context: Context) {
             playbackPositionMs = playbackPositionMs
         )
     }
+
+    /**
+     * Fetches lyrics for an audio item.
+     */
+    fun fetchLyrics(connection: ServerConnection, itemId: String): Result<LyricsUiModel> {
+        return embyApiService.fetchLyrics(
+            baseUrl = connection.baseUrl,
+            userId = connection.userId,
+            accessToken = connection.accessToken,
+            itemId = itemId
+        )
+    }
 }
