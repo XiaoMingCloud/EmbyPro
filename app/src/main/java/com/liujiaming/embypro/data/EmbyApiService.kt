@@ -622,6 +622,10 @@ class EmbyApiService(
                         fetchMusicFoldersPage(baseUrl, userId, accessToken, libraryId)
                     }
                 }
+
+                MusicBrowseType.LOCAL -> {
+                    throw IllegalArgumentException("Local music page should be loaded from offline cache")
+                }
             }
         }
     }
@@ -695,7 +699,8 @@ class EmbyApiService(
                 ),
                 playbackPositionMs = (itemJson.optJSONObject("UserData")?.optLong("PlaybackPositionTicks")
                     ?: 0L) / 10_000L,
-                isFavorite = itemJson.optJSONObject("UserData")?.optBoolean("IsFavorite") == true
+                isFavorite = itemJson.optJSONObject("UserData")?.optBoolean("IsFavorite") == true,
+                runtimeMs = itemJson.optLong("RunTimeTicks") / 10_000L
             )
         }
     }
@@ -2131,6 +2136,8 @@ class EmbyApiService(
                     MusicBrowseType.FOLDERS -> childCount.takeIf { it > 0 }?.let {
                         context.getString(R.string.library_total_count, it)
                     }.orEmpty()
+
+                    MusicBrowseType.LOCAL -> ""
 
                     else -> item.optString("Type")
                 }

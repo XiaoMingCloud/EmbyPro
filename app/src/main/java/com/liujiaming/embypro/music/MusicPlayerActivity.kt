@@ -40,6 +40,7 @@ import androidx.media3.common.Player
 class MusicPlayerActivity : AppCompatActivity() {
     private val musicRepository by lazy { MusicRepository(this) }
     private val mediaRepository by lazy { MediaRepository(this) }
+    private val offlineCache by lazy { MusicOfflineCache(this) }
     private val sessionStore by lazy { ServerSessionStore(this) }
     private val serverRepository by lazy { ServerRepository(this) }
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -72,6 +73,7 @@ class MusicPlayerActivity : AppCompatActivity() {
     private var isServiceBound = false
     private var currentPlaybackItemId: String = ""
     private var currentPlaybackPositionMs: Long = 0L
+    private var currentPlaybackIsLocal = false
     private var shouldResumeAfterLoad = true
     private var isSeekingFromUser = false
     private var isCurrentFavorite = false
@@ -148,6 +150,11 @@ class MusicPlayerActivity : AppCompatActivity() {
                     currentIndex = activeIndex
                     MusicPlayerSessionStore.updateCurrentItem(activeItem?.mediaId)
                 }
+                currentPlaybackItemId = activeItem?.mediaId.orEmpty()
+                currentPlaybackPositionMs = currentPlayer.currentPosition.coerceAtLeast(0L)
+                currentPlaybackIsLocal = activeItem?.localConfiguration?.uri?.scheme == "file"
+                favoriteButton.isEnabled = !currentPlaybackIsLocal
+                deleteButton.isEnabled = !currentPlaybackIsLocal
                 syncMetadataFromCurrentItem(activeItem)
                 syncControls()
                 refreshFavoriteState(activeItem?.mediaId)
@@ -290,16 +297,20 @@ class MusicPlayerActivity : AppCompatActivity() {
         if (resetPosition) {
             currentPlaybackPositionMs = 0L
         }
+        currentPlaybackIsLocal = false
         syncStaticMetadata()
         favoriteButton.isEnabled = false
         deleteButton.isEnabled = false
         startLoadingAnimation()
 
         AppExecutors.io.execute {
-            val result = musicRepository.fetchAudioPlayback(connection, queueIds[index])
+            val itemId = queueIds[index]
+            val result = offlineCache.getCachedPlayback(connection, itemId)?.let { Result.success(it) }
+                ?: musicRepository.fetchAudioPlayback(connection, itemId)
             runOnUiThread {
                 result.onSuccess { playback ->
                     currentPlaybackItemId = playback.itemId
+                    currentPlaybackIsLocal = playback.isOfflineCached
                     currentPlaybackPositionMs = if (resetPosition) {
                         playback.playbackPositionMs
                     } else {
@@ -309,8 +320,8 @@ class MusicPlayerActivity : AppCompatActivity() {
                     subtitleTextView.text = playback.subtitle
                     bindCover(playback.coverImageUrl)
                     isCurrentFavorite = playback.isFavorite
-                    favoriteButton.isEnabled = true
-                    deleteButton.isEnabled = true
+                    favoriteButton.isEnabled = !currentPlaybackIsLocal
+                    deleteButton.isEnabled = !currentPlaybackIsLocal
                     updateFavoriteIcon()
 
                     val metadata = MediaMetadata.Builder()
@@ -328,11 +339,14 @@ class MusicPlayerActivity : AppCompatActivity() {
                     currentPlayer.prepare()
                     currentPlayer.seekTo(currentPlaybackPositionMs)
                     currentPlayer.playWhenReady = shouldResumeAfterLoad
+                    if (!playback.isOfflineCached) {
+                        offlineCache.cachePlayback(connection, libraryId, playback)
+                    }
                     syncControls()
                 }.onFailure { error ->
                     stopLoadingAnimation()
-                    favoriteButton.isEnabled = true
-                    deleteButton.isEnabled = true
+                    favoriteButton.isEnabled = !currentPlaybackIsLocal
+                    deleteButton.isEnabled = !currentPlaybackIsLocal
                     Toast.makeText(
                         this,
                         userFriendlyErrorMessage(error, R.string.player_error),
@@ -394,6 +408,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                 favoriteButton.isEnabled = true
                 result.onSuccess {
                     isCurrentFavorite = target
+                    offlineCache.updateFavoriteState(connection, itemId, target)
                     updateFavoriteIcon()
                     Toast.makeText(
                         this,
@@ -413,6 +428,10 @@ class MusicPlayerActivity : AppCompatActivity() {
 
     private fun refreshFavoriteState(itemId: String?) {
         if (itemId.isNullOrBlank()) return
+        if (currentPlaybackIsLocal) {
+            favoriteButton.isEnabled = false
+            return
+        }
         favoriteButton.isEnabled = false
         AppExecutors.io.execute {
             val result = musicRepository.fetchAudioPlayback(connection, itemId)
@@ -472,6 +491,7 @@ class MusicPlayerActivity : AppCompatActivity() {
             runOnUiThread {
                 deleteRequestInFlight = false
                 result.onSuccess {
+                    offlineCache.remove(connection, itemId)
                     Toast.makeText(this, getString(R.string.delete_music_success), Toast.LENGTH_SHORT).show()
                     handleDeletedQueueItem(itemId)
                 }.onFailure { error ->
@@ -573,6 +593,8 @@ class MusicPlayerActivity : AppCompatActivity() {
 
     private fun reportPlaybackProgress(positionMs: Long) {
         if (currentPlaybackItemId.isBlank()) return
+        offlineCache.updatePlaybackProgress(connection, currentPlaybackItemId, positionMs)
+        if (currentPlaybackIsLocal) return
         AppExecutors.io.execute {
             musicRepository.updatePlaybackProgress(connection, currentPlaybackItemId, positionMs)
         }

@@ -26,7 +26,6 @@ class MusicLibraryScreenController(
     private val countTextView: TextView = root.findViewById(R.id.musicLibraryCountText)
     private val statusTextView: TextView = root.findViewById(R.id.musicLibraryStatusText)
     private val songsStatsText: TextView = root.findViewById(R.id.musicLibrarySongsStatsText)
-    private val playlistsStatsText: TextView = root.findViewById(R.id.musicLibraryPlaylistsStatsText)
     private val albumsStatsText: TextView = root.findViewById(R.id.musicLibraryAlbumsStatsText)
     private val artistsStatsText: TextView = root.findViewById(R.id.musicLibraryArtistsStatsText)
     private val partitionRow: View = root.findViewById(R.id.musicLibraryPartitionRow)
@@ -39,9 +38,9 @@ class MusicLibraryScreenController(
         partitionRow.setDebouncedClickListener { showLibraryPicker() }
         root.findViewById<View>(R.id.musicLibrarySongsEntry).setDebouncedClickListener { openList(MusicBrowseType.SONGS) }
         root.findViewById<View>(R.id.musicLibraryFavoritesEntry).setDebouncedClickListener { openList(MusicBrowseType.FAVORITES) }
-        root.findViewById<View>(R.id.musicLibraryPlaylistsEntry).setDebouncedClickListener { openList(MusicBrowseType.PLAYLISTS) }
         root.findViewById<View>(R.id.musicLibraryAlbumsEntry).setDebouncedClickListener { openList(MusicBrowseType.ALBUMS) }
         root.findViewById<View>(R.id.musicLibraryArtistsEntry).setDebouncedClickListener { openList(MusicBrowseType.ARTISTS) }
+        root.findViewById<View>(R.id.musicLibraryLocalEntry).setDebouncedClickListener { openList(MusicBrowseType.LOCAL) }
         root.findViewById<View>(R.id.musicLibraryFoldersEntry).setDebouncedClickListener { openList(MusicBrowseType.FOLDERS) }
         root.findViewById<View>(R.id.musicLibraryRetryButton).setDebouncedClickListener {
             MusicLibraryRepository.connect(
@@ -98,7 +97,6 @@ class MusicLibraryScreenController(
         if (state.isLoadingStats) {
             countTextView.text = activity.getString(R.string.loading)
             songsStatsText.text = activity.getString(R.string.loading)
-            playlistsStatsText.text = activity.getString(R.string.loading)
             albumsStatsText.text = activity.getString(R.string.loading)
             artistsStatsText.text = activity.getString(R.string.loading)
             statusTextView.visibility = View.GONE
@@ -109,14 +107,12 @@ class MusicLibraryScreenController(
         if (stats != null) {
             countTextView.text = stats.songsCount.toString()
             songsStatsText.text = activity.getString(R.string.music_library_count_with_unit, stats.songsCount)
-            playlistsStatsText.text = activity.getString(R.string.music_library_count_playlists, stats.playlistsCount)
             albumsStatsText.text = activity.getString(R.string.music_library_count_albums, stats.albumsCount)
             artistsStatsText.text = activity.getString(R.string.music_library_count_artists, stats.artistsCount)
             statusTextView.visibility = View.GONE
         } else {
             countTextView.text = "--"
             songsStatsText.text = "--"
-            playlistsStatsText.text = "--"
             albumsStatsText.text = "--"
             artistsStatsText.text = "--"
             statusTextView.visibility = if (state.statsErrorMessage.isNullOrBlank()) View.GONE else View.VISIBLE

@@ -14,7 +14,8 @@ import androidx.recyclerview.widget.RecyclerView
 class MusicListAdapter(
     private val items: MutableList<MusicListEntryUiModel>,
     private val accessToken: String?,
-    private val onItemClick: (MusicListEntryUiModel) -> Unit
+    private val onItemClick: (MusicListEntryUiModel) -> Unit,
+    private val canDeleteItem: (MusicListEntryUiModel) -> Boolean = { it.kind == MusicEntryKind.SONG }
 ) : RecyclerView.Adapter<MusicListAdapter.MusicListViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MusicListViewHolder {
@@ -36,6 +37,25 @@ class MusicListAdapter(
         items.clear()
         items.addAll(newItems)
         notifyDataSetChanged()
+    }
+
+    fun getItemAt(position: Int): MusicListEntryUiModel? = items.getOrNull(position)
+
+    fun canSwipeDelete(position: Int): Boolean {
+        return items.getOrNull(position)?.let(canDeleteItem) == true
+    }
+
+    fun removeItemAt(position: Int): MusicListEntryUiModel? {
+        if (position !in items.indices) return null
+        val removed = items.removeAt(position)
+        notifyItemRemoved(position)
+        return removed
+    }
+
+    fun restoreItem(position: Int) {
+        if (position in items.indices) {
+            notifyItemChanged(position)
+        }
     }
 
     /**

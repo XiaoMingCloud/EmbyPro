@@ -80,6 +80,7 @@
     <string name="music_library_entry_songs">歌曲</string>
     <string name="music_library_entry_favorites">我喜欢的</string>
     <string name="music_library_entry_local">本地音乐</string>
+    <string name="music_local_entry_subtitle">离线播放</string>
     <string name="music_library_entry_playlists">歌单</string>
     <string name="music_library_entry_albums">专辑</string>
     <string name="music_library_entry_artists">专辑艺术家</string>
@@ -103,6 +104,9 @@
     <string name="music_list_artist_tracks">歌手歌曲列表</string>
     <string name="music_list_playlist_tracks">歌单歌曲列表</string>
     <string name="music_list_folder_tracks">文件夹歌曲列表</string>
+    <string name="music_local_list_subtitle">已缓存 %1$d 首歌曲，可离线播放</string>
+    <string name="music_local_cached_detail">已缓存到本机</string>
+    <string name="music_local_empty">还没有缓存过的本地音乐</string>
     <string name="music_list_open_container">进入列表</string>
     <string name="music_list_artist_album_count">%1$d 张专辑</string>
     <string name="music_list_artist_song_count">%1$d 首歌曲</string>
@@ -242,6 +246,13 @@
     <string name="delete_music_confirm_message">确定删除当前歌曲吗？删除后将从服务器媒体库中移除，并从当前播放队列里清掉。</string>
     <string name="delete_music_success">歌曲已删除</string>
     <string name="delete_music_failed">删除歌曲失败</string>
+    <string name="delete_music_list_confirm_title">删除歌曲</string>
+    <string name="delete_music_list_confirm_message">确定删除“%1$s”吗？删除后将从服务器媒体库中移除。</string>
+    <string name="action_delete_playlist">删除歌单</string>
+    <string name="delete_playlist_confirm_title">删除歌单</string>
+    <string name="delete_playlist_confirm_message">确定删除“%1$s”吗？删除后将从服务器媒体库中移除。</string>
+    <string name="delete_playlist_success">歌单已删除</string>
+    <string name="delete_playlist_failed">删除歌单失败</string>
     <string name="pro_badge">Pro</string>
     <string name="chapters">章节</string>
     <string name="studios">工作室</string>

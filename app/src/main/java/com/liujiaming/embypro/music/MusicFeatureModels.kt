@@ -10,7 +10,8 @@ enum class MusicBrowseType {
     ARTISTS,
     PLAYLISTS,
     FAVORITES,
-    FOLDERS
+    FOLDERS,
+    LOCAL
 }
 
 /**
@@ -64,5 +65,7 @@ data class MusicPlaybackUiModel(
     val coverImageUrl: String?,
     val playbackUrl: String,
     val playbackPositionMs: Long,
-    val isFavorite: Boolean
+    val isFavorite: Boolean,
+    val runtimeMs: Long = 0L,
+    val isOfflineCached: Boolean = false
 )

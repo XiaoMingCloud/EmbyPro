@@ -8,7 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 
 /**
  * Activity displaying the music library overview with statistics.
- * Shows songs, albums, artists, and playlists counts for the selected music library.
+ * Shows songs, albums, and artists counts for the selected music library.
  */
 class MusicLibraryActivity : AppCompatActivity() {
     private val sessionStore by lazy { ServerSessionStore(this) }
@@ -24,7 +24,6 @@ class MusicLibraryActivity : AppCompatActivity() {
     private lateinit var countTextView: TextView
     private lateinit var statusTextView: TextView
     private lateinit var songsStatsText: TextView
-    private lateinit var playlistsStatsText: TextView
     private lateinit var albumsStatsText: TextView
     private lateinit var artistsStatsText: TextView
     private lateinit var partitionRow: View
@@ -54,7 +53,6 @@ class MusicLibraryActivity : AppCompatActivity() {
         countTextView = findViewById(R.id.musicLibraryCountText)
         statusTextView = findViewById(R.id.musicLibraryStatusText)
         songsStatsText = findViewById(R.id.musicLibrarySongsStatsText)
-        playlistsStatsText = findViewById(R.id.musicLibraryPlaylistsStatsText)
         albumsStatsText = findViewById(R.id.musicLibraryAlbumsStatsText)
         artistsStatsText = findViewById(R.id.musicLibraryArtistsStatsText)
         partitionRow = findViewById(R.id.musicLibraryPartitionRow)
@@ -62,9 +60,9 @@ class MusicLibraryActivity : AppCompatActivity() {
         partitionRow.setDebouncedClickListener { showLibraryPicker() }
         findViewById<View>(R.id.musicLibrarySongsEntry).setDebouncedClickListener { openList(MusicBrowseType.SONGS) }
         findViewById<View>(R.id.musicLibraryFavoritesEntry).setDebouncedClickListener { openList(MusicBrowseType.FAVORITES) }
-        findViewById<View>(R.id.musicLibraryPlaylistsEntry).setDebouncedClickListener { openList(MusicBrowseType.PLAYLISTS) }
         findViewById<View>(R.id.musicLibraryAlbumsEntry).setDebouncedClickListener { openList(MusicBrowseType.ALBUMS) }
         findViewById<View>(R.id.musicLibraryArtistsEntry).setDebouncedClickListener { openList(MusicBrowseType.ARTISTS) }
+        findViewById<View>(R.id.musicLibraryLocalEntry).setDebouncedClickListener { openList(MusicBrowseType.LOCAL) }
         findViewById<View>(R.id.musicLibraryFoldersEntry).setDebouncedClickListener { openList(MusicBrowseType.FOLDERS) }
         findViewById<View>(R.id.musicLibraryRetryButton).setDebouncedClickListener {
             MusicLibraryRepository.connect(
@@ -118,7 +116,6 @@ class MusicLibraryActivity : AppCompatActivity() {
         if (state.isLoadingStats) {
             countTextView.text = getString(R.string.loading)
             songsStatsText.text = getString(R.string.loading)
-            playlistsStatsText.text = getString(R.string.loading)
             albumsStatsText.text = getString(R.string.loading)
             artistsStatsText.text = getString(R.string.loading)
             statusTextView.visibility = View.GONE
@@ -129,14 +126,12 @@ class MusicLibraryActivity : AppCompatActivity() {
         if (stats != null) {
             countTextView.text = stats.songsCount.toString()
             songsStatsText.text = getString(R.string.music_library_count_with_unit, stats.songsCount)
-            playlistsStatsText.text = getString(R.string.music_library_count_playlists, stats.playlistsCount)
             albumsStatsText.text = getString(R.string.music_library_count_albums, stats.albumsCount)
             artistsStatsText.text = getString(R.string.music_library_count_artists, stats.artistsCount)
             statusTextView.visibility = View.GONE
         } else {
             countTextView.text = "--"
             songsStatsText.text = "--"
-            playlistsStatsText.text = "--"
             albumsStatsText.text = "--"
             artistsStatsText.text = "--"
             statusTextView.visibility = if (state.statsErrorMessage.isNullOrBlank()) View.GONE else View.VISIBLE
