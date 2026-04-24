@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewPropertyAnimator
 import android.widget.ImageButton
@@ -21,6 +22,7 @@ import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -37,6 +39,7 @@ import androidx.media3.common.Player
  */
 class MusicPlayerActivity : AppCompatActivity() {
     private val musicRepository by lazy { MusicRepository(this) }
+    private val mediaRepository by lazy { MediaRepository(this) }
     private val sessionStore by lazy { ServerSessionStore(this) }
     private val serverRepository by lazy { ServerRepository(this) }
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -49,6 +52,7 @@ class MusicPlayerActivity : AppCompatActivity() {
     private lateinit var previousButton: ImageButton
     private lateinit var nextButton: ImageButton
     private lateinit var favoriteButton: ImageButton
+    private lateinit var deleteButton: ImageButton
     private lateinit var elapsedTextView: TextView
     private lateinit var durationTextView: TextView
     private lateinit var seekBar: SeekBar
@@ -72,6 +76,7 @@ class MusicPlayerActivity : AppCompatActivity() {
     private var isSeekingFromUser = false
     private var isCurrentFavorite = false
     private var favoriteRequestInFlight = false
+    private var deleteRequestInFlight = false
     private var loadingAnimator: AnimatorSet? = null
 
     private val stateListener = MusicLibraryStateListener { state ->
@@ -196,6 +201,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         previousButton = findViewById(R.id.musicPlayerPreviousButton)
         nextButton = findViewById(R.id.musicPlayerNextButton)
         favoriteButton = findViewById(R.id.musicPlayerFavoriteButton)
+        deleteButton = findViewById(R.id.musicPlayerDeleteButton)
         elapsedTextView = findViewById(R.id.musicPlayerElapsedText)
         durationTextView = findViewById(R.id.musicPlayerDurationText)
         seekBar = findViewById(R.id.musicPlayerSeekBar)
@@ -206,6 +212,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         previousButton.setDebouncedClickListener { switchToIndex(currentIndex - 1, true) }
         nextButton.setDebouncedClickListener { switchToIndex(currentIndex + 1, true) }
         favoriteButton.setDebouncedClickListener { toggleFavorite() }
+        deleteButton.setDebouncedClickListener { showDeleteMusicConfirmDialog() }
         queueTitleTextView.text = queueTitle
         updateFavoriteIcon()
 
@@ -285,6 +292,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         }
         syncStaticMetadata()
         favoriteButton.isEnabled = false
+        deleteButton.isEnabled = false
         startLoadingAnimation()
 
         AppExecutors.io.execute {
@@ -302,6 +310,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                     bindCover(playback.coverImageUrl)
                     isCurrentFavorite = playback.isFavorite
                     favoriteButton.isEnabled = true
+                    deleteButton.isEnabled = true
                     updateFavoriteIcon()
 
                     val metadata = MediaMetadata.Builder()
@@ -323,6 +332,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                 }.onFailure { error ->
                     stopLoadingAnimation()
                     favoriteButton.isEnabled = true
+                    deleteButton.isEnabled = true
                     Toast.makeText(
                         this,
                         userFriendlyErrorMessage(error, R.string.player_error),
@@ -416,6 +426,113 @@ class MusicPlayerActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun showDeleteMusicConfirmDialog() {
+        val itemId = currentPlaybackItemId.ifBlank { queueIds.getOrNull(currentIndex).orEmpty() }
+        if (itemId.isBlank() || deleteRequestInFlight) return
+
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_clear_played_state, null)
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogTitle)
+            .text = getString(R.string.delete_music_confirm_title)
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogMessage)
+            .text = getString(R.string.delete_music_confirm_message)
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogConfirmButton)
+            .text = getString(R.string.action_delete_music)
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        dialog.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        dialog.window?.attributes = dialog.window?.attributes?.apply {
+            dimAmount = 0.22f
+        }
+
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogCancelButton)
+            .setDebouncedClickListener { dialog.dismiss() }
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogConfirmButton)
+            .setDebouncedClickListener {
+                dialog.dismiss()
+                deleteCurrentMusic(itemId)
+            }
+        dialog.show()
+    }
+
+    private fun deleteCurrentMusic(itemId: String) {
+        if (deleteRequestInFlight) return
+        deleteRequestInFlight = true
+        favoriteButton.isEnabled = false
+        deleteButton.isEnabled = false
+
+        AppExecutors.io.execute {
+            val result = mediaRepository.deleteItem(connection, itemId)
+            runOnUiThread {
+                deleteRequestInFlight = false
+                result.onSuccess {
+                    Toast.makeText(this, getString(R.string.delete_music_success), Toast.LENGTH_SHORT).show()
+                    handleDeletedQueueItem(itemId)
+                }.onFailure { error ->
+                    favoriteButton.isEnabled = true
+                    deleteButton.isEnabled = true
+                    Toast.makeText(
+                        this,
+                        userFriendlyErrorMessage(error, R.string.delete_music_failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun handleDeletedQueueItem(itemId: String) {
+        val removedIndex = queueIds.indexOf(itemId).takeIf { it >= 0 } ?: currentIndex
+        if (removedIndex in queueIds.indices) {
+            queueIds.removeAt(removedIndex)
+        }
+        if (removedIndex in queueTitles.indices) {
+            queueTitles.removeAt(removedIndex)
+        }
+        if (removedIndex in queueSubtitles.indices) {
+            queueSubtitles.removeAt(removedIndex)
+        }
+        if (removedIndex in queueImages.indices) {
+            queueImages.removeAt(removedIndex)
+        }
+
+        currentPlaybackItemId = ""
+        currentPlaybackPositionMs = 0L
+
+        if (queueIds.isEmpty()) {
+            MusicPlayerSessionStore.record(
+                connection = connection,
+                libraryId = libraryId,
+                queueTitle = queueTitle,
+                queueIds = queueIds,
+                queueTitles = queueTitles,
+                queueSubtitles = queueSubtitles,
+                queueImages = queueImages,
+                queueIndex = 0
+            )
+            playbackService?.stopPlaybackAndSelf()
+            finish()
+            return
+        }
+
+        currentIndex = removedIndex.coerceAtMost(queueIds.lastIndex)
+        MusicPlayerSessionStore.record(
+            connection = connection,
+            libraryId = libraryId,
+            queueTitle = queueTitle,
+            queueIds = queueIds,
+            queueTitles = queueTitles,
+            queueSubtitles = queueSubtitles,
+            queueImages = queueImages,
+            queueIndex = currentIndex
+        )
+        switchToIndex(currentIndex, playWhenReady = true, resetPosition = true)
     }
 
     private fun updateFavoriteIcon() {
