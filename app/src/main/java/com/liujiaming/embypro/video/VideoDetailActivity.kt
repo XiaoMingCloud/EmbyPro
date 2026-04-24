@@ -210,21 +210,26 @@ class VideoDetailActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.playback_url_missing), Toast.LENGTH_SHORT).show()
             return
         }
+        if (!VideoPlayerLaunchGuard.tryAcquire()) return
 
-        playerLauncher.launch(
-            AppNavigator.videoPlayerIntent(
-                context = this,
-                connection = connection,
-                detail = detail,
-                queue = VideoQueue(
-                    itemIds = playlistItemIds,
-                    itemTitles = playlistItemTitles,
-                    currentIndex = playlistIndex
-                ),
-                itemId = itemId,
-                preferredStartPositionMs = (detail.playbackPositionTicks) / 10_000L
+        runCatching {
+            playerLauncher.launch(
+                AppNavigator.videoPlayerIntent(
+                    context = this,
+                    connection = connection,
+                    detail = detail,
+                    queue = VideoQueue(
+                        itemIds = playlistItemIds,
+                        itemTitles = playlistItemTitles,
+                        currentIndex = playlistIndex
+                    ),
+                    itemId = itemId,
+                    preferredStartPositionMs = (detail.playbackPositionTicks) / 10_000L
+                )
             )
-        )
+        }.onFailure {
+            VideoPlayerLaunchGuard.release()
+        }
     }
 
     private fun toggleFavorite() {

@@ -21,22 +21,28 @@ fun AppCompatActivity.playVideoDirectly(
     preferredStartPositionMs: Long? = null
 ) {
     if (itemId.isBlank()) return
+    if (!VideoPlayerLaunchGuard.tryAcquire()) return
     AppExecutors.io.execute {
         val result = mediaRepository.fetchVideoDetail(connection, itemId)
         runOnUiThread {
             result.onSuccess { detail ->
-                startActivity(
-                    AppNavigator.videoPlayerIntent(
-                        context = this,
-                        connection = connection,
-                        detail = detail,
-                        queue = queue,
-                        itemId = itemId,
-                        preferredStartPositionMs = preferredStartPositionMs
-                            ?: detail.playbackPositionTicks / 10_000L
+                runCatching {
+                    startActivity(
+                        AppNavigator.videoPlayerIntent(
+                            context = this,
+                            connection = connection,
+                            detail = detail,
+                            queue = queue,
+                            itemId = itemId,
+                            preferredStartPositionMs = preferredStartPositionMs
+                                ?: detail.playbackPositionTicks / 10_000L
+                        )
                     )
-                )
+                }.onFailure {
+                    VideoPlayerLaunchGuard.release()
+                }
             }.onFailure { error ->
+                VideoPlayerLaunchGuard.release()
                 Toast.makeText(
                     this,
                     userFriendlyErrorMessage(error, R.string.player_error),

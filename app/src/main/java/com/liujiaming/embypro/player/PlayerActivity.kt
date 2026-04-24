@@ -113,6 +113,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        VideoPlayerLaunchGuard.release()
         EdgeToEdgeHelper.enable(this, lightSystemBars = false)
         setContentView(R.layout.activity_player)
 
