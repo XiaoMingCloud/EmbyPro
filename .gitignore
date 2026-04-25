@@ -17,6 +17,8 @@ local.properties
 .gradle/
 .gradle-user-home/
 build/
+/app/release
+/Key
 
 # Local temp/cache
 *.part
