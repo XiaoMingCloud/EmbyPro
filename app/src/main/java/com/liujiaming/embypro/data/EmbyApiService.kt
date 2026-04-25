@@ -819,48 +819,121 @@ class EmbyApiService(
      * JSON array, JSON string field, and raw LRC text.
      */
     private fun parseAnyLyricsFormat(body: String): List<LyricLineUiModel> {
-        // 1) Try JSON formats
+        val trimmedBody = body.trim()
+        if (trimmedBody.isBlank()) return emptyList()
+
         runCatching {
-            val json = JSONObject(body)
+            val parsedLines = parseLyricsJsonObject(JSONObject(trimmedBody))
+            if (parsedLines.isNotEmpty()) return parsedLines
+        }
 
-            // a) Try JSON array under various field names
-            val lyricsArray = json.optJSONArray("Lyrics")
-                ?: json.optJSONArray("lyrics")
-                ?: json.optJSONArray("Lines")
-                ?: json.optJSONArray("lines")
-                ?: json.optJSONArray("LyricList")
+        runCatching {
+            val parsedLines = parseLyricsJsonArray(JSONArray(trimmedBody))
+            if (parsedLines.isNotEmpty()) return parsedLines
+        }
 
-            if (lyricsArray != null) {
-                val parsedLines = buildList {
-                    for (i in 0 until lyricsArray.length()) {
-                        val lineJson = lyricsArray.optJSONObject(i) ?: continue
-                        val text = lineJson.optString("Text", "").ifBlank {
-                            lineJson.optString("text", "")
-                        }.trim()
-                        if (text.isEmpty()) continue
-                        val startTicks = lineJson.optLong("Start", lineJson.optLong("start", 0L))
-                        val startMs = startTicks / 10_000L
-                        add(LyricLineUiModel(text = text, startMs = startMs))
-                    }
-                }
+        val normalizedBody = normalizeLyricsPayload(trimmedBody)
+        if (normalizedBody != trimmedBody) {
+            runCatching {
+                val parsedLines = parseLyricsJsonObject(JSONObject(normalizedBody))
                 if (parsedLines.isNotEmpty()) return parsedLines
             }
 
-            // b) Try string field "Lyrics" / "lyrics" containing raw LRC text
-            val rawLrc = json.optString("Lyrics", "").ifBlank {
-                json.optString("lyrics", "")
-            }
-            if (rawLrc.isNotBlank()) {
-                val lrcFromJson = parseLrcText(rawLrc)
-                if (lrcFromJson.isNotEmpty()) return lrcFromJson
+            runCatching {
+                val parsedLines = parseLyricsJsonArray(JSONArray(normalizedBody))
+                if (parsedLines.isNotEmpty()) return parsedLines
             }
         }
 
-        // 2) Try raw LRC text
-        val lrcLines = parseLrcText(body)
-        if (lrcLines.isNotEmpty()) return lrcLines
+        return parseLrcText(normalizedBody)
+    }
+
+    private fun parseLyricsJsonObject(json: JSONObject): List<LyricLineUiModel> {
+        val lyricsArray = json.optJSONArray("Lyrics")
+            ?: json.optJSONArray("lyrics")
+            ?: json.optJSONArray("Lines")
+            ?: json.optJSONArray("lines")
+            ?: json.optJSONArray("LyricList")
+            ?: json.optJSONArray("Items")
+
+        if (lyricsArray != null) {
+            val parsedLines = parseLyricsJsonArray(lyricsArray)
+            if (parsedLines.isNotEmpty()) return parsedLines
+        }
+
+        val rawCandidates = listOf(
+            json.optString("Lyrics", ""),
+            json.optString("lyrics", ""),
+            json.optString("Text", ""),
+            json.optString("text", ""),
+            json.optString("Value", ""),
+            json.optString("value", "")
+        )
+        rawCandidates.forEach { candidate ->
+            if (candidate.isBlank()) return@forEach
+            val parsedLines = parseAnyLyricsFormat(candidate)
+            if (parsedLines.isNotEmpty()) return parsedLines
+        }
+
+        val wrapped = json.optJSONObject("Response")
+            ?: json.optJSONObject("Result")
+            ?: json.optJSONObject("data")
+        if (wrapped != null) {
+            val parsedWrapped = parseLyricsJsonObject(wrapped)
+            if (parsedWrapped.isNotEmpty()) return parsedWrapped
+        }
 
         return emptyList()
+    }
+
+    private fun parseLyricsJsonArray(array: JSONArray): List<LyricLineUiModel> {
+        val parsedLines = mutableListOf<LyricLineUiModel>()
+        for (index in 0 until array.length()) {
+            val value = array.opt(index)
+            when (value) {
+                is JSONObject -> parsedLines.addAll(parseLyricsJsonEntry(value))
+                is String -> parsedLines.addAll(parseAnyLyricsFormat(value))
+            }
+        }
+        return parsedLines.sortedBy { it.startMs }
+    }
+
+    private fun parseLyricsJsonEntry(lineJson: JSONObject): List<LyricLineUiModel> {
+        val rawText = lineJson.optString("Text", "").ifBlank {
+            lineJson.optString("text", "")
+        }.ifBlank {
+            lineJson.optString("Line", "")
+        }.ifBlank {
+            lineJson.optString("line", "")
+        }.ifBlank {
+            lineJson.optString("Value", "")
+        }.ifBlank {
+            lineJson.optString("value", "")
+        }
+        val normalizedText = normalizeLyricsPayload(rawText)
+        if (normalizedText.isNotBlank()) {
+            val expandedLines = parseLrcText(normalizedText)
+            if (expandedLines.size > 1) {
+                return expandedLines
+            }
+        }
+
+        val startTicks = lineJson.optLong(
+            "Start",
+            lineJson.optLong(
+                "start",
+                lineJson.optLong(
+                    "StartTicks",
+                    lineJson.optLong("startTicks", 0L)
+                )
+            )
+        )
+        val startMsFromField = startTicks / 10_000L
+        val startMsFromText = extractFirstTimestampMs(normalizedText)
+        val finalStartMs = if (startMsFromField > 0L) startMsFromField else startMsFromText
+        val cleanedText = cleanLyricDisplayText(normalizedText)
+        if (cleanedText.isBlank()) return emptyList()
+        return listOf(LyricLineUiModel(text = cleanedText, startMs = finalStartMs))
     }
 
     /**
@@ -868,25 +941,76 @@ class EmbyApiService(
      * Format: [mm:ss.xx]Lyric text or [mm:ss]Lyric text
      */
     private fun parseLrcText(body: String): List<LyricLineUiModel> {
-        // LRC line pattern: [mm:ss.xx] or [mm:ss.xxx] or [mm:ss]
-        val lrcLineRegex = Regex("""\[(\d{1,3}):(\d{2})(?:[.:](\d{2,3}))?\](.*)""")
+        val normalizedBody = normalizeLyricsPayload(body)
+        val lrcTimestampRegex = Regex("""\[(\d{1,3}):(\d{2})(?:[.:](\d{2,3}))?\]""")
+        val lrcMetaRegex = Regex("""^\[(ti|ar|al|by|offset|length|re|ve|la|id):.*]$""", RegexOption.IGNORE_CASE)
         val lines = mutableListOf<LyricLineUiModel>()
 
-        for (rawLine in body.lines()) {
-            val match = lrcLineRegex.find(rawLine.trim()) ?: continue
-            val minutes = match.groupValues[1].toLongOrNull() ?: continue
-            val seconds = match.groupValues[2].toLongOrNull() ?: continue
-            val centis = match.groupValues[3].takeIf { it.isNotEmpty() }?.toLongOrNull() ?: 0L
-            val text = match.groupValues[4].trim()
+        for (rawLine in normalizedBody.lines()) {
+            val trimmed = rawLine.trim()
+            if (trimmed.isEmpty() || lrcMetaRegex.matches(trimmed)) continue
+
+            val matches = lrcTimestampRegex.findAll(trimmed).toList()
+            if (matches.isEmpty()) continue
+
+            val text = cleanLyricDisplayText(trimmed)
             if (text.isEmpty()) continue
 
-            // LRC centiseconds: if 2 digits it's cs (10ms), if 3 digits it's ms
-            val centisMs = if (match.groupValues[3].length <= 2) centis * 10L else centis
-            val startMs = (minutes * 60_000L) + (seconds * 1_000L) + centisMs
-            lines.add(LyricLineUiModel(text = text, startMs = startMs))
+            matches.forEach { match ->
+                val startMs = timestampMatchToMs(match)
+                lines.add(LyricLineUiModel(text = text, startMs = startMs))
+            }
         }
 
-        return lines
+        return lines.sortedBy { it.startMs }
+    }
+
+    private fun normalizeLyricsPayload(raw: String): String {
+        var text = raw.trim().removePrefix("\uFEFF")
+        if ((text.startsWith("\"") && text.endsWith("\"")) ||
+            (text.startsWith("'") && text.endsWith("'"))) {
+            text = text.substring(1, text.length - 1)
+        }
+        return text
+            .replace("\\r\\n", "\n")
+            .replace("\\n", "\n")
+            .replace("\\r", "\n")
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+            .replace("\\t", " ")
+            .replace("\\\"", "\"")
+            .replace("\\/", "/")
+            .trim()
+    }
+
+    private fun cleanLyricDisplayText(raw: String): String {
+        return normalizeLyricsPayload(raw)
+            .replace(Regex("""\[(\d{1,3}):(\d{2})(?:[.:](\d{2,3}))?\]"""), "")
+            .lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString(" ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
+    private fun extractFirstTimestampMs(raw: String): Long {
+        val match = Regex("""\[(\d{1,3}):(\d{2})(?:[.:](\d{2,3}))?\]""").find(raw) ?: return 0L
+        return timestampMatchToMs(match)
+    }
+
+    private fun timestampMatchToMs(match: MatchResult): Long {
+        val minutes = match.groupValues[1].toLongOrNull() ?: return 0L
+        val seconds = match.groupValues[2].toLongOrNull() ?: return 0L
+        val fraction = match.groupValues[3]
+        val fractionValue = fraction.toLongOrNull() ?: 0L
+        val fractionMs = when (fraction.length) {
+            0 -> 0L
+            1 -> fractionValue * 100L
+            2 -> fractionValue * 10L
+            else -> fractionValue
+        }
+        return (minutes * 60_000L) + (seconds * 1_000L) + fractionMs
     }
 
     fun searchMusicItems(

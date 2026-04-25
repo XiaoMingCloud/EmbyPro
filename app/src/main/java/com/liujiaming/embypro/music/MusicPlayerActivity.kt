@@ -260,6 +260,7 @@ class MusicPlayerActivity : AppCompatActivity() {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
                     elapsedTextView.text = formatMillis(progress.toLong())
+                    updateLyricsHighlight(progress.toLong())
                 }
             }
 
@@ -272,6 +273,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                 val target = seekBar?.progress?.toLong() ?: 0L
                 player?.seekTo(target)
                 isSeekingFromUser = false
+                updateLyricsHighlight(target)
             }
         })
 
@@ -965,7 +967,7 @@ class MusicPlayerActivity : AppCompatActivity() {
             syncControls()
             val currentPos = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
             updateLyricsHighlight(currentPos)
-            mainHandler.postDelayed(this, 500L)
+            mainHandler.postDelayed(this, 120L)
         }
     }
 
