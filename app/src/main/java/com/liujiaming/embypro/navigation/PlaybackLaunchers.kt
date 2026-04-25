@@ -27,6 +27,7 @@ fun AppCompatActivity.playVideoDirectly(
         runOnUiThread {
             result.onSuccess { detail ->
                 runCatching {
+                    PlayerActivity.closeActivePlayerForReplacement()
                     startActivity(
                         AppNavigator.videoPlayerIntent(
                             context = this,

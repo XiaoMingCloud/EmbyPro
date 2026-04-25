@@ -33,6 +33,7 @@ class PlaybackHistoryActivity : AppCompatActivity() {
     private lateinit var emptyText: TextView
     private lateinit var topBar: View
     private lateinit var videoButton: MaterialButton
+    private lateinit var audioButton: MaterialButton
     private lateinit var actionBar: View
     private lateinit var manageButton: TextView
     private lateinit var titleText: TextView
@@ -63,6 +64,7 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         progressBar = findViewById(R.id.playbackHistoryProgressBar)
         emptyText = findViewById(R.id.playbackHistoryEmptyText)
         videoButton = findViewById(R.id.playbackHistoryVideoButton)
+        audioButton = findViewById(R.id.playbackHistoryAudioButton)
         actionBar = findViewById(R.id.playbackHistoryActionBar)
         manageButton = findViewById(R.id.playbackHistoryManageButton)
         titleText = findViewById(R.id.playbackHistoryTitleText)
@@ -72,6 +74,7 @@ class PlaybackHistoryActivity : AppCompatActivity() {
 
         findViewById<ImageButton>(R.id.playbackHistoryBackButton).setDebouncedClickListener { finish() }
         videoButton.setDebouncedClickListener { switchCategory(PlaybackHistoryCategory.VIDEO) }
+        audioButton.setDebouncedClickListener { switchCategory(PlaybackHistoryCategory.AUDIO) }
         manageButton.setDebouncedClickListener {
             if (adapter.isSelectionMode()) {
                 exitSelectionMode()
@@ -97,7 +100,7 @@ class PlaybackHistoryActivity : AppCompatActivity() {
                     adapter.toggleSelection(item.itemId)
                     updateSelectionUi()
                 } else {
-                    openVideoDirectly(item)
+                    openPlaybackHistoryItem(item)
                 }
             },
             onItemLongClick = { item ->
@@ -145,6 +148,7 @@ class PlaybackHistoryActivity : AppCompatActivity() {
      */
     private fun updateCategorySelection() {
         updateCategoryButton(videoButton, currentCategory == PlaybackHistoryCategory.VIDEO)
+        updateCategoryButton(audioButton, currentCategory == PlaybackHistoryCategory.AUDIO)
     }
 
     /**
@@ -183,7 +187,18 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         }
 
         networkExecutor.execute {
-            val result = mediaRepository.fetchPlaybackHistoryPage(connection, startIndex, PAGE_SIZE, currentCategory)
+            val historyParentId = if (currentCategory == PlaybackHistoryCategory.AUDIO) {
+                MusicLibraryRepository.currentState().currentLibraryId
+            } else {
+                null
+            }
+            val result = mediaRepository.fetchPlaybackHistoryPage(
+                connection = connection,
+                startIndex = startIndex,
+                limit = PAGE_SIZE,
+                category = currentCategory,
+                parentId = historyParentId
+            )
             runOnUiThread {
                 isLoading = false
                 progressBar.visibility = View.GONE
@@ -221,6 +236,13 @@ class PlaybackHistoryActivity : AppCompatActivity() {
      * Opens video player directly for a history item with resume position.
      * @param item The playback history item to play
      */
+    private fun openPlaybackHistoryItem(item: PlaybackHistoryItemUiModel) {
+        when (currentCategory) {
+            PlaybackHistoryCategory.AUDIO -> openAudioDirectly(item)
+            else -> openVideoDirectly(item)
+        }
+    }
+
     private fun openVideoDirectly(item: PlaybackHistoryItemUiModel) {
         val preferredStartPositionMs = if (item.played) 0L else item.playbackPositionTicks / 10_000L
         playVideoDirectly(
@@ -229,6 +251,24 @@ class PlaybackHistoryActivity : AppCompatActivity() {
             itemId = item.itemId,
             queue = AppNavigator.buildHistoryVideoQueue(items, item.itemId),
             preferredStartPositionMs = preferredStartPositionMs
+        )
+    }
+
+    private fun openAudioDirectly(item: PlaybackHistoryItemUiModel) {
+        val audioItems = items.filter { it.itemType == "Audio" }
+        val queueIndex = audioItems.indexOfFirst { it.itemId == item.itemId }
+        if (queueIndex < 0) return
+        val currentLibraryId = MusicLibraryRepository.currentState().currentLibraryId
+        AppNavigator.openMusicPlayer(
+            activity = this,
+            connection = connection,
+            libraryId = currentLibraryId,
+            queueTitle = getString(R.string.playback_history_tab_audio),
+            queueIds = ArrayList(audioItems.map { it.itemId }),
+            queueTitles = ArrayList(audioItems.map { it.title }),
+            queueSubtitles = ArrayList(audioItems.map { it.libraryName }),
+            queueImages = ArrayList(audioItems.map { it.imageUrl.orEmpty() }),
+            queueIndex = queueIndex
         )
     }
 
@@ -269,7 +309,9 @@ class PlaybackHistoryActivity : AppCompatActivity() {
         )
         clearButton.isEnabled = selectedCount > 0 && !isClearing
         clearButton.alpha = if (clearButton.isEnabled) 1f else 0.45f
-        videoButton.visibility = if (inSelectionMode) View.GONE else View.VISIBLE
+        val categoryVisibility = if (inSelectionMode) View.GONE else View.VISIBLE
+        videoButton.visibility = categoryVisibility
+        audioButton.visibility = categoryVisibility
     }
 
     /**

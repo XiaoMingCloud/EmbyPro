@@ -28,7 +28,9 @@ object PlayerCache {
         val itemId: String,
         val playbackUrl: String,
         val playbackPositionMs: Long,
-        val title: String
+        val title: String,
+        val mediaSourceId: String,
+        val playSessionId: String
     )
 
     @Volatile

@@ -138,6 +138,7 @@ enum class LibraryBrowseMode {
 enum class PlaybackHistoryCategory(val includeItemTypes: String, val labelRes: Int) {
     ALL("Movie,Episode,Video,MusicVideo,Series,Season,BoxSet,Program,TvChannel", R.string.tab_all),
     VIDEO("Movie,Episode,Video,MusicVideo", R.string.playback_history_tab_video),
+    AUDIO("Audio", R.string.playback_history_tab_audio),
     LIVE("Program,TvChannel", R.string.playback_history_tab_live),
     COLUMN("Series,Season,BoxSet", R.string.playback_history_tab_column)
 }
@@ -199,6 +200,7 @@ data class VideoDetailUiModel(
     val heroImageUrl: String?,
     val isFavorite: Boolean,
     val playbackPositionTicks: Long,
+    val mediaSourceId: String,
     val playbackUrl: String?,
     val playSessionId: String
 )
@@ -1200,6 +1202,62 @@ class EmbyApiService(
         }
     }
 
+    fun reportVideoPlaybackStarted(
+        baseUrl: String,
+        accessToken: String,
+        itemId: String,
+        mediaSourceId: String,
+        playSessionId: String,
+        playbackPositionMs: Long,
+        isPaused: Boolean
+    ): Result<Unit> = reportVideoPlaybackSession(
+        baseUrl = baseUrl,
+        accessToken = accessToken,
+        endpoint = "Playing",
+        itemId = itemId,
+        mediaSourceId = mediaSourceId,
+        playSessionId = playSessionId,
+        playbackPositionMs = playbackPositionMs,
+        isPaused = isPaused
+    )
+
+    fun reportVideoPlaybackProgress(
+        baseUrl: String,
+        accessToken: String,
+        itemId: String,
+        mediaSourceId: String,
+        playSessionId: String,
+        playbackPositionMs: Long,
+        isPaused: Boolean
+    ): Result<Unit> = reportVideoPlaybackSession(
+        baseUrl = baseUrl,
+        accessToken = accessToken,
+        endpoint = "Playing/Progress",
+        itemId = itemId,
+        mediaSourceId = mediaSourceId,
+        playSessionId = playSessionId,
+        playbackPositionMs = playbackPositionMs,
+        isPaused = isPaused
+    )
+
+    fun reportVideoPlaybackStopped(
+        baseUrl: String,
+        accessToken: String,
+        itemId: String,
+        mediaSourceId: String,
+        playSessionId: String,
+        playbackPositionMs: Long
+    ): Result<Unit> = reportVideoPlaybackSession(
+        baseUrl = baseUrl,
+        accessToken = accessToken,
+        endpoint = "Playing/Stopped",
+        itemId = itemId,
+        mediaSourceId = mediaSourceId,
+        playSessionId = playSessionId,
+        playbackPositionMs = playbackPositionMs,
+        isPaused = true
+    )
+
     fun fetchLibraryItemsPage(
         baseUrl: String,
         userId: String,
@@ -1356,11 +1414,12 @@ class EmbyApiService(
         accessToken: String,
         startIndex: Int,
         limit: Int,
-        category: PlaybackHistoryCategory = PlaybackHistoryCategory.ALL
+        category: PlaybackHistoryCategory = PlaybackHistoryCategory.ALL,
+        parentId: String? = null
     ): Result<PlaybackHistoryPageUiModel> {
         return runCatching {
             val request = Request.Builder()
-                .url(buildPlaybackHistoryUrl(baseUrl, userId, startIndex, limit, category))
+                .url(buildPlaybackHistoryUrl(baseUrl, userId, startIndex, limit, category, parentId))
                 .header("X-Emby-Token", accessToken)
                 .get()
                 .build()
@@ -2077,11 +2136,13 @@ class EmbyApiService(
             ),
             isFavorite = userData?.optBoolean("IsFavorite") == true,
             playbackPositionTicks = playbackPositionTicks,
+            mediaSourceId = mediaSourceId,
             playbackUrl = buildPlaybackUrl(
                 baseUrl = baseUrl,
                 itemId = item.optString("Id"),
                 mediaSourceId = mediaSourceId,
                 directStreamUrl = directStreamUrl,
+                playSessionId = playSessionId,
                 staticBuild = true
             ),
             playSessionId = playSessionId
@@ -2215,14 +2276,16 @@ class EmbyApiService(
         itemId: String,
         mediaSourceId: String,
         directStreamUrl: String,
+        playSessionId: String,
         staticBuild: Boolean
     ): String? {
         if (directStreamUrl.isNotBlank()) {
-            return if (directStreamUrl.startsWith("http")) directStreamUrl else "$baseUrl$directStreamUrl"
+            val resolvedUrl = if (directStreamUrl.startsWith("http")) directStreamUrl else "$baseUrl$directStreamUrl"
+            return appendQueryParameter(resolvedUrl, "PlaySessionId", playSessionId)
         }
         if (itemId.isBlank()) return null
 
-        return buildString {
+        val url = buildString {
             append(baseUrl)
             append("/emby/Videos/")
             append(itemId)
@@ -2234,6 +2297,53 @@ class EmbyApiService(
                 append(mediaSourceId)
             }
         }
+        return appendQueryParameter(url, "PlaySessionId", playSessionId)
+    }
+
+    private fun reportVideoPlaybackSession(
+        baseUrl: String,
+        accessToken: String,
+        endpoint: String,
+        itemId: String,
+        mediaSourceId: String,
+        playSessionId: String,
+        playbackPositionMs: Long,
+        isPaused: Boolean
+    ): Result<Unit> {
+        return runCatching {
+            if (itemId.isBlank() || playSessionId.isBlank()) return@runCatching
+            val ticks = playbackPositionMs.coerceAtLeast(0L) * 10_000L
+            val requestBody = JSONObject()
+                .put("ItemId", itemId)
+                .put("MediaSourceId", mediaSourceId)
+                .put("PlaySessionId", playSessionId)
+                .put("PositionTicks", ticks)
+                .put("PlaybackStartTimeTicks", System.currentTimeMillis() * 10_000L)
+                .put("CanSeek", true)
+                .put("IsPaused", isPaused)
+                .put("PlayMethod", "DirectPlay")
+                .toString()
+                .toRequestBody(jsonMediaType)
+
+            val request = Request.Builder()
+                .url("$baseUrl/emby/Sessions/$endpoint")
+                .header("X-Emby-Token", accessToken)
+                .post(requestBody)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("视频播放会话上报失败：${response.code}")
+                }
+            }
+        }
+    }
+
+    private fun appendQueryParameter(url: String, key: String, value: String): String {
+        if (url.isBlank() || value.isBlank()) return url
+        if (url.contains("$key=")) return url
+        val separator = if (url.contains("?")) "&" else "?"
+        return url + separator + key + "=" + value
     }
 
     private fun buildImageUrl(
@@ -2732,10 +2842,14 @@ class EmbyApiService(
         userId: String,
         startIndex: Int,
         limit: Int,
-        category: PlaybackHistoryCategory
+        category: PlaybackHistoryCategory,
+        parentId: String? = null
     ): String {
         return buildString {
             append("$baseUrl/emby/Users/$userId/Items?")
+            if (!parentId.isNullOrBlank()) {
+                append("ParentId=$parentId&")
+            }
             append("Recursive=true")
             append("&StartIndex=$startIndex")
             append("&Limit=$limit")

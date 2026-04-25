@@ -79,6 +79,8 @@ class PlayerActivity : AppCompatActivity() {
     private var coverImageUrl: String? = null
     private lateinit var connection: ServerConnection
     private lateinit var itemId: String
+    private var mediaSourceId: String = ""
+    private var playSessionId: String = ""
     private var startPositionMs: Long = 0L
     private var currentSpeedIndex = 0
     private val speeds = listOf(1.0f, 1.25f, 1.5f, 2.0f)
@@ -96,6 +98,8 @@ class PlayerActivity : AppCompatActivity() {
     private var loadingAnimator: AnimatorSet? = null
     private var hasRenderedFirstFrame = false
     private var wasInPictureInPictureMode = false
+    private var isFinishingForReplacement = false
+    private var hasReportedPlaybackStart = false
     private var shouldReturnDeletedItem = false
 
     // Gesture control state
@@ -126,6 +130,8 @@ class PlayerActivity : AppCompatActivity() {
         coverImageUrl = intent.getStringExtra(EXTRA_COVER_IMAGE_URL)
         connection = sessionStore.resolveConnection(intent, serverRepository) ?: ServerConnection("", "", "")
         itemId = intent.getStringExtra(EXTRA_ITEM_ID).orEmpty()
+        mediaSourceId = intent.getStringExtra(EXTRA_MEDIA_SOURCE_ID).orEmpty()
+        playSessionId = intent.getStringExtra(EXTRA_PLAY_SESSION_ID).orEmpty()
         startPositionMs = intent.getLongExtra(EXTRA_START_POSITION_MS, 0L)
         playlistItemIds = intent.getStringArrayListExtra(EXTRA_PLAYLIST_ITEM_IDS) ?: arrayListOf()
         playlistItemTitles = intent.getStringArrayListExtra(EXTRA_PLAYLIST_ITEM_TITLES) ?: arrayListOf()
@@ -136,6 +142,8 @@ class PlayerActivity : AppCompatActivity() {
         manualVideoRotation = savedInstanceState?.getInt(STATE_MANUAL_ROTATION) ?: 0
         isContinuousPlayEnabled = savedInstanceState?.getBoolean(STATE_CONTINUOUS_PLAY) ?: false
         itemId = savedInstanceState?.getString(STATE_ITEM_ID) ?: itemId
+        mediaSourceId = savedInstanceState?.getString(STATE_MEDIA_SOURCE_ID) ?: mediaSourceId
+        playSessionId = savedInstanceState?.getString(STATE_PLAY_SESSION_ID) ?: playSessionId
         playbackUrl = savedInstanceState?.getString(STATE_PLAYBACK_URL) ?: playbackUrl
         title = savedInstanceState?.getString(STATE_TITLE) ?: title
         playlistIndex = savedInstanceState?.getInt(STATE_PLAYLIST_INDEX) ?: playlistIndex
@@ -172,7 +180,7 @@ class PlayerActivity : AppCompatActivity() {
             val currentPlayer = player ?: return@setDebouncedClickListener
             if (currentPlayer.isPlaying || (currentPlayer.playbackState == Player.STATE_BUFFERING && currentPlayer.playWhenReady)) {
                 currentPlayer.pause()
-                reportPlaybackProgress(currentPlayer.currentPosition)
+                reportPlaybackProgress(currentPlayer.currentPosition, isPaused = true)
                 playerView.showController()
             } else {
                 currentPlayer.play()
@@ -247,13 +255,15 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     override fun finish() {
-        setResult(
-            RESULT_OK,
-            Intent()
-                .putExtra(RESULT_ITEM_ID, itemId)
-                .putExtra(RESULT_PLAYLIST_INDEX, playlistIndex)
-                .putExtra(RESULT_ITEM_DELETED, shouldReturnDeletedItem)
-        )
+        if (!isFinishingForReplacement) {
+            setResult(
+                RESULT_OK,
+                Intent()
+                    .putExtra(RESULT_ITEM_ID, itemId)
+                    .putExtra(RESULT_PLAYLIST_INDEX, playlistIndex)
+                    .putExtra(RESULT_ITEM_DELETED, shouldReturnDeletedItem)
+            )
+        }
         super.finish()
     }
 
@@ -265,6 +275,8 @@ class PlayerActivity : AppCompatActivity() {
         outState.putInt(STATE_MANUAL_ROTATION, manualVideoRotation)
         outState.putBoolean(STATE_CONTINUOUS_PLAY, isContinuousPlayEnabled)
         outState.putString(STATE_ITEM_ID, itemId)
+        outState.putString(STATE_MEDIA_SOURCE_ID, mediaSourceId)
+        outState.putString(STATE_PLAY_SESSION_ID, playSessionId)
         outState.putString(STATE_PLAYBACK_URL, playbackUrl)
         outState.putString(STATE_TITLE, title)
         outState.putInt(STATE_PLAYLIST_INDEX, playlistIndex)
@@ -313,7 +325,10 @@ class PlayerActivity : AppCompatActivity() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 syncPlaybackControls()
                 if (isPlaying) {
+                    reportPlaybackStartedIfNeeded(exoPlayer.currentPosition)
                     playerView.hideController()
+                } else if (hasReportedPlaybackStart) {
+                    reportPlaybackProgress(exoPlayer.currentPosition, isPaused = true)
                 }
                 updatePictureInPictureParams()
             }
@@ -348,7 +363,11 @@ class PlayerActivity : AppCompatActivity() {
         val currentPlayer = player ?: return
         playbackPosition = currentPlayer.currentPosition
         playWhenReady = if (endPlayback) false else currentPlayer.playWhenReady
-        reportPlaybackProgress(playbackPosition)
+        if (endPlayback) {
+            reportPlaybackStopped(playbackPosition)
+        } else {
+            reportPlaybackProgress(playbackPosition, isPaused = !currentPlayer.playWhenReady)
+        }
         currentPlayer.playWhenReady = false
         currentPlayer.pause()
         if (endPlayback) {
@@ -492,8 +511,11 @@ class PlayerActivity : AppCompatActivity() {
         val prefetchedPlayback = PlayerCache.takePrefetchedPlayback(targetItemId)
         if (prefetchedPlayback != null) {
             isSwitchingItem = false
+            reportPlaybackStopped(player?.currentPosition ?: playbackPosition)
             playlistIndex = targetIndex
             itemId = prefetchedPlayback.itemId
+            mediaSourceId = prefetchedPlayback.mediaSourceId
+            playSessionId = prefetchedPlayback.playSessionId
             playbackUrl = prefetchedPlayback.playbackUrl
             title = prefetchedPlayback.title.ifBlank {
                 playlistItemTitles.getOrNull(targetIndex).orEmpty()
@@ -512,8 +534,11 @@ class PlayerActivity : AppCompatActivity() {
             runOnUiThread {
                 isSwitchingItem = false
                 result.onSuccess { detail ->
+                    reportPlaybackStopped(player?.currentPosition ?: playbackPosition)
                     playlistIndex = targetIndex
                     itemId = detail.itemId
+                    mediaSourceId = detail.mediaSourceId
+                    playSessionId = detail.playSessionId
                     playbackUrl = detail.playbackUrl.orEmpty()
                     title = detail.title
                     titleText.text = title
@@ -681,7 +706,7 @@ class PlayerActivity : AppCompatActivity() {
         val currentPlayer = player ?: return
         if (currentPlayer.isPlaying) {
             currentPlayer.pause()
-            reportPlaybackProgress(currentPlayer.currentPosition)
+            reportPlaybackProgress(currentPlayer.currentPosition, isPaused = true)
             playerView.showController()
         } else {
             currentPlayer.play()
@@ -693,11 +718,15 @@ class PlayerActivity : AppCompatActivity() {
     private fun handlePictureInPictureControl(action: String) {
         val currentPlayer = player ?: return
         when (action) {
-            ACTION_PIP_PAUSE -> currentPlayer.pause()
+            ACTION_PIP_PAUSE -> {
+                currentPlayer.pause()
+                reportPlaybackProgress(currentPlayer.currentPosition, isPaused = true)
+            }
             ACTION_PIP_PLAY,
             ACTION_PIP_TOGGLE -> {
                 if (currentPlayer.isPlaying) {
                     currentPlayer.pause()
+                    reportPlaybackProgress(currentPlayer.currentPosition, isPaused = true)
                 } else {
                     currentPlayer.play()
                 }
@@ -730,7 +759,7 @@ class PlayerActivity : AppCompatActivity() {
             switchPlaylistItem(1)
         } else if (!isContinuousPlayEnabled) {
             player?.let { currentPlayer ->
-                reportPlaybackProgress(0L)
+                reportPlaybackProgress(0L, isPaused = false)
                 playbackPosition = 0L
                 currentPlayer.seekTo(0L)
                 currentPlayer.playWhenReady = true
@@ -751,10 +780,12 @@ class PlayerActivity : AppCompatActivity() {
         }
         val currentPlayer = player ?: run {
             playbackUrl = url
+            hasReportedPlaybackStart = false
             initializePlayer()
             return
         }
         playbackUrl = url
+        hasReportedPlaybackStart = false
         currentPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(url)))
         currentPlayer.prepare()
         currentPlayer.seekTo(playbackPosition.coerceAtLeast(0L))
@@ -810,7 +841,9 @@ class PlayerActivity : AppCompatActivity() {
                             playbackPositionMs = detail?.playbackPositionTicks?.div(10_000L) ?: 0L,
                             title = detail?.title.orEmpty().ifBlank {
                                 playlistItemTitles.getOrNull(playlistItemIds.indexOf(nextItemId)).orEmpty()
-                            }
+                            },
+                            mediaSourceId = detail?.mediaSourceId.orEmpty(),
+                            playSessionId = detail?.playSessionId.orEmpty()
                         )
                     )
                     preloadTargets += nextItemId to url
@@ -961,10 +994,64 @@ class PlayerActivity : AppCompatActivity() {
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
 
-    private fun reportPlaybackProgress(positionMs: Long) {
-        if (!connection.isValid || itemId.isBlank()) return
+    private fun reportPlaybackStartedIfNeeded(positionMs: Long) {
+        if (!connection.isValid || itemId.isBlank() || hasReportedPlaybackStart) return
+        val currentItemId = itemId
+        val currentMediaSourceId = mediaSourceId
+        val currentPlaySessionId = playSessionId
+        hasReportedPlaybackStart = true
+        if (currentPlaySessionId.isBlank()) return
         networkExecutor.execute {
-            mediaRepository.updatePlaybackProgress(connection, itemId, positionMs)
+            mediaRepository.reportVideoPlaybackStarted(
+                connection = connection,
+                itemId = currentItemId,
+                mediaSourceId = currentMediaSourceId,
+                playSessionId = currentPlaySessionId,
+                playbackPositionMs = positionMs,
+                isPaused = false
+            )
+        }
+    }
+
+    private fun reportPlaybackProgress(positionMs: Long, isPaused: Boolean = false) {
+        if (!connection.isValid || itemId.isBlank()) return
+        val currentItemId = itemId
+        val currentMediaSourceId = mediaSourceId
+        val currentPlaySessionId = playSessionId
+        networkExecutor.execute {
+            if (currentPlaySessionId.isNotBlank()) {
+                mediaRepository.reportVideoPlaybackProgress(
+                    connection = connection,
+                    itemId = currentItemId,
+                    mediaSourceId = currentMediaSourceId,
+                    playSessionId = currentPlaySessionId,
+                    playbackPositionMs = positionMs,
+                    isPaused = isPaused
+                )
+            } else {
+                mediaRepository.updatePlaybackProgress(connection, currentItemId, positionMs)
+            }
+        }
+    }
+
+    private fun reportPlaybackStopped(positionMs: Long) {
+        if (!connection.isValid || itemId.isBlank()) return
+        val currentItemId = itemId
+        val currentMediaSourceId = mediaSourceId
+        val currentPlaySessionId = playSessionId
+        hasReportedPlaybackStart = false
+        networkExecutor.execute {
+            if (currentPlaySessionId.isNotBlank()) {
+                mediaRepository.reportVideoPlaybackStopped(
+                    connection = connection,
+                    itemId = currentItemId,
+                    mediaSourceId = currentMediaSourceId,
+                    playSessionId = currentPlaySessionId,
+                    playbackPositionMs = positionMs
+                )
+            } else {
+                mediaRepository.updatePlaybackProgress(connection, currentItemId, positionMs)
+            }
         }
     }
 
@@ -1033,6 +1120,14 @@ class PlayerActivity : AppCompatActivity() {
         )
     }
 
+    private fun finishForReplacement() {
+        if (isFinishing || isDestroyed || isFinishingForReplacement) return
+        isFinishingForReplacement = true
+        wasInPictureInPictureMode = true
+        releasePlayer(endPlayback = true)
+        finish()
+    }
+
     private fun buildPictureInPictureActions(isPlaying: Boolean): List<RemoteAction> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return emptyList()
         val action = if (isPlaying) ACTION_PIP_PAUSE else ACTION_PIP_PLAY
@@ -1088,6 +1183,8 @@ class PlayerActivity : AppCompatActivity() {
         const val EXTRA_TITLE = "extra_title"
         const val EXTRA_COVER_IMAGE_URL = "extra_cover_image_url"
         const val EXTRA_ITEM_ID = "extra_item_id"
+        const val EXTRA_MEDIA_SOURCE_ID = "extra_media_source_id"
+        const val EXTRA_PLAY_SESSION_ID = "extra_play_session_id"
         const val EXTRA_START_POSITION_MS = "extra_start_position_ms"
         const val EXTRA_PLAYLIST_ITEM_IDS = "extra_playlist_item_ids"
         const val EXTRA_PLAYLIST_ITEM_TITLES = "extra_playlist_item_titles"
@@ -1101,6 +1198,8 @@ class PlayerActivity : AppCompatActivity() {
         private const val STATE_MANUAL_ROTATION = "state_manual_rotation"
         private const val STATE_CONTINUOUS_PLAY = "state_continuous_play"
         private const val STATE_ITEM_ID = "state_item_id"
+        private const val STATE_MEDIA_SOURCE_ID = "state_media_source_id"
+        private const val STATE_PLAY_SESSION_ID = "state_play_session_id"
         private const val STATE_PLAYBACK_URL = "state_playback_url"
         private const val STATE_TITLE = "state_title"
         private const val STATE_PLAYLIST_INDEX = "state_playlist_index"
@@ -1110,6 +1209,21 @@ class PlayerActivity : AppCompatActivity() {
 
         @Volatile
         private var activeInstance: PlayerActivity? = null
+
+        fun closeActivePlayerForReplacement() {
+            val instance = activeInstance ?: return
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                if (activeInstance === instance) {
+                    instance.finishForReplacement()
+                }
+                return
+            }
+            instance.runOnUiThread {
+                if (activeInstance === instance) {
+                    instance.finishForReplacement()
+                }
+            }
+        }
 
         fun handlePipControlAction(action: String) {
             activeInstance?.runOnUiThread {

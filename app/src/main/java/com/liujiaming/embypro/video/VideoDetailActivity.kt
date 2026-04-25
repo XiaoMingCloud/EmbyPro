@@ -213,6 +213,7 @@ class VideoDetailActivity : AppCompatActivity() {
         if (!VideoPlayerLaunchGuard.tryAcquire()) return
 
         runCatching {
+            PlayerActivity.closeActivePlayerForReplacement()
             playerLauncher.launch(
                 AppNavigator.videoPlayerIntent(
                     context = this,

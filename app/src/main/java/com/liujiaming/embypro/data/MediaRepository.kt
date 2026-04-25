@@ -93,7 +93,8 @@ class MediaRepository(context: Context) {
         connection: ServerConnection,
         startIndex: Int,
         limit: Int,
-        category: PlaybackHistoryCategory = PlaybackHistoryCategory.ALL
+        category: PlaybackHistoryCategory = PlaybackHistoryCategory.ALL,
+        parentId: String? = null
     ): Result<PlaybackHistoryPageUiModel> {
         return embyApiService.fetchPlaybackHistoryPage(
             baseUrl = connection.baseUrl,
@@ -101,7 +102,8 @@ class MediaRepository(context: Context) {
             accessToken = connection.accessToken,
             startIndex = startIndex,
             limit = limit,
-            category = category
+            category = category,
+            parentId = parentId
         )
     }
 
@@ -187,6 +189,61 @@ class MediaRepository(context: Context) {
             userId = connection.userId,
             accessToken = connection.accessToken,
             itemId = itemId,
+            playbackPositionMs = playbackPositionMs
+        )
+    }
+
+    fun reportVideoPlaybackStarted(
+        connection: ServerConnection,
+        itemId: String,
+        mediaSourceId: String,
+        playSessionId: String,
+        playbackPositionMs: Long,
+        isPaused: Boolean
+    ): Result<Unit> {
+        return embyApiService.reportVideoPlaybackStarted(
+            baseUrl = connection.baseUrl,
+            accessToken = connection.accessToken,
+            itemId = itemId,
+            mediaSourceId = mediaSourceId,
+            playSessionId = playSessionId,
+            playbackPositionMs = playbackPositionMs,
+            isPaused = isPaused
+        )
+    }
+
+    fun reportVideoPlaybackProgress(
+        connection: ServerConnection,
+        itemId: String,
+        mediaSourceId: String,
+        playSessionId: String,
+        playbackPositionMs: Long,
+        isPaused: Boolean
+    ): Result<Unit> {
+        return embyApiService.reportVideoPlaybackProgress(
+            baseUrl = connection.baseUrl,
+            accessToken = connection.accessToken,
+            itemId = itemId,
+            mediaSourceId = mediaSourceId,
+            playSessionId = playSessionId,
+            playbackPositionMs = playbackPositionMs,
+            isPaused = isPaused
+        )
+    }
+
+    fun reportVideoPlaybackStopped(
+        connection: ServerConnection,
+        itemId: String,
+        mediaSourceId: String,
+        playSessionId: String,
+        playbackPositionMs: Long
+    ): Result<Unit> {
+        return embyApiService.reportVideoPlaybackStopped(
+            baseUrl = connection.baseUrl,
+            accessToken = connection.accessToken,
+            itemId = itemId,
+            mediaSourceId = mediaSourceId,
+            playSessionId = playSessionId,
             playbackPositionMs = playbackPositionMs
         )
     }

@@ -73,6 +73,21 @@
             app:backgroundTint="@android:color/transparent"
             app:cornerRadius="14dp" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/playbackHistoryAudioButton"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginStart="6dp"
+            android:minWidth="0dp"
+            android:text="@string/playback_history_tab_audio"
+            android:textAllCaps="false"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            app:backgroundTint="@android:color/transparent"
+            app:cornerRadius="14dp" />
+
         <TextView
             android:id="@+id/playbackHistoryManageButton"
             android:layout_width="0dp"

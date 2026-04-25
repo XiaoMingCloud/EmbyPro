@@ -215,6 +215,8 @@ object AppNavigator {
             .putExtra(PlayerActivity.EXTRA_COVER_IMAGE_URL, detail.heroImageUrl)
             .putServerConnection(connection)
             .putExtra(PlayerActivity.EXTRA_ITEM_ID, itemId)
+            .putExtra(PlayerActivity.EXTRA_MEDIA_SOURCE_ID, detail.mediaSourceId)
+            .putExtra(PlayerActivity.EXTRA_PLAY_SESSION_ID, detail.playSessionId)
             .putExtra(PlayerActivity.EXTRA_START_POSITION_MS, preferredStartPositionMs)
             .putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_ITEM_IDS, queue.itemIds)
             .putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_ITEM_TITLES, queue.itemTitles)
