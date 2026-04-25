@@ -435,6 +435,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                     currentPlayer.playWhenReady = shouldResumeAfterLoad
                     if (!playback.isOfflineCached) {
                         offlineCache.cachePlayback(connection, libraryId, playback)
+                        cacheLyricsForOffline(playback.itemId)
                     }
                     isSwitchingTrack = false
                     syncControls()
@@ -749,6 +750,12 @@ class MusicPlayerActivity : AppCompatActivity() {
 
     private fun loadLyrics(itemId: String) {
         if (lyricsLoadInFlight) return
+        val cachedLyrics = offlineCache.getCachedLyrics(connection, itemId)
+        if (currentPlaybackIsLocal && cachedLyrics != null) {
+            lyricsLines = cachedLyrics.lines
+            renderLyrics()
+            return
+        }
         lyricsLoadInFlight = true
         lyricsContainer.removeAllViews()
         val loadingText = TextView(this).apply {
@@ -766,12 +773,15 @@ class MusicPlayerActivity : AppCompatActivity() {
                 result.onSuccess { lyrics ->
                     if (currentPlaybackItemId == itemId || queueIds.getOrNull(currentIndex) == itemId) {
                         lyricsLines = lyrics.lines
+                        if (lyrics.lines.isNotEmpty()) {
+                            offlineCache.cacheLyrics(connection, itemId, lyrics)
+                        }
                         renderLyrics()
                     }
                 }.onFailure { error ->
                     android.util.Log.e("MusicPlayerLyrics", "歌词加载失败", error)
                     if (currentPlaybackItemId == itemId || queueIds.getOrNull(currentIndex) == itemId) {
-                        lyricsLines = emptyList()
+                        lyricsLines = cachedLyrics?.lines ?: emptyList()
                         renderLyrics()
                         Toast.makeText(
                             this@MusicPlayerActivity,
@@ -779,6 +789,18 @@ class MusicPlayerActivity : AppCompatActivity() {
                             Toast.LENGTH_LONG
                         ).show()
                     }
+                }
+            }
+        }
+    }
+
+    private fun cacheLyricsForOffline(itemId: String) {
+        if (itemId.isBlank()) return
+        AppExecutors.io.execute {
+            val result = musicRepository.fetchLyrics(connection, itemId)
+            result.onSuccess { lyrics ->
+                if (lyrics.lines.isNotEmpty()) {
+                    offlineCache.cacheLyrics(connection, itemId, lyrics)
                 }
             }
         }
@@ -883,6 +905,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                         cacheButton.alpha = 1f
                         result.onSuccess {
                             isCurrentCached = true
+                            cacheLyricsForOffline(itemId)
                             updateCacheIcon()
                             Toast.makeText(this, getString(R.string.music_player_cache_success), Toast.LENGTH_SHORT).show()
                         }.onFailure { error ->

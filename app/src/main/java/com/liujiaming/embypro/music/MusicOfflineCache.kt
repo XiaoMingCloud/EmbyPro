@@ -17,6 +17,7 @@ class MusicOfflineCache(context: Context) {
     private val appContext = context.applicationContext
     private val rootDir = File(appContext.filesDir, "music_offline").apply { mkdirs() }
     private val audioDir = File(rootDir, "audio").apply { mkdirs() }
+    private val lyricsDir = File(rootDir, "lyrics").apply { mkdirs() }
     private val indexFile = File(rootDir, "index.json")
     private val client = NetworkClientProvider.client
 
@@ -81,6 +82,47 @@ class MusicOfflineCache(context: Context) {
 
     fun countCachedTracks(connection: ServerConnection): Int = synchronized(lock) {
         readEntriesLocked().count { it.baseUrl == connection.baseUrl && it.userId == connection.userId }
+    }
+
+    fun getCachedLyrics(connection: ServerConnection, itemId: String): LyricsUiModel? = synchronized(lock) {
+        val lyricsFile = buildLyricsFile(buildEntryKey(connection, itemId))
+        if (!lyricsFile.exists()) return null
+        runCatching {
+            val json = JSONArray(lyricsFile.readText(Charsets.UTF_8))
+            val lines = buildList {
+                for (index in 0 until json.length()) {
+                    val item = json.optJSONObject(index) ?: continue
+                    val text = item.optString("text").trim()
+                    if (text.isEmpty()) continue
+                    add(
+                        LyricLineUiModel(
+                            text = text,
+                            startMs = item.optLong("startMs").coerceAtLeast(0L)
+                        )
+                    )
+                }
+            }
+            LyricsUiModel(lines = lines)
+        }.getOrNull()
+    }
+
+    fun cacheLyrics(connection: ServerConnection, itemId: String, lyrics: LyricsUiModel) = synchronized(lock) {
+        val entryKey = buildEntryKey(connection, itemId)
+        val lyricsFile = buildLyricsFile(entryKey)
+        if (lyrics.lines.isEmpty()) {
+            lyricsFile.delete()
+            return
+        }
+        val json = JSONArray()
+        lyrics.lines.forEach { line ->
+            if (line.text.isBlank()) return@forEach
+            json.put(
+                JSONObject()
+                    .put("text", line.text)
+                    .put("startMs", line.startMs.coerceAtLeast(0L))
+            )
+        }
+        lyricsFile.writeText(json.toString(), Charsets.UTF_8)
     }
 
     /**
@@ -294,6 +336,7 @@ class MusicOfflineCache(context: Context) {
             val entry = iterator.next()
             if (entry.baseUrl == connection.baseUrl && entry.userId == connection.userId && entry.itemId == itemId) {
                 File(entry.localPath).delete()
+                buildLyricsFile(buildEntryKey(connection, itemId)).delete()
                 iterator.remove()
                 changed = true
             }
@@ -362,6 +405,7 @@ class MusicOfflineCache(context: Context) {
             val file = File(entry.localPath)
             val fileSize = file.takeIf(File::exists)?.length() ?: 0L
             file.delete()
+            buildLyricsFile(buildEntryKeyFromEntry(entry)).delete()
             iterator.remove()
             totalSize -= fileSize
         }
@@ -376,6 +420,14 @@ class MusicOfflineCache(context: Context) {
 
     private fun buildEntryKey(connection: ServerConnection, itemId: String): String {
         return "${connection.baseUrl}::${connection.userId}::$itemId"
+    }
+
+    private fun buildEntryKeyFromEntry(entry: CachedMusicEntry): String {
+        return "${entry.baseUrl}::${entry.userId}::${entry.itemId}"
+    }
+
+    private fun buildLyricsFile(entryKey: String): File {
+        return File(lyricsDir, "${hashKey(entryKey)}.lyrics.json")
     }
 
     private fun hashKey(value: String): String {
