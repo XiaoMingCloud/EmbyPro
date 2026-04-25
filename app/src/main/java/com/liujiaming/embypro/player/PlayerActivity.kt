@@ -44,6 +44,8 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import java.util.concurrent.ExecutorService
 import kotlin.math.abs
 
@@ -69,6 +71,9 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var playPauseButton: ImageButton
     private lateinit var centerTimeText: TextView
     private lateinit var topBar: View
+    private var playerQueueRecyclerView: RecyclerView? = null
+    private var playerQueueEmptyText: TextView? = null
+    private val playerQueueAdapter = PlayerQueueAdapter(mutableListOf())
     private val mainHandler = Handler(Looper.getMainLooper())
 
     // Player state
@@ -166,6 +171,8 @@ class PlayerActivity : AppCompatActivity() {
         progressTimeBar = playerView.findViewById(androidx.media3.ui.R.id.exo_progress)
         centerTimeText = playerView.findViewById(R.id.playerCenterTimeText)
         topBar = findViewById(R.id.playerTopBar)
+        playerQueueRecyclerView = findViewById(R.id.playerQueueRecyclerView)
+        playerQueueEmptyText = findViewById(R.id.playerQueueEmptyText)
 
         playerView.controllerShowTimeoutMs = 1800
         playerView.controllerHideOnTouch = true
@@ -193,6 +200,9 @@ class PlayerActivity : AppCompatActivity() {
         updatePlayPauseButtonLayout()
 
         titleText.text = title
+        playerQueueRecyclerView?.layoutManager = LinearLayoutManager(this)
+        playerQueueRecyclerView?.adapter = playerQueueAdapter
+        bindPlaylistPanel()
         bindCoverImage()
         findViewById<ImageButton>(R.id.playerBackButton).setDebouncedClickListener { finish() }
         moreButton.setDebouncedClickListener { showPlayerMenu() }
@@ -486,6 +496,7 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         if (playlistItemIds.isEmpty()) {
+            bindPlaylistPanel()
             shouldReturnDeletedItem = true
             itemId = ""
             playlistIndex = -1
@@ -500,6 +511,7 @@ class PlayerActivity : AppCompatActivity() {
             playlistIndex.coerceIn(0, playlistItemIds.lastIndex)
         }
         val shouldKeepPlaying = player?.playWhenReady ?: true
+        bindPlaylistPanel()
         loadPlaylistItemAt(targetIndex, shouldKeepPlaying)
     }
 
@@ -523,6 +535,7 @@ class PlayerActivity : AppCompatActivity() {
             titleText.text = title
             playbackPosition = prefetchedPlayback.playbackPositionMs
             playWhenReady = shouldPlayWhenReady
+            bindPlaylistPanel()
             swapToMedia(prefetchedPlayback.playbackUrl, shouldPlayWhenReady)
             PlayerCache.markPlayed(this, itemId)
             prefetchUpcomingVideosIfNeeded()
@@ -544,6 +557,7 @@ class PlayerActivity : AppCompatActivity() {
                     titleText.text = title
                     playbackPosition = detail.playbackPositionTicks / 10_000L
                     playWhenReady = shouldPlayWhenReady
+                    bindPlaylistPanel()
                     swapToMedia(detail.playbackUrl.orEmpty(), shouldPlayWhenReady)
                     PlayerCache.markPlayed(this, itemId)
                     prefetchUpcomingVideosIfNeeded()
@@ -1072,6 +1086,37 @@ class PlayerActivity : AppCompatActivity() {
         val position = currentPlayer.currentPosition.coerceAtLeast(0L)
         val duration = currentPlayer.duration.takeIf { it > 0 } ?: 0L
         centerTimeText.text = "${formatMillis(position)} / ${formatMillis(duration)}"
+    }
+
+    private fun bindPlaylistPanel() {
+        if (playerQueueRecyclerView == null) return
+
+        val totalItems = maxOf(
+            playlistItemIds.size,
+            playlistItemTitles.size,
+            if (title.isNotBlank()) 1 else 0
+        )
+        if (totalItems == 0) {
+            playerQueueAdapter.submitItems(emptyList())
+            playerQueueRecyclerView?.visibility = View.GONE
+            playerQueueEmptyText?.visibility = View.VISIBLE
+            return
+        }
+
+        val fallbackCurrentIndex = playlistIndex.takeIf { it in 0 until totalItems } ?: 0
+        val queueItems = List(totalItems) { index ->
+            val itemTitle = playlistItemTitles.getOrNull(index)
+                ?.takeIf { it.isNotBlank() }
+                ?: if (index == fallbackCurrentIndex) title else itemId
+            PlayerQueueEntryUiModel(
+                indexLabel = (index + 1).toString(),
+                title = itemTitle.ifBlank { title },
+                isCurrent = index == fallbackCurrentIndex
+            )
+        }
+        playerQueueAdapter.submitItems(queueItems)
+        playerQueueRecyclerView?.visibility = View.VISIBLE
+        playerQueueEmptyText?.visibility = View.GONE
     }
 
     private fun maybeEnterPictureInPicture(autoEnter: Boolean) {

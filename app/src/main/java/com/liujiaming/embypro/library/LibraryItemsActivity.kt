@@ -84,7 +84,7 @@ class LibraryItemsActivity : AppCompatActivity() {
             connection.accessToken,
             onItemClick = { openItem(it) }
         )
-        recyclerView.layoutManager = GridLayoutManager(this, 2)
+        recyclerView.layoutManager = GridLayoutManager(this, if (isTabletLayout()) 4 else 2)
         recyclerView.adapter = adapter
         recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
@@ -337,6 +337,8 @@ class LibraryItemsActivity : AppCompatActivity() {
     private fun openItem(item: MediaPosterUiModel) {
         AppNavigator.openPosterItem(this, connection, item, loadedItems)
     }
+
+    private fun isTabletLayout(): Boolean = resources.configuration.smallestScreenWidthDp >= 600
 
     companion object {
         const val EXTRA_LIBRARY_ID = "extra_library_id"
