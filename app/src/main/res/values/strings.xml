@@ -113,6 +113,7 @@
     <string name="music_list_empty">当前列表暂无内容。</string>
     <string name="music_list_load_failed">加载音乐列表失败，请稍后重试</string>
     <string name="music_list_partition_changed">音乐分区已切换，请重新选择内容</string>
+    <string name="music_list_shuffle_play">随机播放</string>
     <string name="music_search_hint">搜索歌曲、专辑、歌手</string>
     <string name="music_search_clear">清空搜索</string>
     <string name="music_search_no_results">没有找到相关音乐内容</string>

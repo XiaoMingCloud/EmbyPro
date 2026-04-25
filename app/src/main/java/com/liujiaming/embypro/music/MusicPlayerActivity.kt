@@ -80,6 +80,7 @@ class MusicPlayerActivity : AppCompatActivity() {
     private var queueSubtitles: ArrayList<String> = arrayListOf()
     private var queueImages: ArrayList<String> = arrayListOf()
     private var currentIndex: Int = 0
+    private var isShuffleModeEnabled: Boolean = false
 
     private var player: Player? = null
     private var playbackService: MusicPlaybackService? = null
@@ -120,7 +121,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                 stopLoadingAnimation()
             }
             if (playbackState == Player.STATE_ENDED) {
-                switchToIndex(currentIndex + 1, true)
+                handleQueuePlaybackEnded()
             }
             syncControls()
         }
@@ -215,6 +216,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         queueSubtitles = intent.getStringArrayListExtra(EXTRA_QUEUE_SUBTITLES) ?: arrayListOf()
         queueImages = intent.getStringArrayListExtra(EXTRA_QUEUE_IMAGES) ?: arrayListOf()
         currentIndex = intent.getIntExtra(EXTRA_QUEUE_INDEX, 0).coerceIn(0, (queueIds.lastIndex).coerceAtLeast(0))
+        isShuffleModeEnabled = intent.getBooleanExtra(EXTRA_SHUFFLE_MODE, false)
         MusicPlayerSessionStore.record(
             connection = connection,
             libraryId = libraryId,
@@ -223,7 +225,8 @@ class MusicPlayerActivity : AppCompatActivity() {
             queueTitles = queueTitles,
             queueSubtitles = queueSubtitles,
             queueImages = queueImages,
-            queueIndex = currentIndex
+            queueIndex = currentIndex,
+            shuffleModeEnabled = isShuffleModeEnabled
         )
 
         if (queueIds.isEmpty()) {
@@ -641,7 +644,8 @@ class MusicPlayerActivity : AppCompatActivity() {
                 queueTitles = queueTitles,
                 queueSubtitles = queueSubtitles,
                 queueImages = queueImages,
-                queueIndex = 0
+                queueIndex = 0,
+                shuffleModeEnabled = isShuffleModeEnabled
             )
             playbackService?.stopPlaybackAndSelf()
             finish()
@@ -657,7 +661,59 @@ class MusicPlayerActivity : AppCompatActivity() {
             queueTitles = queueTitles,
             queueSubtitles = queueSubtitles,
             queueImages = queueImages,
-            queueIndex = currentIndex
+            queueIndex = currentIndex,
+            shuffleModeEnabled = isShuffleModeEnabled
+        )
+        switchToIndex(currentIndex, playWhenReady = true, resetPosition = true)
+    }
+
+    private fun handleQueuePlaybackEnded() {
+        if (currentIndex < queueIds.lastIndex) {
+            switchToIndex(currentIndex + 1, true)
+            return
+        }
+        if (isShuffleModeEnabled) {
+            reshuffleQueueForContinuousPlay()
+            return
+        }
+        syncControls()
+    }
+
+    private fun reshuffleQueueForContinuousPlay() {
+        if (queueIds.isEmpty()) {
+            syncControls()
+            return
+        }
+        val justFinishedItemId = queueIds.getOrNull(currentIndex).orEmpty()
+        val shuffledEntries = queueIds.indices.map { index ->
+            MusicQueueEntry(
+                id = queueIds[index],
+                title = queueTitles.getOrNull(index).orEmpty(),
+                subtitle = queueSubtitles.getOrNull(index).orEmpty(),
+                imageUrl = queueImages.getOrNull(index).orEmpty()
+            )
+        }.shuffled().toMutableList()
+
+        if (shuffledEntries.size > 1 && shuffledEntries.firstOrNull()?.id == justFinishedItemId) {
+            val first = shuffledEntries.removeAt(0)
+            shuffledEntries.add(first)
+        }
+
+        queueIds = ArrayList(shuffledEntries.map { it.id })
+        queueTitles = ArrayList(shuffledEntries.map { it.title })
+        queueSubtitles = ArrayList(shuffledEntries.map { it.subtitle })
+        queueImages = ArrayList(shuffledEntries.map { it.imageUrl })
+        currentIndex = 0
+        MusicPlayerSessionStore.record(
+            connection = connection,
+            libraryId = libraryId,
+            queueTitle = queueTitle,
+            queueIds = queueIds,
+            queueTitles = queueTitles,
+            queueSubtitles = queueSubtitles,
+            queueImages = queueImages,
+            queueIndex = currentIndex,
+            shuffleModeEnabled = true
         )
         switchToIndex(currentIndex, playWhenReady = true, resetPosition = true)
     }
@@ -1051,10 +1107,18 @@ class MusicPlayerActivity : AppCompatActivity() {
         const val EXTRA_QUEUE_SUBTITLES = "extra_queue_subtitles"
         const val EXTRA_QUEUE_IMAGES = "extra_queue_images"
         const val EXTRA_QUEUE_INDEX = "extra_queue_index"
+        const val EXTRA_SHUFFLE_MODE = "extra_shuffle_mode"
 
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 2001
     }
 }
+
+private data class MusicQueueEntry(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val imageUrl: String
+)
 
 private enum class MusicPlayerContentPage {
     SONG,

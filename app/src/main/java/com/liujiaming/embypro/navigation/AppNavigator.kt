@@ -129,7 +129,8 @@ object AppNavigator {
         queueTitles: ArrayList<String>,
         queueSubtitles: ArrayList<String>,
         queueImages: ArrayList<String>,
-        queueIndex: Int
+        queueIndex: Int,
+        shuffleModeEnabled: Boolean = false
     ) {
         activity.startActivity(
             Intent(activity, MusicPlayerActivity::class.java)
@@ -141,6 +142,7 @@ object AppNavigator {
                 .putStringArrayListExtra(MusicPlayerActivity.EXTRA_QUEUE_SUBTITLES, queueSubtitles)
                 .putStringArrayListExtra(MusicPlayerActivity.EXTRA_QUEUE_IMAGES, queueImages)
                 .putExtra(MusicPlayerActivity.EXTRA_QUEUE_INDEX, queueIndex)
+                .putExtra(MusicPlayerActivity.EXTRA_SHUFFLE_MODE, shuffleModeEnabled)
         )
     }
 

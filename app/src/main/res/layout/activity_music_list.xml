@@ -123,6 +123,26 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/musicListShufflePlayButton"
+                android:layout_width="wrap_content"
+                android:layout_height="42dp"
+                android:layout_gravity="end"
+                android:layout_marginTop="10dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:text="@string/music_list_shuffle_play"
+                android:textAllCaps="false"
+                android:textColor="@color/music_library_title"
+                android:visibility="gone"
+                app:backgroundTint="@color/music_library_search_background"
+                app:cornerRadius="21dp"
+                app:elevation="0dp"
+                app:icon="@android:drawable/ic_media_play"
+                app:iconTint="@color/music_library_title"
+                app:strokeColor="@color/music_library_search_stroke"
+                app:strokeWidth="1dp" />
+
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/musicListRecyclerView"
                 android:layout_width="match_parent"

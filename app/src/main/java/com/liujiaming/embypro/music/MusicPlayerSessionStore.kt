@@ -30,7 +30,8 @@ object MusicPlayerSessionStore {
         queueTitles: ArrayList<String>,
         queueSubtitles: ArrayList<String>,
         queueImages: ArrayList<String>,
-        queueIndex: Int
+        queueIndex: Int,
+        shuffleModeEnabled: Boolean = false
     ) {
         launchState = MusicPlayerLaunchState(
             connection = connection,
@@ -40,7 +41,8 @@ object MusicPlayerSessionStore {
             queueTitles = ArrayList(queueTitles),
             queueSubtitles = ArrayList(queueSubtitles),
             queueImages = ArrayList(queueImages),
-            queueIndex = queueIndex.coerceIn(0, (queueIds.lastIndex).coerceAtLeast(0))
+            queueIndex = queueIndex.coerceIn(0, (queueIds.lastIndex).coerceAtLeast(0)),
+            shuffleModeEnabled = shuffleModeEnabled
         )
     }
 
@@ -77,6 +79,7 @@ object MusicPlayerSessionStore {
             .putStringArrayListExtra(MusicPlayerActivity.EXTRA_QUEUE_SUBTITLES, ArrayList(state.queueSubtitles))
             .putStringArrayListExtra(MusicPlayerActivity.EXTRA_QUEUE_IMAGES, ArrayList(state.queueImages))
             .putExtra(MusicPlayerActivity.EXTRA_QUEUE_INDEX, state.queueIndex)
+            .putExtra(MusicPlayerActivity.EXTRA_SHUFFLE_MODE, state.shuffleModeEnabled)
     }
 
     /**
@@ -90,6 +93,7 @@ object MusicPlayerSessionStore {
         val queueTitles: ArrayList<String>,
         val queueSubtitles: ArrayList<String>,
         val queueImages: ArrayList<String>,
-        val queueIndex: Int
+        val queueIndex: Int,
+        val shuffleModeEnabled: Boolean
     )
 }

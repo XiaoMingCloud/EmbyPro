@@ -21,6 +21,7 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.button.MaterialButton
 
 /**
  * Activity displaying a list of music items (songs, albums, artists, playlists).
@@ -53,11 +54,13 @@ class MusicListActivity : AppCompatActivity() {
     private lateinit var errorTextView: TextView
     private lateinit var pageTitleView: TextView
     private lateinit var pageSubtitleView: TextView
+    private lateinit var shufflePlayButton: MaterialButton
     private lateinit var adapter: MusicListAdapter
     private lateinit var searchInput: EditText
     private lateinit var searchClearButton: ImageButton
 
     private val items = mutableListOf<MusicListEntryUiModel>()
+    private var isCurrentSongList = false
 
     private val stateListener = MusicLibraryStateListener { state ->
         renderLibraryState(state)
@@ -90,6 +93,7 @@ class MusicListActivity : AppCompatActivity() {
         errorTextView = findViewById(R.id.musicListErrorText)
         pageTitleView = findViewById(R.id.musicListTitleText)
         pageSubtitleView = findViewById(R.id.musicListSubtitleText)
+        shufflePlayButton = findViewById(R.id.musicListShufflePlayButton)
         searchInput = findViewById(R.id.musicListSearchInput)
         searchClearButton = findViewById(R.id.musicListSearchClearButton)
 
@@ -107,6 +111,7 @@ class MusicListActivity : AppCompatActivity() {
                 )
             }
         }
+        shufflePlayButton.setDebouncedClickListener { startShufflePlayback() }
         
         searchInput.doAfterTextChanged {
             searchClearButton.visibility = if (it.isNullOrBlank()) View.GONE else View.VISIBLE
@@ -222,6 +227,7 @@ class MusicListActivity : AppCompatActivity() {
                 result.onSuccess { page ->
                     pageTitleView.text = page.title
                     pageSubtitleView.text = page.subtitle
+                    isCurrentSongList = page.isSongList
                     adapter.submitItems(page.items)
                     if (page.items.isEmpty()) {
                         showEmpty()
@@ -261,6 +267,24 @@ class MusicListActivity : AppCompatActivity() {
             queueSubtitles = ArrayList(queue.map { it.subtitle }),
             queueImages = ArrayList(queue.map { it.imageUrl.orEmpty() }),
             queueIndex = currentIndex
+        )
+    }
+
+    private fun startShufflePlayback() {
+        val queue = items.filter { it.kind == MusicEntryKind.SONG }
+        if (queue.isEmpty()) return
+        val shuffledQueue = queue.shuffled()
+        AppNavigator.openMusicPlayer(
+            activity = this,
+            connection = connection,
+            libraryId = lastLibraryId,
+            queueTitle = pageTitleView.text.toString(),
+            queueIds = ArrayList(shuffledQueue.map { it.id }),
+            queueTitles = ArrayList(shuffledQueue.map { it.title }),
+            queueSubtitles = ArrayList(shuffledQueue.map { it.subtitle }),
+            queueImages = ArrayList(shuffledQueue.map { it.imageUrl.orEmpty() }),
+            queueIndex = 0,
+            shuffleModeEnabled = true
         )
     }
 
@@ -453,6 +477,7 @@ class MusicListActivity : AppCompatActivity() {
                 result.onSuccess { page ->
                     pageTitleView.text = page.title
                     pageSubtitleView.text = page.subtitle
+                    isCurrentSongList = page.isSongList
                     adapter.submitItems(page.items)
                     if (page.items.isEmpty()) {
                         showEmpty()
@@ -467,6 +492,7 @@ class MusicListActivity : AppCompatActivity() {
     }
 
     private fun showLoading() {
+        shufflePlayButton.visibility = View.GONE
         recyclerView.visibility = View.GONE
         loadingContainer.visibility = View.VISIBLE
         emptyContainer.visibility = View.GONE
@@ -474,6 +500,7 @@ class MusicListActivity : AppCompatActivity() {
     }
 
     private fun showEmpty() {
+        shufflePlayButton.visibility = View.GONE
         recyclerView.visibility = View.GONE
         loadingContainer.visibility = View.GONE
         emptyContainer.visibility = View.VISIBLE
@@ -486,6 +513,7 @@ class MusicListActivity : AppCompatActivity() {
     }
 
     private fun showError(message: String) {
+        shufflePlayButton.visibility = View.GONE
         recyclerView.visibility = View.GONE
         loadingContainer.visibility = View.GONE
         emptyContainer.visibility = View.GONE
@@ -498,6 +526,11 @@ class MusicListActivity : AppCompatActivity() {
         loadingContainer.visibility = View.GONE
         emptyContainer.visibility = View.GONE
         errorContainer.visibility = View.GONE
+        shufflePlayButton.visibility = if (isCurrentSongList && items.any { it.kind == MusicEntryKind.SONG }) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
     }
     
     private fun performMusicSearch() {
@@ -534,6 +567,7 @@ class MusicListActivity : AppCompatActivity() {
                 result.onSuccess { page ->
                     pageTitleView.text = page.title
                     pageSubtitleView.text = page.subtitle
+                    isCurrentSongList = page.isSongList
                     adapter.submitItems(page.items)
                     if (page.items.isEmpty()) {
                         showEmpty()
