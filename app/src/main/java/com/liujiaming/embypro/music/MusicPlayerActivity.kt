@@ -26,6 +26,7 @@ import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import android.content.res.ColorStateList
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -66,6 +67,10 @@ class MusicPlayerActivity : AppCompatActivity() {
     private lateinit var lyricsScrollView: ScrollView
     private lateinit var lyricsContainer: LinearLayout
     private lateinit var lyricsButton: ImageButton
+    private lateinit var songTabButton: TextView
+    private lateinit var lyricsTabButton: TextView
+    private lateinit var songPage: LinearLayout
+    private lateinit var lyricsPage: LinearLayout
 
     private lateinit var connection: ServerConnection
     private var libraryId: String? = null
@@ -98,6 +103,7 @@ class MusicPlayerActivity : AppCompatActivity() {
     private var lyricsLines: List<LyricLineUiModel> = emptyList()
     private var lyricsLoadInFlight = false
     private var currentLyricIndex = -1
+    private var currentContentPage = MusicPlayerContentPage.SONG
 
     private val stateListener = MusicLibraryStateListener { state ->
         if (libraryId != null && state.currentLibraryId != null && state.currentLibraryId != libraryId) {
@@ -239,6 +245,10 @@ class MusicPlayerActivity : AppCompatActivity() {
         lyricsScrollView = findViewById(R.id.musicPlayerLyricsScroll)
         lyricsContainer = findViewById(R.id.musicPlayerLyricsContainer)
         lyricsButton = findViewById(R.id.musicPlayerLyricsButton)
+        songTabButton = findViewById(R.id.musicPlayerSongTabButton)
+        lyricsTabButton = findViewById(R.id.musicPlayerLyricsTabButton)
+        songPage = findViewById(R.id.musicPlayerSongPage)
+        lyricsPage = findViewById(R.id.musicPlayerLyricsPage)
         elapsedTextView = findViewById(R.id.musicPlayerElapsedText)
         durationTextView = findViewById(R.id.musicPlayerDurationText)
         seekBar = findViewById(R.id.musicPlayerSeekBar)
@@ -251,10 +261,14 @@ class MusicPlayerActivity : AppCompatActivity() {
         favoriteButton.setDebouncedClickListener { toggleFavorite() }
         cacheButton.setDebouncedClickListener { triggerProactiveCache() }
         deleteButton.setDebouncedClickListener { showDeleteMusicConfirmDialog() }
-        lyricsButton.setDebouncedClickListener { toggleLyrics() }
-        lyricsButton.alpha = 0.5f
+        lyricsButton.setDebouncedClickListener { switchContentPage(MusicPlayerContentPage.LYRICS) }
+        songTabButton.setDebouncedClickListener { switchContentPage(MusicPlayerContentPage.SONG) }
+        lyricsTabButton.setDebouncedClickListener { switchContentPage(MusicPlayerContentPage.LYRICS) }
+        lyricsButton.visibility = View.GONE
         queueTitleTextView.text = queueTitle
         updateFavoriteIcon()
+        applyBottomControlButtonTint()
+        switchContentPage(MusicPlayerContentPage.SONG)
 
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -688,20 +702,47 @@ class MusicPlayerActivity : AppCompatActivity() {
     // ─── Lyrics ──────────────────────────────────────────────
 
     private fun toggleLyrics() {
-        isLyricsVisible = !isLyricsVisible
-        val itemId = currentPlaybackItemId.ifBlank { queueIds.getOrNull(currentIndex).orEmpty() }
+        switchContentPage(
+            if (currentContentPage == MusicPlayerContentPage.LYRICS) {
+                MusicPlayerContentPage.SONG
+            } else {
+                MusicPlayerContentPage.LYRICS
+            }
+        )
+    }
 
-        if (isLyricsVisible) {
-            lyricsScrollView.visibility = View.VISIBLE
-            lyricsButton.alpha = 1f
+    private fun switchContentPage(page: MusicPlayerContentPage) {
+        currentContentPage = page
+        isLyricsVisible = page == MusicPlayerContentPage.LYRICS
+        songPage.visibility = if (page == MusicPlayerContentPage.SONG) View.VISIBLE else View.GONE
+        lyricsPage.visibility = if (page == MusicPlayerContentPage.LYRICS) View.VISIBLE else View.GONE
+
+        val selectedBackground = R.drawable.bg_glass_dialog_button_primary
+        val unselectedBackground = R.drawable.bg_glass_dialog_button_secondary
+        val selectedTextColor = ContextCompat.getColor(this, R.color.music_library_title)
+        val unselectedTextColor = ContextCompat.getColor(this, R.color.music_library_meta)
+
+        songTabButton.setBackgroundResource(
+            if (page == MusicPlayerContentPage.SONG) selectedBackground else unselectedBackground
+        )
+        lyricsTabButton.setBackgroundResource(
+            if (page == MusicPlayerContentPage.LYRICS) selectedBackground else unselectedBackground
+        )
+        songTabButton.setTextColor(
+            if (page == MusicPlayerContentPage.SONG) selectedTextColor else unselectedTextColor
+        )
+        lyricsTabButton.setTextColor(
+            if (page == MusicPlayerContentPage.LYRICS) selectedTextColor else unselectedTextColor
+        )
+
+        if (page == MusicPlayerContentPage.LYRICS) {
+            val itemId = currentPlaybackItemId.ifBlank { queueIds.getOrNull(currentIndex).orEmpty() }
             if (lyricsLines.isEmpty() && itemId.isNotBlank()) {
                 loadLyrics(itemId)
             } else {
                 renderLyrics()
             }
         } else {
-            lyricsScrollView.visibility = View.GONE
-            lyricsButton.alpha = 0.5f
             currentLyricIndex = -1
         }
     }
@@ -888,6 +929,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         playPauseButton.setImageResource(
             if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         )
+        applyBottomControlButtonTint()
         previousButton.isEnabled = currentIndex > 0
         nextButton.isEnabled = currentIndex < queueIds.lastIndex
         if (currentPlayer != null && !isSeekingFromUser) {
@@ -971,6 +1013,13 @@ class MusicPlayerActivity : AppCompatActivity() {
         }
     }
 
+    private fun applyBottomControlButtonTint() {
+        val whiteTint = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.white))
+        previousButton.imageTintList = whiteTint
+        playPauseButton.imageTintList = whiteTint
+        nextButton.imageTintList = whiteTint
+    }
+
     companion object {
         const val EXTRA_LIBRARY_ID = "extra_library_id"
         const val EXTRA_QUEUE_TITLE = "extra_queue_title"
@@ -982,4 +1031,9 @@ class MusicPlayerActivity : AppCompatActivity() {
 
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 2001
     }
+}
+
+private enum class MusicPlayerContentPage {
+    SONG,
+    LYRICS
 }
