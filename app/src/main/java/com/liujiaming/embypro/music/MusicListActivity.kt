@@ -58,6 +58,7 @@ class MusicListActivity : AppCompatActivity() {
     private lateinit var adapter: MusicListAdapter
     private lateinit var searchInput: EditText
     private lateinit var searchClearButton: ImageButton
+    private val tabletSidebarEntries = mutableListOf<Pair<MusicBrowseType, View>>()
 
     private val items = mutableListOf<MusicListEntryUiModel>()
     private var isCurrentSongList = false
@@ -138,6 +139,13 @@ class MusicListActivity : AppCompatActivity() {
             searchInput.setText("")
             hideKeyboard()
         }
+        bindTabletSidebarEntry(R.id.musicListSidebarSongsEntry, MusicBrowseType.SONGS)
+        bindTabletSidebarEntry(R.id.musicListSidebarFavoritesEntry, MusicBrowseType.FAVORITES)
+        bindTabletSidebarEntry(R.id.musicListSidebarAlbumsEntry, MusicBrowseType.ALBUMS)
+        bindTabletSidebarEntry(R.id.musicListSidebarArtistsEntry, MusicBrowseType.ARTISTS)
+        bindTabletSidebarEntry(R.id.musicListSidebarFoldersEntry, MusicBrowseType.FOLDERS)
+        bindTabletSidebarEntry(R.id.musicListSidebarLocalEntry, MusicBrowseType.LOCAL)
+        updateTabletSidebarSelection()
 
         adapter = MusicListAdapter(
             items = items,
@@ -584,6 +592,26 @@ class MusicListActivity : AppCompatActivity() {
     private fun hideKeyboard() {
         val inputMethodManager = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
         inputMethodManager?.hideSoftInputFromWindow(searchInput.windowToken, 0)
+    }
+
+    private fun bindTabletSidebarEntry(viewId: Int, targetBrowseType: MusicBrowseType) {
+        val entry = findViewById<View?>(viewId) ?: return
+        tabletSidebarEntries += targetBrowseType to entry
+        entry.setDebouncedClickListener {
+            if (browseType == targetBrowseType) return@setDebouncedClickListener
+            AppNavigator.openMusicList(
+                activity = this,
+                connection = connection,
+                browseType = targetBrowseType,
+                libraryId = lastLibraryId ?: intentLibraryId
+            )
+        }
+    }
+
+    private fun updateTabletSidebarSelection() {
+        tabletSidebarEntries.forEach { (type, entry) ->
+            entry.isActivated = browseType == type
+        }
     }
 
     private fun dp(value: Int): Int {

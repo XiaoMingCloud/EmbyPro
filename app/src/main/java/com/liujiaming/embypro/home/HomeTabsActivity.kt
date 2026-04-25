@@ -197,13 +197,13 @@ class HomeTabsActivity : AppCompatActivity() {
 
         homeFeedAdapter = MediaPosterAdapter(
             homeFeedItems,
-            R.layout.item_library_grid_card,
+            if (isTabletLayout()) R.layout.item_home_feature_card else R.layout.item_library_grid_card,
             connection.accessToken,
             onItemClick = { item ->
                 openHomeFeedItem(item)
             }
         )
-        homeFeedRecyclerView.layoutManager = GridLayoutManager(this, 2)
+        homeFeedRecyclerView.layoutManager = GridLayoutManager(this, if (isTabletLayout()) 2 else 2)
         homeFeedRecyclerView.adapter = homeFeedAdapter
         homeFeedRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
@@ -217,7 +217,7 @@ class HomeTabsActivity : AppCompatActivity() {
             }
         })
         homeRefreshLayout.setOnRefreshListener { refreshHomeFeed() }
-        mediaTabRecyclerView.layoutManager = GridLayoutManager(this, 1)
+        mediaTabRecyclerView.layoutManager = GridLayoutManager(this, if (isTabletLayout()) 2 else 1)
         loadMediaTabLibraries()
         updatePrimaryCategorySelection(PrimaryCategory.VIDEO)
 
@@ -552,6 +552,8 @@ class HomeTabsActivity : AppCompatActivity() {
         textView.alpha = if (selected) 1f else 0.92f
         iconView.alpha = if (selected) 1f else 0.88f
     }
+
+    private fun isTabletLayout(): Boolean = resources.configuration.smallestScreenWidthDp >= 600
 
     private enum class Tab {
         HOME,
