@@ -140,7 +140,12 @@ class MusicLibraryActivity : AppCompatActivity() {
     }
 
     private fun openList(browseType: MusicBrowseType) {
-        AppNavigator.openMusicList(this, connection, browseType)
+        AppNavigator.openMusicList(
+            this,
+            connection,
+            browseType,
+            libraryId = MusicLibraryRepository.currentState().currentLibraryId
+        )
     }
 
     private fun showLibraryPicker() {

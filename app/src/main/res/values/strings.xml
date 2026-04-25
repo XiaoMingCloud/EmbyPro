@@ -248,6 +248,11 @@
     <string name="delete_music_failed">删除歌曲失败</string>
     <string name="delete_music_list_confirm_title">删除歌曲</string>
     <string name="delete_music_list_confirm_message">确定删除“%1$s”吗？删除后将从服务器媒体库中移除。</string>
+    <string name="action_delete_local_music">删除本地缓存</string>
+    <string name="delete_local_music_confirm_title">删除本地音乐</string>
+    <string name="delete_local_music_confirm_message">确定删除“%1$s”的本地缓存吗？删除后将从本机移除音频和歌词缓存，不会影响服务器媒体库。</string>
+    <string name="delete_local_music_success">本地音乐已删除</string>
+    <string name="delete_local_music_failed">删除本地音乐失败</string>
     <string name="action_delete_playlist">删除歌单</string>
     <string name="delete_playlist_confirm_title">删除歌单</string>
     <string name="delete_playlist_confirm_message">确定删除“%1$s”吗？删除后将从服务器媒体库中移除。</string>

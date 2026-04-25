@@ -121,7 +121,12 @@ class MusicLibraryScreenController(
     }
 
     private fun openList(browseType: MusicBrowseType) {
-        AppNavigator.openMusicList(activity, connection, browseType)
+        AppNavigator.openMusicList(
+            activity,
+            connection,
+            browseType,
+            libraryId = MusicLibraryRepository.currentState().currentLibraryId
+        )
     }
 
     private fun showLibraryPicker() {

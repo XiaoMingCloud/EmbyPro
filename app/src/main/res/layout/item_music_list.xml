@@ -62,11 +62,6 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
-        <ImageView
-            android:id="@+id/musicListActionIcon"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:tint="@color/music_library_accent" />
     </LinearLayout>
 
 </com.google.android.material.card.MaterialCardView>

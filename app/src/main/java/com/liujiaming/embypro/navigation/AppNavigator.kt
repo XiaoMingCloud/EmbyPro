@@ -103,12 +103,14 @@ object AppNavigator {
         activity: AppCompatActivity,
         connection: ServerConnection,
         browseType: MusicBrowseType,
+        libraryId: String? = null,
         containerId: String? = null,
         containerTitle: String? = null
     ) {
         activity.startActivity(
             Intent(activity, MusicListActivity::class.java)
                 .putExtra(MusicListActivity.EXTRA_BROWSE_TYPE, browseType.name)
+                .putExtra(MusicListActivity.EXTRA_LIBRARY_ID, libraryId)
                 .putExtra(MusicListActivity.EXTRA_CONTAINER_ID, containerId)
                 .putExtra(MusicListActivity.EXTRA_CONTAINER_TITLE, containerTitle)
                 .putServerConnection(connection)

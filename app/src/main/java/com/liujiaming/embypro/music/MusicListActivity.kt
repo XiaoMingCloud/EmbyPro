@@ -36,6 +36,7 @@ class MusicListActivity : AppCompatActivity() {
     private lateinit var connection: ServerConnection
     private lateinit var browseType: MusicBrowseType
 
+    private var intentLibraryId: String? = null
     private var containerId: String? = null
     private var containerTitle: String? = null
     private var lastLibraryId: String? = null
@@ -73,8 +74,12 @@ class MusicListActivity : AppCompatActivity() {
         browseType = MusicBrowseType.valueOf(
             intent.getStringExtra(EXTRA_BROWSE_TYPE).orEmpty().ifBlank { MusicBrowseType.SONGS.name }
         )
+        intentLibraryId = intent.getStringExtra(EXTRA_LIBRARY_ID)
         containerId = intent.getStringExtra(EXTRA_CONTAINER_ID)
         containerTitle = intent.getStringExtra(EXTRA_CONTAINER_TITLE)
+        if (intentLibraryId != null) {
+            lastLibraryId = intentLibraryId
+        }
 
         val topBar = findViewById<View>(R.id.musicListTopBar)
         recyclerView = findViewById(R.id.musicListRecyclerView)
@@ -140,7 +145,11 @@ class MusicListActivity : AppCompatActivity() {
                 }
             },
             canDeleteItem = { entry ->
-                !isLocalBrowse() && (entry.kind == MusicEntryKind.SONG || isPlaylistEntry(entry))
+                if (isLocalBrowse()) {
+                    entry.kind == MusicEntryKind.SONG
+                } else {
+                    entry.kind == MusicEntryKind.SONG || isPlaylistEntry(entry)
+                }
             }
         )
         recyclerView.layoutManager = LinearLayoutManager(this)
@@ -231,6 +240,7 @@ class MusicListActivity : AppCompatActivity() {
             activity = this,
             connection = connection,
             browseType = entry.browseType,
+            libraryId = lastLibraryId,
             containerId = entry.id,
             containerTitle = entry.title
         )
@@ -331,21 +341,25 @@ class MusicListActivity : AppCompatActivity() {
     private fun showDeleteMusicItemConfirmDialog(item: MusicListEntryUiModel, position: Int) {
         var shouldRestoreOnDismiss = true
         val dialogView = layoutInflater.inflate(R.layout.dialog_clear_played_state, null)
+        val deletingLocal = isLocalBrowse()
         val deletingPlaylist = isPlaylistEntry(item)
         dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogTitle)
             .text = getString(
-                if (deletingPlaylist) R.string.delete_playlist_confirm_title
+                if (deletingLocal) R.string.delete_local_music_confirm_title
+                else if (deletingPlaylist) R.string.delete_playlist_confirm_title
                 else R.string.delete_music_list_confirm_title
             )
         dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogMessage)
             .text = getString(
-                if (deletingPlaylist) R.string.delete_playlist_confirm_message
+                if (deletingLocal) R.string.delete_local_music_confirm_message
+                else if (deletingPlaylist) R.string.delete_playlist_confirm_message
                 else R.string.delete_music_list_confirm_message,
                 item.title
             )
         dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogConfirmButton)
             .text = getString(
-                if (deletingPlaylist) R.string.action_delete_playlist
+                if (deletingLocal) R.string.action_delete_local_music
+                else if (deletingPlaylist) R.string.action_delete_playlist
                 else R.string.action_delete_music
             )
 
@@ -379,18 +393,26 @@ class MusicListActivity : AppCompatActivity() {
     private fun deleteMusicItem(item: MusicListEntryUiModel, position: Int) {
         if (deleteRequestInFlight) return
         deleteRequestInFlight = true
+        val deletingLocal = isLocalBrowse()
         val deletingPlaylist = isPlaylistEntry(item)
 
         AppExecutors.io.execute {
-            val result = mediaRepository.deleteItem(connection, item.id)
+            val result = if (deletingLocal) {
+                runCatching { offlineCache.remove(connection, item.id) }
+            } else {
+                mediaRepository.deleteItem(connection, item.id)
+            }
             runOnUiThread {
                 deleteRequestInFlight = false
                 result.onSuccess {
-                    offlineCache.remove(connection, item.id)
                     adapter.removeItemAt(position)
                     Toast.makeText(
                         this,
-                        getString(if (deletingPlaylist) R.string.delete_playlist_success else R.string.delete_music_success),
+                        getString(
+                            if (deletingLocal) R.string.delete_local_music_success
+                            else if (deletingPlaylist) R.string.delete_playlist_success
+                            else R.string.delete_music_success
+                        ),
                         Toast.LENGTH_SHORT
                     ).show()
                     if (items.isEmpty()) {
@@ -404,7 +426,9 @@ class MusicListActivity : AppCompatActivity() {
                         this,
                         userFriendlyErrorMessage(
                             error,
-                            if (deletingPlaylist) R.string.delete_playlist_failed else R.string.delete_music_failed
+                            if (deletingLocal) R.string.delete_local_music_failed
+                            else if (deletingPlaylist) R.string.delete_playlist_failed
+                            else R.string.delete_music_failed
                         ),
                         Toast.LENGTH_SHORT
                     ).show()
@@ -419,7 +443,11 @@ class MusicListActivity : AppCompatActivity() {
         showLoading()
 
         AppExecutors.io.execute {
-            val result = offlineCache.buildLocalPage(connection, query)
+            val result = offlineCache.buildLocalPage(
+                connection = connection,
+                libraryId = intentLibraryId ?: lastLibraryId,
+                query = query
+            )
             runOnUiThread {
                 isLoadingPage = false
                 result.onSuccess { page ->
@@ -539,6 +567,7 @@ class MusicListActivity : AppCompatActivity() {
     
     companion object {
         const val EXTRA_BROWSE_TYPE = "extra_browse_type"
+        const val EXTRA_LIBRARY_ID = "extra_library_id"
         const val EXTRA_CONTAINER_ID = "extra_container_id"
         const val EXTRA_CONTAINER_TITLE = "extra_container_title"
     }

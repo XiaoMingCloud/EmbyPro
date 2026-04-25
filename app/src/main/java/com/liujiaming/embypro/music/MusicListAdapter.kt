@@ -67,7 +67,6 @@ class MusicListAdapter(
         private val titleView: TextView = itemView.findViewById(R.id.musicListTitle)
         private val subtitleView: TextView = itemView.findViewById(R.id.musicListSubtitle)
         private val detailView: TextView = itemView.findViewById(R.id.musicListDetail)
-        private val actionIconView: ImageView = itemView.findViewById(R.id.musicListActionIcon)
 
         /**
          * Binds music entry data to the view.
@@ -92,13 +91,6 @@ class MusicListAdapter(
             detailView.text = item.detail
             detailView.visibility = if (item.detail.isBlank()) View.GONE else View.VISIBLE
 
-            actionIconView.setImageResource(
-                if (item.kind == MusicEntryKind.SONG) {
-                    android.R.drawable.ic_media_play
-                } else {
-                    android.R.drawable.ic_media_next
-                }
-            )
             itemView.setDebouncedClickListener { onItemClick(item) }
         }
 

@@ -23,11 +23,13 @@ class MusicOfflineCache(context: Context) {
 
     fun buildLocalPage(
         connection: ServerConnection,
+        libraryId: String? = null,
         query: String = ""
     ): Result<MusicListPageUiModel> = runCatching {
         val entries = synchronized(lock) {
             readEntriesLocked()
                 .filter { it.baseUrl == connection.baseUrl && it.userId == connection.userId }
+                .filter { libraryId.isNullOrBlank() || it.libraryId == libraryId }
                 .filter {
                     query.isBlank() || it.title.contains(query, ignoreCase = true) ||
                         it.subtitle.contains(query, ignoreCase = true)
