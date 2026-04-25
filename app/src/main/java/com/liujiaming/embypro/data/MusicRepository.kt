@@ -69,6 +69,18 @@ class MusicRepository(context: Context) {
     }
 
     /**
+     * Fetches favorite audio items within the selected music library.
+     */
+    fun fetchFavoriteAudioItems(connection: ServerConnection, libraryId: String): Result<MusicListPageUiModel> {
+        return embyApiService.fetchFavoriteAudioItemsPage(
+            baseUrl = connection.baseUrl,
+            userId = connection.userId,
+            accessToken = connection.accessToken,
+            libraryId = libraryId
+        )
+    }
+
+    /**
      * Searches for music items matching the query within a library.
      */
     fun searchMusicItems(

@@ -20,6 +20,7 @@ import java.util.concurrent.ExecutorService
 class FavoriteItemsActivity : AppCompatActivity() {
     private val networkExecutor: ExecutorService = AppExecutors.io
     private val mediaRepository by lazy { MediaRepository(this) }
+    private val musicRepository by lazy { MusicRepository(this) }
     private val sessionStore by lazy { ServerSessionStore(this) }
     private val serverRepository by lazy { ServerRepository(this) }
 
@@ -29,10 +30,13 @@ class FavoriteItemsActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var emptyText: TextView
     private lateinit var topBar: View
+    private lateinit var videoButton: MaterialButton
+    private lateinit var audioButton: MaterialButton
 
     private val items = mutableListOf<PlaybackHistoryItemUiModel>()
     private lateinit var adapter: PlaybackHistoryAdapter
 
+    private var currentCategory = PlaybackHistoryCategory.VIDEO
     private var isLoading = false
     private var totalCount = Int.MAX_VALUE
     private var startIndex = 0
@@ -50,13 +54,17 @@ class FavoriteItemsActivity : AppCompatActivity() {
         recyclerView = findViewById(R.id.favoriteItemsRecyclerView)
         progressBar = findViewById(R.id.favoriteItemsProgressBar)
         emptyText = findViewById(R.id.favoriteItemsEmptyText)
+        videoButton = findViewById(R.id.favoriteItemsVideoButton)
+        audioButton = findViewById(R.id.favoriteItemsAudioButton)
 
         findViewById<ImageButton>(R.id.favoriteItemsBackButton).setDebouncedClickListener { finish() }
+        videoButton.setDebouncedClickListener { switchCategory(PlaybackHistoryCategory.VIDEO) }
+        audioButton.setDebouncedClickListener { switchCategory(PlaybackHistoryCategory.AUDIO) }
 
         adapter = PlaybackHistoryAdapter(
             items = items,
             accessToken = connection.accessToken,
-            onItemClick = { item -> openVideoDirectly(item) },
+            onItemClick = { item -> openFavoriteItem(item) },
             onItemLongClick = { },
             onFavoriteClick = { item -> removeFavorite(item) }
         )
@@ -75,7 +83,25 @@ class FavoriteItemsActivity : AppCompatActivity() {
 
         EdgeToEdgeHelper.applyInsets(topBar, applyTop = true)
         EdgeToEdgeHelper.applyInsets(recyclerView, applyBottom = true)
+        updateCategorySelection()
         loadFirstPage()
+    }
+
+    private fun switchCategory(category: PlaybackHistoryCategory) {
+        if (currentCategory == category) return
+        currentCategory = category
+        updateCategorySelection()
+        loadFirstPage()
+    }
+
+    private fun updateCategorySelection() {
+        updateCategoryButton(videoButton, currentCategory == PlaybackHistoryCategory.VIDEO)
+        updateCategoryButton(audioButton, currentCategory == PlaybackHistoryCategory.AUDIO)
+    }
+
+    private fun updateCategoryButton(button: MaterialButton, selected: Boolean) {
+        button.isChecked = selected
+        button.alpha = if (selected) 1f else 0.72f
     }
 
     /**
@@ -103,7 +129,37 @@ class FavoriteItemsActivity : AppCompatActivity() {
         }
 
         networkExecutor.execute {
-            val result = mediaRepository.fetchFavoriteItemsPage(connection, startIndex, PAGE_SIZE)
+            val result = if (currentCategory == PlaybackHistoryCategory.AUDIO) {
+                val currentLibraryId = MusicLibraryRepository.currentState().currentLibraryId
+                if (currentLibraryId.isNullOrBlank()) {
+                    Result.success(
+                        FavoriteItemsPageUiModel(
+                            items = emptyList(),
+                            totalCount = 0
+                        )
+                    )
+                } else {
+                    musicRepository.fetchFavoriteAudioItems(connection, currentLibraryId)
+                        .map { page ->
+                            FavoriteItemsPageUiModel(
+                                items = page.items.map { entry ->
+                                    PlaybackHistoryItemUiModel(
+                                        itemId = entry.id,
+                                        title = entry.title,
+                                        libraryName = entry.subtitle,
+                                        playedTimeLabel = "",
+                                        imageUrl = entry.imageUrl,
+                                        itemType = entry.itemType,
+                                        runtimeTicks = entry.runtimeTicks
+                                    )
+                                },
+                                totalCount = page.totalCount
+                            )
+                        }
+                }
+            } else {
+                mediaRepository.fetchFavoriteItemsPage(connection, startIndex, PAGE_SIZE)
+            }
             runOnUiThread {
                 isLoading = false
                 progressBar.visibility = View.GONE
@@ -141,12 +197,38 @@ class FavoriteItemsActivity : AppCompatActivity() {
      * Opens video player directly for a favorite item.
      * @param item The playback history item to play
      */
+    private fun openFavoriteItem(item: PlaybackHistoryItemUiModel) {
+        if (currentCategory == PlaybackHistoryCategory.AUDIO) {
+            openAudioDirectly(item)
+        } else {
+            openVideoDirectly(item)
+        }
+    }
+
     private fun openVideoDirectly(item: PlaybackHistoryItemUiModel) {
         playVideoDirectly(
             connection = connection,
             mediaRepository = mediaRepository,
             itemId = item.itemId,
             queue = AppNavigator.buildHistoryVideoQueue(items, item.itemId)
+        )
+    }
+
+    private fun openAudioDirectly(item: PlaybackHistoryItemUiModel) {
+        val audioItems = items.filter { it.itemType == "Audio" }
+        val queueIndex = audioItems.indexOfFirst { it.itemId == item.itemId }
+        if (queueIndex < 0) return
+        val currentLibraryId = MusicLibraryRepository.currentState().currentLibraryId
+        AppNavigator.openMusicPlayer(
+            activity = this,
+            connection = connection,
+            libraryId = currentLibraryId,
+            queueTitle = getString(R.string.music_library_entry_favorites),
+            queueIds = ArrayList(audioItems.map { it.itemId }),
+            queueTitles = ArrayList(audioItems.map { it.title }),
+            queueSubtitles = ArrayList(audioItems.map { it.libraryName }),
+            queueImages = ArrayList(audioItems.map { it.imageUrl.orEmpty() }),
+            queueIndex = queueIndex
         )
     }
 

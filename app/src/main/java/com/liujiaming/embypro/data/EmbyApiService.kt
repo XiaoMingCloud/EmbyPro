@@ -2339,6 +2339,24 @@ class EmbyApiService(
         }
     }
 
+    fun fetchFavoriteAudioItemsPage(
+        baseUrl: String,
+        userId: String,
+        accessToken: String,
+        libraryId: String
+    ): Result<MusicListPageUiModel> {
+        return runCatching {
+            fetchFavoriteMusicSongsPage(
+                baseUrl = baseUrl,
+                userId = userId,
+                accessToken = accessToken,
+                libraryId = libraryId,
+                pageTitle = context.getString(R.string.music_library_entry_favorites),
+                pageSubtitle = context.getString(R.string.music_list_favorites_subtitle)
+            )
+        }
+    }
+
     private fun appendQueryParameter(url: String, key: String, value: String): String {
         if (url.isBlank() || value.isBlank()) return url
         if (url.contains("$key=")) return url
