@@ -314,4 +314,7 @@
     <string name="music_player_lyrics_no_lyrics">暂无歌词</string>
     <string name="music_player_lyrics_loading">歌词加载中…</string>
     <string name="music_player_lyrics_embedded">此音频包含内嵌歌词，暂不支持解析</string>
+    <string name="music_player_mode_order">顺序播放</string>
+    <string name="music_player_mode_repeat_one">单曲循环</string>
+    <string name="music_player_mode_shuffle">随机播放</string>
 </resources>

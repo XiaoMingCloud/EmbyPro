@@ -57,6 +57,8 @@ class MusicPlayerActivity : AppCompatActivity() {
     private lateinit var playPauseButton: ImageButton
     private lateinit var previousButton: ImageButton
     private lateinit var nextButton: ImageButton
+    private lateinit var playbackModeContainer: View
+    private lateinit var playbackModeButton: ImageButton
     private lateinit var favoriteButton: ImageButton
     private lateinit var cacheButton: ImageButton
     private lateinit var deleteButton: ImageButton
@@ -69,6 +71,7 @@ class MusicPlayerActivity : AppCompatActivity() {
     private lateinit var lyricsButton: ImageButton
     private lateinit var songTabButton: TextView
     private lateinit var lyricsTabButton: TextView
+    private lateinit var playbackModeTextView: TextView
     private lateinit var songPage: LinearLayout
     private lateinit var lyricsPage: LinearLayout
 
@@ -79,8 +82,12 @@ class MusicPlayerActivity : AppCompatActivity() {
     private var queueTitles: ArrayList<String> = arrayListOf()
     private var queueSubtitles: ArrayList<String> = arrayListOf()
     private var queueImages: ArrayList<String> = arrayListOf()
+    private var playlistIds: ArrayList<String> = arrayListOf()
+    private var playlistTitles: ArrayList<String> = arrayListOf()
+    private var playlistSubtitles: ArrayList<String> = arrayListOf()
+    private var playlistImages: ArrayList<String> = arrayListOf()
     private var currentIndex: Int = 0
-    private var isShuffleModeEnabled: Boolean = false
+    private var playbackMode: MusicPlaybackMode = MusicPlaybackMode.ORDER
 
     private var player: Player? = null
     private var playbackService: MusicPlaybackService? = null
@@ -215,19 +222,19 @@ class MusicPlayerActivity : AppCompatActivity() {
         queueTitles = intent.getStringArrayListExtra(EXTRA_QUEUE_TITLES) ?: arrayListOf()
         queueSubtitles = intent.getStringArrayListExtra(EXTRA_QUEUE_SUBTITLES) ?: arrayListOf()
         queueImages = intent.getStringArrayListExtra(EXTRA_QUEUE_IMAGES) ?: arrayListOf()
+        playlistIds = intent.getStringArrayListExtra(EXTRA_PLAYLIST_IDS) ?: ArrayList(queueIds)
+        playlistTitles = intent.getStringArrayListExtra(EXTRA_PLAYLIST_TITLES) ?: ArrayList(queueTitles)
+        playlistSubtitles = intent.getStringArrayListExtra(EXTRA_PLAYLIST_SUBTITLES) ?: ArrayList(queueSubtitles)
+        playlistImages = intent.getStringArrayListExtra(EXTRA_PLAYLIST_IMAGES) ?: ArrayList(queueImages)
         currentIndex = intent.getIntExtra(EXTRA_QUEUE_INDEX, 0).coerceIn(0, (queueIds.lastIndex).coerceAtLeast(0))
-        isShuffleModeEnabled = intent.getBooleanExtra(EXTRA_SHUFFLE_MODE, false)
-        MusicPlayerSessionStore.record(
-            connection = connection,
-            libraryId = libraryId,
-            queueTitle = queueTitle,
-            queueIds = queueIds,
-            queueTitles = queueTitles,
-            queueSubtitles = queueSubtitles,
-            queueImages = queueImages,
-            queueIndex = currentIndex,
-            shuffleModeEnabled = isShuffleModeEnabled
-        )
+        playbackMode = intent.getStringExtra(EXTRA_PLAYBACK_MODE)
+            ?.let { runCatching { MusicPlaybackMode.valueOf(it) }.getOrNull() }
+            ?: if (intent.getBooleanExtra(EXTRA_SHUFFLE_MODE, false)) {
+                MusicPlaybackMode.SHUFFLE
+            } else {
+                MusicPlaybackMode.ORDER
+            }
+        recordPlayerSession()
 
         if (queueIds.isEmpty()) {
             Toast.makeText(this, getString(R.string.server_data_missing), Toast.LENGTH_SHORT).show()
@@ -242,6 +249,8 @@ class MusicPlayerActivity : AppCompatActivity() {
         playPauseButton = findViewById(R.id.musicPlayerPlayPauseButton)
         previousButton = findViewById(R.id.musicPlayerPreviousButton)
         nextButton = findViewById(R.id.musicPlayerNextButton)
+        playbackModeContainer = findViewById(R.id.musicPlayerModeContainer)
+        playbackModeButton = findViewById(R.id.musicPlayerModeButton)
         favoriteButton = findViewById(R.id.musicPlayerFavoriteButton)
         cacheButton = findViewById(R.id.musicPlayerCacheButton)
         deleteButton = findViewById(R.id.musicPlayerDeleteButton)
@@ -250,6 +259,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         lyricsButton = findViewById(R.id.musicPlayerLyricsButton)
         songTabButton = findViewById(R.id.musicPlayerSongTabButton)
         lyricsTabButton = findViewById(R.id.musicPlayerLyricsTabButton)
+        playbackModeTextView = findViewById(R.id.musicPlayerModeText)
         songPage = findViewById(R.id.musicPlayerSongPage)
         lyricsPage = findViewById(R.id.musicPlayerLyricsPage)
         elapsedTextView = findViewById(R.id.musicPlayerElapsedText)
@@ -259,8 +269,9 @@ class MusicPlayerActivity : AppCompatActivity() {
 
         findViewById<ImageButton>(R.id.musicPlayerBackButton).setDebouncedClickListener { finish() }
         playPauseButton.setDebouncedClickListener { togglePlayPause() }
-        previousButton.setDebouncedClickListener { switchToIndex(currentIndex - 1, true) }
-        nextButton.setDebouncedClickListener { switchToIndex(currentIndex + 1, true) }
+        previousButton.setDebouncedClickListener { playPrevious() }
+        nextButton.setDebouncedClickListener { playNext() }
+        playbackModeContainer.setDebouncedClickListener { cyclePlaybackMode() }
         favoriteButton.setDebouncedClickListener { toggleFavorite() }
         cacheButton.setDebouncedClickListener { triggerProactiveCache() }
         deleteButton.setDebouncedClickListener { showDeleteMusicConfirmDialog() }
@@ -271,6 +282,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         queueTitleTextView.text = queueTitle
         updateFavoriteIcon()
         applyBottomControlButtonTint()
+        updatePlaybackModeUi()
         switchContentPage(MusicPlayerContentPage.SONG)
 
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -333,9 +345,9 @@ class MusicPlayerActivity : AppCompatActivity() {
                     // Require minimum 120px horizontal movement and horizontal dominance
                     if (absDiffX > 120 && absDiffX > absDiffY * 2) {
                         if (diffX < 0) {
-                            switchToIndex(currentIndex + 1, true)
+                            playNext()
                         } else {
-                            switchToIndex(currentIndex - 1, true)
+                            playPrevious()
                         }
                     }
                 }
@@ -359,6 +371,136 @@ class MusicPlayerActivity : AppCompatActivity() {
         }
         mainHandler.removeCallbacks(progressUpdater)
         player = null
+    }
+
+    private fun recordPlayerSession() {
+        MusicPlayerSessionStore.record(
+            connection = connection,
+            libraryId = libraryId,
+            queueTitle = queueTitle,
+            queueIds = queueIds,
+            queueTitles = queueTitles,
+            queueSubtitles = queueSubtitles,
+            queueImages = queueImages,
+            queueIndex = currentIndex,
+            playbackMode = playbackMode,
+            playlistIds = playlistIds,
+            playlistTitles = playlistTitles,
+            playlistSubtitles = playlistSubtitles,
+            playlistImages = playlistImages
+        )
+    }
+
+    private fun cyclePlaybackMode() {
+        playbackMode = when (playbackMode) {
+            MusicPlaybackMode.ORDER -> MusicPlaybackMode.REPEAT_ONE
+            MusicPlaybackMode.REPEAT_ONE -> MusicPlaybackMode.SHUFFLE
+            MusicPlaybackMode.SHUFFLE -> MusicPlaybackMode.ORDER
+        }
+        val currentItemId = currentPlaybackItemId.ifBlank { queueIds.getOrNull(currentIndex).orEmpty() }
+        when (playbackMode) {
+            MusicPlaybackMode.ORDER -> restorePlaylistOrder(currentItemId)
+            MusicPlaybackMode.SHUFFLE -> shuffleQueueKeepingCurrent(currentItemId)
+            MusicPlaybackMode.REPEAT_ONE -> Unit
+        }
+        updatePlaybackModeUi()
+        syncControls()
+        recordPlayerSession()
+        Toast.makeText(this, currentPlaybackModeLabel(), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun restorePlaylistOrder(currentItemId: String) {
+        queueIds = ArrayList(playlistIds)
+        queueTitles = ArrayList(playlistTitles)
+        queueSubtitles = ArrayList(playlistSubtitles)
+        queueImages = ArrayList(playlistImages)
+        currentIndex = if (currentItemId.isNotBlank()) {
+            queueIds.indexOf(currentItemId).takeIf { it >= 0 } ?: currentIndex.coerceIn(0, (queueIds.lastIndex).coerceAtLeast(0))
+        } else {
+            currentIndex.coerceIn(0, (queueIds.lastIndex).coerceAtLeast(0))
+        }
+    }
+
+    private fun shuffleQueueKeepingCurrent(currentItemId: String) {
+        val entries = playlistIds.indices.map { index ->
+            MusicQueueEntry(
+                id = playlistIds[index],
+                title = playlistTitles.getOrNull(index).orEmpty(),
+                subtitle = playlistSubtitles.getOrNull(index).orEmpty(),
+                imageUrl = playlistImages.getOrNull(index).orEmpty()
+            )
+        }.toMutableList()
+        if (entries.isEmpty()) return
+
+        val anchor = entries.firstOrNull { it.id == currentItemId }
+        if (anchor != null) {
+            entries.remove(anchor)
+            entries.shuffle()
+            entries.add(0, anchor)
+            currentIndex = 0
+        } else {
+            entries.shuffle()
+            currentIndex = currentIndex.coerceIn(0, (entries.lastIndex).coerceAtLeast(0))
+        }
+
+        queueIds = ArrayList(entries.map { it.id })
+        queueTitles = ArrayList(entries.map { it.title })
+        queueSubtitles = ArrayList(entries.map { it.subtitle })
+        queueImages = ArrayList(entries.map { it.imageUrl })
+    }
+
+    private fun playPrevious() {
+        if (queueIds.size <= 1) {
+            syncControls()
+            return
+        }
+        if (currentIndex > 0) {
+            switchToIndex(currentIndex - 1, true)
+            return
+        }
+        switchToIndex(queueIds.lastIndex, true)
+    }
+
+    private fun playNext() {
+        if (queueIds.size <= 1) {
+            syncControls()
+            return
+        }
+        if (currentIndex < queueIds.lastIndex) {
+            switchToIndex(currentIndex + 1, true)
+            return
+        }
+        when (playbackMode) {
+            MusicPlaybackMode.SHUFFLE -> reshuffleQueueForContinuousPlay()
+            else -> switchToIndex(0, true)
+        }
+    }
+
+    private fun replayCurrentTrackFromStart() {
+        val currentPlayer = player ?: return
+        currentPlayer.seekTo(0L)
+        currentPlayer.playWhenReady = true
+        currentPlayer.play()
+        syncControls()
+    }
+
+    private fun updatePlaybackModeUi() {
+        val (iconRes, labelRes) = when (playbackMode) {
+            MusicPlaybackMode.ORDER -> R.drawable.ic_music_mode_order to R.string.music_player_mode_order
+            MusicPlaybackMode.REPEAT_ONE -> R.drawable.ic_music_mode_repeat_one to R.string.music_player_mode_repeat_one
+            MusicPlaybackMode.SHUFFLE -> R.drawable.ic_music_mode_shuffle to R.string.music_player_mode_shuffle
+        }
+        playbackModeButton.setImageResource(iconRes)
+        playbackModeButton.contentDescription = getString(labelRes)
+        playbackModeTextView.text = getString(labelRes)
+    }
+
+    private fun currentPlaybackModeLabel(): String {
+        return when (playbackMode) {
+            MusicPlaybackMode.ORDER -> getString(R.string.music_player_mode_order)
+            MusicPlaybackMode.REPEAT_ONE -> getString(R.string.music_player_mode_repeat_one)
+            MusicPlaybackMode.SHUFFLE -> getString(R.string.music_player_mode_shuffle)
+        }
     }
 
     private fun switchToIndex(index: Int, playWhenReady: Boolean, resetPosition: Boolean = true) {
@@ -631,52 +773,55 @@ class MusicPlayerActivity : AppCompatActivity() {
         if (removedIndex in queueImages.indices) {
             queueImages.removeAt(removedIndex)
         }
+        val playlistRemovedIndex = playlistIds.indexOf(itemId)
+        if (playlistRemovedIndex in playlistIds.indices) {
+            playlistIds.removeAt(playlistRemovedIndex)
+        }
+        if (playlistRemovedIndex in playlistTitles.indices) {
+            playlistTitles.removeAt(playlistRemovedIndex)
+        }
+        if (playlistRemovedIndex in playlistSubtitles.indices) {
+            playlistSubtitles.removeAt(playlistRemovedIndex)
+        }
+        if (playlistRemovedIndex in playlistImages.indices) {
+            playlistImages.removeAt(playlistRemovedIndex)
+        }
 
         currentPlaybackItemId = ""
         currentPlaybackPositionMs = 0L
 
         if (queueIds.isEmpty()) {
-            MusicPlayerSessionStore.record(
-                connection = connection,
-                libraryId = libraryId,
-                queueTitle = queueTitle,
-                queueIds = queueIds,
-                queueTitles = queueTitles,
-                queueSubtitles = queueSubtitles,
-                queueImages = queueImages,
-                queueIndex = 0,
-                shuffleModeEnabled = isShuffleModeEnabled
-            )
+            recordPlayerSession()
             playbackService?.stopPlaybackAndSelf()
             finish()
             return
         }
 
         currentIndex = removedIndex.coerceAtMost(queueIds.lastIndex)
-        MusicPlayerSessionStore.record(
-            connection = connection,
-            libraryId = libraryId,
-            queueTitle = queueTitle,
-            queueIds = queueIds,
-            queueTitles = queueTitles,
-            queueSubtitles = queueSubtitles,
-            queueImages = queueImages,
-            queueIndex = currentIndex,
-            shuffleModeEnabled = isShuffleModeEnabled
-        )
+        recordPlayerSession()
         switchToIndex(currentIndex, playWhenReady = true, resetPosition = true)
     }
 
     private fun handleQueuePlaybackEnded() {
-        if (currentIndex < queueIds.lastIndex) {
-            switchToIndex(currentIndex + 1, true)
-            return
+        when (playbackMode) {
+            MusicPlaybackMode.REPEAT_ONE -> replayCurrentTrackFromStart()
+            MusicPlaybackMode.SHUFFLE -> {
+                if (currentIndex < queueIds.lastIndex) {
+                    switchToIndex(currentIndex + 1, true)
+                } else {
+                    reshuffleQueueForContinuousPlay()
+                }
+            }
+            MusicPlaybackMode.ORDER -> {
+                if (currentIndex < queueIds.lastIndex) {
+                    switchToIndex(currentIndex + 1, true)
+                } else if (queueIds.size > 1) {
+                    switchToIndex(0, true)
+                } else {
+                    replayCurrentTrackFromStart()
+                }
+            }
         }
-        if (isShuffleModeEnabled) {
-            reshuffleQueueForContinuousPlay()
-            return
-        }
-        syncControls()
     }
 
     private fun reshuffleQueueForContinuousPlay() {
@@ -704,17 +849,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         queueSubtitles = ArrayList(shuffledEntries.map { it.subtitle })
         queueImages = ArrayList(shuffledEntries.map { it.imageUrl })
         currentIndex = 0
-        MusicPlayerSessionStore.record(
-            connection = connection,
-            libraryId = libraryId,
-            queueTitle = queueTitle,
-            queueIds = queueIds,
-            queueTitles = queueTitles,
-            queueSubtitles = queueSubtitles,
-            queueImages = queueImages,
-            queueIndex = currentIndex,
-            shuffleModeEnabled = true
-        )
+        recordPlayerSession()
         switchToIndex(currentIndex, playWhenReady = true, resetPosition = true)
     }
 
@@ -1009,8 +1144,9 @@ class MusicPlayerActivity : AppCompatActivity() {
             if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         )
         applyBottomControlButtonTint()
-        previousButton.isEnabled = currentIndex > 0
-        nextButton.isEnabled = currentIndex < queueIds.lastIndex
+        previousButton.isEnabled = queueIds.size > 1
+        nextButton.isEnabled = queueIds.size > 1
+        updatePlaybackModeUi()
         if (currentPlayer != null && !isSeekingFromUser) {
             val duration = currentPlayer.duration.takeIf { it > 0 } ?: 0L
             val position = currentPlayer.currentPosition.coerceAtLeast(0L)
@@ -1107,6 +1243,11 @@ class MusicPlayerActivity : AppCompatActivity() {
         const val EXTRA_QUEUE_SUBTITLES = "extra_queue_subtitles"
         const val EXTRA_QUEUE_IMAGES = "extra_queue_images"
         const val EXTRA_QUEUE_INDEX = "extra_queue_index"
+        const val EXTRA_PLAYBACK_MODE = "extra_playback_mode"
+        const val EXTRA_PLAYLIST_IDS = "extra_playlist_ids"
+        const val EXTRA_PLAYLIST_TITLES = "extra_playlist_titles"
+        const val EXTRA_PLAYLIST_SUBTITLES = "extra_playlist_subtitles"
+        const val EXTRA_PLAYLIST_IMAGES = "extra_playlist_images"
         const val EXTRA_SHUFFLE_MODE = "extra_shuffle_mode"
 
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 2001

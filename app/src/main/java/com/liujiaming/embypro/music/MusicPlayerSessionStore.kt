@@ -31,7 +31,11 @@ object MusicPlayerSessionStore {
         queueSubtitles: ArrayList<String>,
         queueImages: ArrayList<String>,
         queueIndex: Int,
-        shuffleModeEnabled: Boolean = false
+        playbackMode: MusicPlaybackMode = MusicPlaybackMode.ORDER,
+        playlistIds: ArrayList<String> = ArrayList(queueIds),
+        playlistTitles: ArrayList<String> = ArrayList(queueTitles),
+        playlistSubtitles: ArrayList<String> = ArrayList(queueSubtitles),
+        playlistImages: ArrayList<String> = ArrayList(queueImages)
     ) {
         launchState = MusicPlayerLaunchState(
             connection = connection,
@@ -42,7 +46,11 @@ object MusicPlayerSessionStore {
             queueSubtitles = ArrayList(queueSubtitles),
             queueImages = ArrayList(queueImages),
             queueIndex = queueIndex.coerceIn(0, (queueIds.lastIndex).coerceAtLeast(0)),
-            shuffleModeEnabled = shuffleModeEnabled
+            playbackMode = playbackMode,
+            playlistIds = ArrayList(playlistIds),
+            playlistTitles = ArrayList(playlistTitles),
+            playlistSubtitles = ArrayList(playlistSubtitles),
+            playlistImages = ArrayList(playlistImages)
         )
     }
 
@@ -79,7 +87,11 @@ object MusicPlayerSessionStore {
             .putStringArrayListExtra(MusicPlayerActivity.EXTRA_QUEUE_SUBTITLES, ArrayList(state.queueSubtitles))
             .putStringArrayListExtra(MusicPlayerActivity.EXTRA_QUEUE_IMAGES, ArrayList(state.queueImages))
             .putExtra(MusicPlayerActivity.EXTRA_QUEUE_INDEX, state.queueIndex)
-            .putExtra(MusicPlayerActivity.EXTRA_SHUFFLE_MODE, state.shuffleModeEnabled)
+            .putExtra(MusicPlayerActivity.EXTRA_PLAYBACK_MODE, state.playbackMode.name)
+            .putStringArrayListExtra(MusicPlayerActivity.EXTRA_PLAYLIST_IDS, ArrayList(state.playlistIds))
+            .putStringArrayListExtra(MusicPlayerActivity.EXTRA_PLAYLIST_TITLES, ArrayList(state.playlistTitles))
+            .putStringArrayListExtra(MusicPlayerActivity.EXTRA_PLAYLIST_SUBTITLES, ArrayList(state.playlistSubtitles))
+            .putStringArrayListExtra(MusicPlayerActivity.EXTRA_PLAYLIST_IMAGES, ArrayList(state.playlistImages))
     }
 
     /**
@@ -94,6 +106,10 @@ object MusicPlayerSessionStore {
         val queueSubtitles: ArrayList<String>,
         val queueImages: ArrayList<String>,
         val queueIndex: Int,
-        val shuffleModeEnabled: Boolean
+        val playbackMode: MusicPlaybackMode,
+        val playlistIds: ArrayList<String>,
+        val playlistTitles: ArrayList<String>,
+        val playlistSubtitles: ArrayList<String>,
+        val playlistImages: ArrayList<String>
     )
 }

@@ -130,7 +130,11 @@ object AppNavigator {
         queueSubtitles: ArrayList<String>,
         queueImages: ArrayList<String>,
         queueIndex: Int,
-        shuffleModeEnabled: Boolean = false
+        playbackMode: MusicPlaybackMode = MusicPlaybackMode.ORDER,
+        playlistIds: ArrayList<String> = ArrayList(queueIds),
+        playlistTitles: ArrayList<String> = ArrayList(queueTitles),
+        playlistSubtitles: ArrayList<String> = ArrayList(queueSubtitles),
+        playlistImages: ArrayList<String> = ArrayList(queueImages)
     ) {
         activity.startActivity(
             Intent(activity, MusicPlayerActivity::class.java)
@@ -142,7 +146,11 @@ object AppNavigator {
                 .putStringArrayListExtra(MusicPlayerActivity.EXTRA_QUEUE_SUBTITLES, queueSubtitles)
                 .putStringArrayListExtra(MusicPlayerActivity.EXTRA_QUEUE_IMAGES, queueImages)
                 .putExtra(MusicPlayerActivity.EXTRA_QUEUE_INDEX, queueIndex)
-                .putExtra(MusicPlayerActivity.EXTRA_SHUFFLE_MODE, shuffleModeEnabled)
+                .putExtra(MusicPlayerActivity.EXTRA_PLAYBACK_MODE, playbackMode.name)
+                .putStringArrayListExtra(MusicPlayerActivity.EXTRA_PLAYLIST_IDS, playlistIds)
+                .putStringArrayListExtra(MusicPlayerActivity.EXTRA_PLAYLIST_TITLES, playlistTitles)
+                .putStringArrayListExtra(MusicPlayerActivity.EXTRA_PLAYLIST_SUBTITLES, playlistSubtitles)
+                .putStringArrayListExtra(MusicPlayerActivity.EXTRA_PLAYLIST_IMAGES, playlistImages)
         )
     }
 

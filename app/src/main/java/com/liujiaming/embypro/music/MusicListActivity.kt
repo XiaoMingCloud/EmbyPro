@@ -292,7 +292,11 @@ class MusicListActivity : AppCompatActivity() {
             queueSubtitles = ArrayList(shuffledQueue.map { it.subtitle }),
             queueImages = ArrayList(shuffledQueue.map { it.imageUrl.orEmpty() }),
             queueIndex = 0,
-            shuffleModeEnabled = true
+            playbackMode = MusicPlaybackMode.SHUFFLE,
+            playlistIds = ArrayList(queue.map { it.id }),
+            playlistTitles = ArrayList(queue.map { it.title }),
+            playlistSubtitles = ArrayList(queue.map { it.subtitle }),
+            playlistImages = ArrayList(queue.map { it.imageUrl.orEmpty() })
         )
     }
 

@@ -310,6 +310,48 @@
                     android:src="@android:drawable/ic_media_next"
                     android:tint="@android:color/white" />
             </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/musicPlayerModeContainer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="14dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:minHeight="44dp"
+                android:orientation="horizontal"
+                android:paddingStart="10dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="2dp">
+
+                <ImageButton
+                    android:id="@+id/musicPlayerModeButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@android:color/transparent"
+                    android:clickable="false"
+                    android:focusable="false"
+                    android:contentDescription="@string/music_player_mode_order"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_music_mode_order"
+                    android:tint="@android:color/white" />
+
+                <TextView
+                    android:id="@+id/musicPlayerModeText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:clickable="false"
+                    android:focusable="false"
+                    android:text="@string/music_player_mode_order"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 
