@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Glass card background for video detail info section -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="24dp" />
+    <gradient
+        android:angle="270"
+        android:startColor="#D9FFFFFF"
+        android:centerColor="#C2F8F6FF"
+        android:endColor="#A8F0ECFF" />
+    <stroke
+        android:width="1dp"
+        android:color="#99FFFFFF" />
+</shape>

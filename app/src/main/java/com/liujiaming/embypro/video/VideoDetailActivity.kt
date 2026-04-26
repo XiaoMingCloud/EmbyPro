@@ -115,7 +115,7 @@ class VideoDetailActivity : AppCompatActivity() {
         favoriteButton = findViewById(R.id.videoFavoriteButton)
         playButton = findViewById(R.id.videoPlayButton)
         actionMoreButton = findViewById(R.id.videoActionMoreButton)
-        val topBar = findViewById<ImageButton>(R.id.videoBackButton).parent as View
+        val topBar = findViewById<LinearLayout>(R.id.videoTopBar)
 
         findViewById<ImageButton>(R.id.videoBackButton).setDebouncedClickListener { finish() }
         findViewById<ImageButton>(R.id.videoMoreButton).setDebouncedClickListener {
