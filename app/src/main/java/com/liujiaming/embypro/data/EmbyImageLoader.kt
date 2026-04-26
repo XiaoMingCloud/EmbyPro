@@ -1,6 +1,7 @@
 package com.liujiaming.embypro
 
 import android.content.ContentResolver
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -47,68 +48,58 @@ object EmbyImageLoader {
         }
 
         imageView.tag = url
-        val cached = memoryCache.get(url)
-        if (cached != null) {
-            imageView.clearColorFilter()
-            imageView.background = null
-            imageView.setImageBitmap(cached)
-            onSuccess?.invoke(cached)
+        loadBitmap(imageView.context.applicationContext, url, token) { bitmap ->
+            if (imageView.tag != url) return@loadBitmap
+            if (bitmap != null) {
+                imageView.clearColorFilter()
+                imageView.background = null
+                imageView.setImageBitmap(bitmap)
+                onSuccess?.invoke(bitmap)
+            } else {
+                onFailure?.invoke()
+            }
+        }
+    }
+
+    fun loadBitmap(
+        context: Context,
+        url: String?,
+        token: String?,
+        onResult: (Bitmap?) -> Unit
+    ) {
+        if (url.isNullOrBlank()) {
+            onResult(null)
             return
         }
 
-        val diskCache = LocalMediaCache(imageView.context.applicationContext)
+        val cached = memoryCache.get(url)
+        if (cached != null) {
+            onResult(cached)
+            return
+        }
+
+        val appContext = context.applicationContext
+        val diskCache = LocalMediaCache(appContext)
         val diskBitmap = diskCache.readBitmap(url)
         if (diskBitmap != null) {
             memoryCache.put(url, diskBitmap)
-            imageView.clearColorFilter()
-            imageView.background = null
-            imageView.setImageBitmap(diskBitmap)
-            onSuccess?.invoke(diskBitmap)
+            onResult(diskBitmap)
             return
         }
 
         executor.execute {
-            val imageBytes = try {
-                val uri = Uri.parse(url)
-                if (isLocalUri(uri)) {
-                    imageView.context.contentResolver.openInputStream(uri)?.use { input ->
-                        input.readBytes()
-                    }
-                } else {
-                    val request = Request.Builder()
-                        .url(url)
-                        .apply {
-                            if (!token.isNullOrBlank()) {
-                                header("X-Emby-Token", token)
-                            }
-                        }
-                        .build()
-
-                    client.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) return@use null
-                        response.body?.bytes()
-                    }
-                }
-            } catch (_: Exception) {
-                null
-            }
+            val imageBytes = loadImageBytes(appContext, url, token)
             val bitmap = imageBytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
 
             mainHandler.post {
-                if (imageView.tag != url) return@post
                 if (bitmap != null) {
                     memoryCache.put(url, bitmap)
                     val uri = Uri.parse(url)
                     if (!isLocalUri(uri)) {
-                        imageBytes?.let { diskCache.writeBitmapBytes(url, it) }
+                        diskCache.writeBitmapBytes(url, imageBytes)
                     }
-                    imageView.clearColorFilter()
-                    imageView.background = null
-                    imageView.setImageBitmap(bitmap)
-                    onSuccess?.invoke(bitmap)
-                } else {
-                    onFailure?.invoke()
                 }
+                onResult(bitmap)
             }
         }
     }
@@ -122,6 +113,33 @@ object EmbyImageLoader {
             ContentResolver.SCHEME_FILE,
             ContentResolver.SCHEME_ANDROID_RESOURCE -> true
             else -> false
+        }
+    }
+
+    private fun loadImageBytes(context: Context, url: String, token: String?): ByteArray? {
+        return try {
+            val uri = Uri.parse(url)
+            if (isLocalUri(uri)) {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    input.readBytes()
+                }
+            } else {
+                val request = Request.Builder()
+                    .url(url)
+                    .apply {
+                        if (!token.isNullOrBlank()) {
+                            header("X-Emby-Token", token)
+                        }
+                    }
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use null
+                    response.body?.bytes()
+                }
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 }

@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.graphics.Bitmap
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Binder
@@ -33,6 +34,8 @@ class MusicPlaybackService : Service() {
     private lateinit var player: ExoPlayer
     private lateinit var mediaSession: MediaSession
     private var sleepTimerDeadlineMs: Long? = null
+    private var currentArtworkUrl: String? = null
+    private var currentArtworkBitmap: Bitmap? = null
 
     private val sleepTimerRunnable = Runnable {
         if (sleepTimerDeadlineMs == null) return@Runnable
@@ -243,11 +246,16 @@ class MusicPlaybackService : Service() {
         mediaSession.setPlaybackState(playbackState)
 
         val currentMetadata = player.currentMediaItem?.mediaMetadata ?: MediaMetadata.EMPTY
-        val mediaMetadata = android.media.MediaMetadata.Builder()
+        val mediaMetadataBuilder = android.media.MediaMetadata.Builder()
             .putString(android.media.MediaMetadata.METADATA_KEY_TITLE, currentMetadata.title?.toString())
             .putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, currentMetadata.artist?.toString())
-            .build()
-        mediaSession.setMetadata(mediaMetadata)
+        currentArtworkBitmap?.let { bitmap ->
+            mediaMetadataBuilder
+                .putBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART, bitmap)
+                .putBitmap(android.media.MediaMetadata.METADATA_KEY_ART, bitmap)
+                .putBitmap(android.media.MediaMetadata.METADATA_KEY_DISPLAY_ICON, bitmap)
+        }
+        mediaSession.setMetadata(mediaMetadataBuilder.build())
     }
 
     /**
@@ -300,6 +308,7 @@ class MusicPlaybackService : Service() {
             .setContentTitle(title)
             .setContentText(subtitle)
             .setContentIntent(contentIntent)
+            .setLargeIcon(currentArtworkBitmap)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setShowWhen(false)
             .setOngoing(isPlaying)
@@ -323,6 +332,33 @@ class MusicPlaybackService : Service() {
                     .setShowActionsInCompactView(0)
             )
             .build()
+    }
+
+    private fun refreshArtworkIfNeeded() {
+        val artworkUrl = player.currentMediaItem?.mediaMetadata?.artworkUri?.toString().orEmpty().ifBlank { null }
+        if (artworkUrl == currentArtworkUrl && (artworkUrl == null || currentArtworkBitmap != null)) {
+            return
+        }
+
+        currentArtworkUrl = artworkUrl
+        currentArtworkBitmap = null
+
+        if (artworkUrl == null) {
+            syncMediaSessionState()
+            updateForegroundNotification()
+            return
+        }
+
+        EmbyImageLoader.loadBitmap(
+            context = applicationContext,
+            url = artworkUrl,
+            token = MusicPlayerSessionStore.currentConnection()?.accessToken
+        ) { bitmap ->
+            if (currentArtworkUrl != artworkUrl) return@loadBitmap
+            currentArtworkBitmap = bitmap
+            syncMediaSessionState()
+            updateForegroundNotification()
+        }
     }
 
     /**
@@ -359,24 +395,28 @@ class MusicPlaybackService : Service() {
      */
     private val playerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
+            refreshArtworkIfNeeded()
             syncMediaSessionState()
             updateForegroundNotification()
             notifyStateChanged()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            refreshArtworkIfNeeded()
             syncMediaSessionState()
             updateForegroundNotification()
             notifyStateChanged()
         }
 
         override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+            refreshArtworkIfNeeded()
             syncMediaSessionState()
             updateForegroundNotification()
             notifyStateChanged()
         }
 
         override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+            refreshArtworkIfNeeded()
             syncMediaSessionState()
             updateForegroundNotification()
             notifyStateChanged()
