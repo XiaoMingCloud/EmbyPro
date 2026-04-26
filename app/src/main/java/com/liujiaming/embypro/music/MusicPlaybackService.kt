@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaMetadata
@@ -27,9 +28,16 @@ import java.util.concurrent.CopyOnWriteArraySet
  */
 class MusicPlaybackService : Service() {
     private val binder = LocalBinder()
+    private val sleepTimerHandler = Handler(Looper.getMainLooper())
 
     private lateinit var player: ExoPlayer
     private lateinit var mediaSession: MediaSession
+    private var sleepTimerDeadlineMs: Long? = null
+
+    private val sleepTimerRunnable = Runnable {
+        if (sleepTimerDeadlineMs == null) return@Runnable
+        stopPlaybackAndSelf(StopReason.SLEEP_TIMER)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -63,6 +71,7 @@ class MusicPlaybackService : Service() {
     }
 
     override fun onDestroy() {
+        clearSleepTimer(notify = false)
         player.removeListener(playerListener)
         player.release()
         mediaSession.release()
@@ -113,9 +122,45 @@ class MusicPlaybackService : Service() {
     }
 
     /**
+     * Starts or replaces a sleep timer. Playback will stop automatically when it expires.
+     */
+    fun startSleepTimer(durationMs: Long) {
+        if (durationMs <= 0L) {
+            clearSleepTimer()
+            return
+        }
+        sleepTimerHandler.removeCallbacks(sleepTimerRunnable)
+        sleepTimerDeadlineMs = SystemClock.elapsedRealtime() + durationMs
+        sleepTimerHandler.postDelayed(sleepTimerRunnable, durationMs)
+        notifyStateChanged()
+    }
+
+    /**
+     * Clears the current sleep timer if one exists.
+     */
+    fun clearSleepTimer(notify: Boolean = true) {
+        sleepTimerHandler.removeCallbacks(sleepTimerRunnable)
+        sleepTimerDeadlineMs = null
+        if (notify) {
+            notifyStateChanged()
+        }
+    }
+
+    /**
+     * Returns remaining time for the active sleep timer, or null if not set.
+     */
+    fun getSleepTimerRemainingMs(): Long? {
+        val deadline = sleepTimerDeadlineMs ?: return null
+        val remaining = deadline - SystemClock.elapsedRealtime()
+        return if (remaining > 0L) remaining else 0L
+    }
+
+    /**
      * Stops playback, clears media queue, and stops the service.
      */
-    fun stopPlaybackAndSelf() {
+    fun stopPlaybackAndSelf(reason: StopReason = StopReason.USER) {
+        lastStopReason = reason
+        clearSleepTimer(notify = false)
         if (::player.isInitialized) {
             player.playWhenReady = false
             player.pause()
@@ -357,11 +402,19 @@ class MusicPlaybackService : Service() {
 
         @Volatile
         private var activeService: MusicPlaybackService? = null
+        @Volatile
+        private var lastStopReason: StopReason? = null
 
         /**
          * Returns the currently active service instance.
          */
         fun activeService(): MusicPlaybackService? = activeService
+
+        fun consumeLastStopReason(): StopReason? {
+            val reason = lastStopReason
+            lastStopReason = null
+            return reason
+        }
 
         /**
          * Registers a listener for playback state changes.
@@ -394,5 +447,10 @@ class MusicPlaybackService : Service() {
      */
     fun interface PlaybackStateListener {
         fun onMusicPlaybackStateChanged()
+    }
+
+    enum class StopReason {
+        USER,
+        SLEEP_TIMER
     }
 }

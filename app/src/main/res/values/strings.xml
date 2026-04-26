@@ -317,4 +317,15 @@
     <string name="music_player_mode_order">顺序播放</string>
     <string name="music_player_mode_repeat_one">单曲循环</string>
     <string name="music_player_mode_shuffle">随机播放</string>
+    <string name="music_player_sleep_timer">定时睡眠</string>
+    <string name="music_player_sleep_timer_off">定时睡眠 未设置</string>
+    <string name="music_player_sleep_timer_remaining">定时睡眠 剩余 %1$s</string>
+    <string name="music_player_sleep_timer_expired">定时睡眠已结束，已停止播放</string>
+    <string name="music_player_sleep_timer_dialog_title">设置定时睡眠</string>
+    <string name="music_player_sleep_timer_cancel_option">关闭定时睡眠</string>
+    <string name="music_player_sleep_timer_duration">时长</string>
+    <string name="music_player_sleep_timer_start">开始</string>
+    <string name="music_player_sleep_timer_update">更新</string>
+    <string name="music_player_sleep_timer_minutes">%1$d 分钟</string>
+    <string name="music_player_sleep_timer_slider_hint">左右拖动滑杆设置睡眠时间</string>
 </resources>

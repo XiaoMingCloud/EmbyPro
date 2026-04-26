@@ -57,8 +57,10 @@ class MusicPlayerActivity : AppCompatActivity() {
     private lateinit var playPauseButton: ImageButton
     private lateinit var previousButton: ImageButton
     private lateinit var nextButton: ImageButton
-    private lateinit var playbackModeContainer: View
     private lateinit var playbackModeButton: ImageButton
+    private lateinit var sleepTimerButton: ImageButton
+    private lateinit var lyricsQuickButton: ImageButton
+    private lateinit var songQuickButton: ImageButton
     private lateinit var favoriteButton: ImageButton
     private lateinit var cacheButton: ImageButton
     private lateinit var deleteButton: ImageButton
@@ -71,7 +73,6 @@ class MusicPlayerActivity : AppCompatActivity() {
     private lateinit var lyricsButton: ImageButton
     private lateinit var songTabButton: TextView
     private lateinit var lyricsTabButton: TextView
-    private lateinit var playbackModeTextView: TextView
     private lateinit var songPage: LinearLayout
     private lateinit var lyricsPage: LinearLayout
 
@@ -112,6 +113,33 @@ class MusicPlayerActivity : AppCompatActivity() {
     private var lyricsLoadInFlight = false
     private var currentLyricIndex = -1
     private var currentContentPage = MusicPlayerContentPage.SONG
+
+    private val playbackStateListener = MusicPlaybackService.PlaybackStateListener {
+        runOnUiThread {
+            updateSleepTimerUi()
+            val stopReason = MusicPlaybackService.consumeLastStopReason()
+            if (stopReason == MusicPlaybackService.StopReason.SLEEP_TIMER && !isFinishing) {
+                Toast.makeText(
+                    this,
+                    getString(R.string.music_player_sleep_timer_expired),
+                    Toast.LENGTH_SHORT
+                ).show()
+                finish()
+            }
+        }
+    }
+
+    private val sleepTimerUpdater = object : Runnable {
+        override fun run() {
+            val service = playbackService ?: MusicPlaybackService.activeService()
+            if (service?.getSleepTimerRemainingMs() != null) {
+                updateSleepTimerUi()
+                mainHandler.postDelayed(this, 1000L)
+            } else {
+                updateSleepTimerUi()
+            }
+        }
+    }
 
     private val stateListener = MusicLibraryStateListener { state ->
         if (libraryId != null && state.currentLibraryId != null && state.currentLibraryId != libraryId) {
@@ -249,8 +277,10 @@ class MusicPlayerActivity : AppCompatActivity() {
         playPauseButton = findViewById(R.id.musicPlayerPlayPauseButton)
         previousButton = findViewById(R.id.musicPlayerPreviousButton)
         nextButton = findViewById(R.id.musicPlayerNextButton)
-        playbackModeContainer = findViewById(R.id.musicPlayerModeContainer)
         playbackModeButton = findViewById(R.id.musicPlayerModeButton)
+        sleepTimerButton = findViewById(R.id.musicPlayerSleepTimerButton)
+        lyricsQuickButton = findViewById(R.id.musicPlayerLyricsQuickButton)
+        songQuickButton = findViewById(R.id.musicPlayerSongQuickButton)
         favoriteButton = findViewById(R.id.musicPlayerFavoriteButton)
         cacheButton = findViewById(R.id.musicPlayerCacheButton)
         deleteButton = findViewById(R.id.musicPlayerDeleteButton)
@@ -259,7 +289,6 @@ class MusicPlayerActivity : AppCompatActivity() {
         lyricsButton = findViewById(R.id.musicPlayerLyricsButton)
         songTabButton = findViewById(R.id.musicPlayerSongTabButton)
         lyricsTabButton = findViewById(R.id.musicPlayerLyricsTabButton)
-        playbackModeTextView = findViewById(R.id.musicPlayerModeText)
         songPage = findViewById(R.id.musicPlayerSongPage)
         lyricsPage = findViewById(R.id.musicPlayerLyricsPage)
         elapsedTextView = findViewById(R.id.musicPlayerElapsedText)
@@ -271,7 +300,10 @@ class MusicPlayerActivity : AppCompatActivity() {
         playPauseButton.setDebouncedClickListener { togglePlayPause() }
         previousButton.setDebouncedClickListener { playPrevious() }
         nextButton.setDebouncedClickListener { playNext() }
-        playbackModeContainer.setDebouncedClickListener { cyclePlaybackMode() }
+        playbackModeButton.setDebouncedClickListener { cyclePlaybackMode() }
+        sleepTimerButton.setDebouncedClickListener { showSleepTimerDialog() }
+        lyricsQuickButton.setDebouncedClickListener { switchContentPage(MusicPlayerContentPage.LYRICS) }
+        songQuickButton.setDebouncedClickListener { switchContentPage(MusicPlayerContentPage.SONG) }
         favoriteButton.setDebouncedClickListener { toggleFavorite() }
         cacheButton.setDebouncedClickListener { triggerProactiveCache() }
         deleteButton.setDebouncedClickListener { showDeleteMusicConfirmDialog() }
@@ -283,6 +315,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         updateFavoriteIcon()
         applyBottomControlButtonTint()
         updatePlaybackModeUi()
+        updateSleepTimerUi()
         switchContentPage(MusicPlayerContentPage.SONG)
 
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -312,6 +345,7 @@ class MusicPlayerActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         MusicLibraryRepository.subscribe(stateListener)
+        MusicPlaybackService.registerStateListener(playbackStateListener)
 
         val serviceIntent = Intent(this, MusicPlaybackService::class.java)
         ContextCompat.startForegroundService(this, serviceIntent)
@@ -320,7 +354,9 @@ class MusicPlayerActivity : AppCompatActivity() {
 
     override fun onStop() {
         MusicLibraryRepository.unsubscribe(stateListener)
+        MusicPlaybackService.unregisterStateListener(playbackStateListener)
         detachPlayer()
+        mainHandler.removeCallbacks(sleepTimerUpdater)
         if (isServiceBound) {
             unbindService(serviceConnection)
             isServiceBound = false
@@ -370,6 +406,7 @@ class MusicPlayerActivity : AppCompatActivity() {
             currentPlayer.removeListener(playerListener)
         }
         mainHandler.removeCallbacks(progressUpdater)
+        mainHandler.removeCallbacks(sleepTimerUpdater)
         player = null
     }
 
@@ -492,7 +529,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         }
         playbackModeButton.setImageResource(iconRes)
         playbackModeButton.contentDescription = getString(labelRes)
-        playbackModeTextView.text = getString(labelRes)
+        playbackModeButton.alpha = 1f
     }
 
     private fun currentPlaybackModeLabel(): String {
@@ -501,6 +538,133 @@ class MusicPlayerActivity : AppCompatActivity() {
             MusicPlaybackMode.REPEAT_ONE -> getString(R.string.music_player_mode_repeat_one)
             MusicPlaybackMode.SHUFFLE -> getString(R.string.music_player_mode_shuffle)
         }
+    }
+
+    private fun showSleepTimerDialog() {
+        val service = playbackService ?: MusicPlaybackService.activeService() ?: return
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_music_sleep_timer, null, false)
+        val durationValueView = dialogView.findViewById<TextView>(R.id.musicSleepTimerDurationValue)
+        val seekBar = dialogView.findViewById<SeekBar>(R.id.musicSleepTimerSeekBar)
+        val startButton = dialogView.findViewById<TextView>(R.id.musicSleepTimerStartButton)
+        val clearButton = dialogView.findViewById<TextView>(R.id.musicSleepTimerClearButton)
+        val cancelButton = dialogView.findViewById<TextView>(R.id.musicSleepTimerCancelButton)
+
+        val remainingMs = service.getSleepTimerRemainingMs()
+        val initialMinutes = remainingMs?.let { remainingToSleepMinutes(it) } ?: DEFAULT_SLEEP_TIMER_MINUTES
+        seekBar.progress = sleepMinutesToProgress(initialMinutes)
+        durationValueView.text = formatSleepTimerMinutes(initialMinutes)
+        startButton.text = getString(
+            if (remainingMs != null) R.string.music_player_sleep_timer_update else R.string.music_player_sleep_timer_start
+        )
+        clearButton.visibility = if (remainingMs != null) View.VISIBLE else View.GONE
+
+        seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                durationValueView.text = formatSleepTimerMinutes(progressToSleepMinutes(progress))
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+        })
+
+        val dialog = createMusicGlassDialog(dialogView)
+        startButton.setDebouncedClickListener {
+            val durationMinutes = progressToSleepMinutes(seekBar.progress)
+            service.startSleepTimer(durationMinutes * 60_000L)
+            updateSleepTimerUi()
+            dialog.dismiss()
+        }
+        clearButton.setDebouncedClickListener {
+            service.clearSleepTimer()
+            updateSleepTimerUi()
+            dialog.dismiss()
+        }
+        cancelButton.setDebouncedClickListener {
+            dialog.dismiss()
+        }
+        dialog.applyMusicGlassWindow(this)
+    }
+
+    private fun showSleepTimerDialogLegacy() {
+        val service = playbackService ?: MusicPlaybackService.activeService() ?: return
+        val options = mutableListOf<Pair<String, Long?>>(
+            "10 分钟" to 10L * 60_000L,
+            "20 分钟" to 20L * 60_000L,
+            "30 分钟" to 30L * 60_000L,
+            "45 分钟" to 45L * 60_000L,
+            "60 分钟" to 60L * 60_000L,
+            "90 分钟" to 90L * 60_000L
+        )
+        if (service.getSleepTimerRemainingMs() != null) {
+            options.add(getString(R.string.music_player_sleep_timer_cancel_option) to null)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.music_player_sleep_timer_dialog_title)
+            .setItems(options.map { it.first }.toTypedArray()) { dialog, which ->
+                val durationMs = options.getOrNull(which)?.second
+                if (durationMs == null) {
+                    service.clearSleepTimer()
+                } else {
+                    service.startSleepTimer(durationMs)
+                }
+                updateSleepTimerUi()
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun updateSleepTimerUi() {
+        val remainingMs = (playbackService ?: MusicPlaybackService.activeService())?.getSleepTimerRemainingMs()
+        if (remainingMs == null) {
+            sleepTimerButton.alpha = 0.72f
+            sleepTimerButton.contentDescription = getString(R.string.music_player_sleep_timer_off)
+            mainHandler.removeCallbacks(sleepTimerUpdater)
+            return
+        }
+        sleepTimerButton.alpha = 1f
+        sleepTimerButton.contentDescription = getString(
+            R.string.music_player_sleep_timer_remaining,
+            formatSleepTimer(remainingMs)
+        )
+        mainHandler.removeCallbacks(sleepTimerUpdater)
+        mainHandler.postDelayed(sleepTimerUpdater, 1000L)
+    }
+
+    private fun formatSleepTimer(remainingMs: Long): String {
+        val totalSeconds = ((remainingMs + 999L) / 1000L).coerceAtLeast(0L)
+        val hours = totalSeconds / 3600L
+        val minutes = (totalSeconds % 3600L) / 60L
+        val seconds = totalSeconds % 60L
+        return if (hours > 0L) {
+            String.format("%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format("%02d:%02d", minutes, seconds)
+        }
+    }
+
+    private fun formatSleepTimerMinutes(minutes: Int): String {
+        return getString(R.string.music_player_sleep_timer_minutes, minutes)
+    }
+
+    private fun progressToSleepMinutes(progress: Int): Int {
+        return SLEEP_TIMER_MIN_MINUTES + (progress.coerceIn(0, SLEEP_TIMER_MAX_PROGRESS) * SLEEP_TIMER_STEP_MINUTES)
+    }
+
+    private fun sleepMinutesToProgress(minutes: Int): Int {
+        val clampedMinutes = minutes.coerceIn(SLEEP_TIMER_MIN_MINUTES, SLEEP_TIMER_MAX_MINUTES)
+        return ((clampedMinutes - SLEEP_TIMER_MIN_MINUTES) / SLEEP_TIMER_STEP_MINUTES)
+            .coerceIn(0, SLEEP_TIMER_MAX_PROGRESS)
+    }
+
+    private fun remainingToSleepMinutes(remainingMs: Long): Int {
+        val roundedMinutes = ((remainingMs + 59_999L) / 60_000L).toInt()
+        val steps = ((roundedMinutes - SLEEP_TIMER_MIN_MINUTES + SLEEP_TIMER_STEP_MINUTES - 1) / SLEEP_TIMER_STEP_MINUTES)
+            .coerceAtLeast(0)
+        return (SLEEP_TIMER_MIN_MINUTES + steps * SLEEP_TIMER_STEP_MINUTES)
+            .coerceIn(SLEEP_TIMER_MIN_MINUTES, SLEEP_TIMER_MAX_MINUTES)
     }
 
     private fun switchToIndex(index: Int, playWhenReady: Boolean, resetPosition: Boolean = true) {
@@ -927,6 +1091,9 @@ class MusicPlayerActivity : AppCompatActivity() {
             if (page == MusicPlayerContentPage.LYRICS) selectedTextColor else unselectedTextColor
         )
 
+        songQuickButton.alpha = if (page == MusicPlayerContentPage.SONG) 1f else 0.58f
+        lyricsQuickButton.alpha = if (page == MusicPlayerContentPage.LYRICS) 1f else 0.58f
+
         if (page == MusicPlayerContentPage.LYRICS) {
             val itemId = currentPlaybackItemId.ifBlank { queueIds.getOrNull(currentIndex).orEmpty() }
             if (lyricsLines.isEmpty() && itemId.isNotBlank()) {
@@ -1251,6 +1418,12 @@ class MusicPlayerActivity : AppCompatActivity() {
         const val EXTRA_SHUFFLE_MODE = "extra_shuffle_mode"
 
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 2001
+        private const val SLEEP_TIMER_MIN_MINUTES = 5
+        private const val SLEEP_TIMER_MAX_MINUTES = 180
+        private const val SLEEP_TIMER_STEP_MINUTES = 5
+        private const val SLEEP_TIMER_MAX_PROGRESS =
+            (SLEEP_TIMER_MAX_MINUTES - SLEEP_TIMER_MIN_MINUTES) / SLEEP_TIMER_STEP_MINUTES
+        private const val DEFAULT_SLEEP_TIMER_MINUTES = 15
     }
 }
 

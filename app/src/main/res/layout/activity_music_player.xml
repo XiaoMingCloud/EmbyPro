@@ -40,12 +40,14 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/musicPlayerPageTabsRow"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="14dp"
             android:gravity="center"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:visibility="gone">
 
             <TextView
                 android:id="@+id/musicPlayerSongTabButton"
@@ -312,45 +314,55 @@
             </LinearLayout>
 
             <LinearLayout
-                android:id="@+id/musicPlayerModeContainer"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
                 android:layout_marginTop="14dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"
                 android:gravity="center"
-                android:minHeight="44dp"
-                android:orientation="horizontal"
-                android:paddingStart="10dp"
-                android:paddingTop="2dp"
-                android:paddingEnd="10dp"
-                android:paddingBottom="2dp">
+                android:orientation="horizontal">
 
                 <ImageButton
                     android:id="@+id/musicPlayerModeButton"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="@android:color/transparent"
-                    android:clickable="false"
-                    android:focusable="false"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/music_player_mode_order"
-                    android:padding="8dp"
+                    android:padding="9dp"
                     android:src="@drawable/ic_music_mode_order"
                     android:tint="@android:color/white" />
 
-                <TextView
-                    android:id="@+id/musicPlayerModeText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
-                    android:clickable="false"
-                    android:focusable="false"
-                    android:text="@string/music_player_mode_order"
-                    android:textColor="@android:color/white"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
+                <ImageButton
+                    android:id="@+id/musicPlayerSleepTimerButton"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="18dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/music_player_sleep_timer"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_music_sleep_timer"
+                    android:tint="@android:color/white" />
+
+                <ImageButton
+                    android:id="@+id/musicPlayerLyricsQuickButton"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="18dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/music_player_page_lyrics"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_music_feature_lyrics"
+                    android:tint="@android:color/white" />
+
+                <ImageButton
+                    android:id="@+id/musicPlayerSongQuickButton"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="18dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/music_player_page_song"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_music_feature_song"
+                    android:tint="@android:color/white" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>
