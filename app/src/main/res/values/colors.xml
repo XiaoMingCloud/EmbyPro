@@ -34,7 +34,7 @@
     <color name="global_font_white">#FF6E7385</color>
     <color name="global_font_purple">#FF6B4FB3</color>
     <color name="global_font_blue">#FF2F6FD6</color>
-    <color name="global_font_gold">#FF9A6A00</color>
+    <color name="global_font_gold">#FBFBFB</color>
     <color name="home_search_surface">#FFF3EFF7</color>
     <color name="home_search_stroke">#1F1B1B1F</color>
     <color name="home_tab_video_bg">#FFFFD7E6</color>

@@ -15,7 +15,8 @@ class MediaPosterAdapter(
     private val items: List<MediaPosterUiModel>,
     private val cardLayout: Int,
     private val accessToken: String?,
-    private val onItemClick: ((MediaPosterUiModel) -> Unit)? = null
+    private val onItemClick: ((MediaPosterUiModel) -> Unit)? = null,
+    private val onItemLongClick: ((MediaPosterUiModel) -> Unit)? = null
 ) : RecyclerView.Adapter<MediaPosterAdapter.MediaPosterViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MediaPosterViewHolder {
@@ -24,7 +25,7 @@ class MediaPosterAdapter(
     }
 
     override fun onBindViewHolder(holder: MediaPosterViewHolder, position: Int) {
-        holder.bind(items[position], accessToken, onItemClick)
+        holder.bind(items[position], accessToken, onItemClick, onItemLongClick)
     }
 
     override fun getItemCount(): Int = items.size
@@ -45,7 +46,8 @@ class MediaPosterAdapter(
         fun bind(
             item: MediaPosterUiModel,
             accessToken: String?,
-            onItemClick: ((MediaPosterUiModel) -> Unit)?
+            onItemClick: ((MediaPosterUiModel) -> Unit)?,
+            onItemLongClick: ((MediaPosterUiModel) -> Unit)?
         ) {
             applyPlaceholder()
             EmbyImageLoader.load(
@@ -60,6 +62,14 @@ class MediaPosterAdapter(
             subtitleText?.setTextColor(GlobalThemeManager.secondaryTextColor(itemView.context))
             subtitleText?.visibility = if (item.subtitle.isBlank()) View.GONE else View.VISIBLE
             itemView.setDebouncedClickListener { onItemClick?.invoke(item) }
+            itemView.setOnLongClickListener {
+                if (onItemLongClick == null) {
+                    false
+                } else {
+                    onItemLongClick.invoke(item)
+                    true
+                }
+            }
         }
 
         /**

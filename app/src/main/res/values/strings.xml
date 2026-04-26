@@ -170,7 +170,7 @@
     <string name="theme_black">黑色字体</string>
     <string name="theme_light_purple">紫色字体</string>
     <string name="theme_light_blue">蓝色字体</string>
-    <string name="theme_light_yellow">金色字体</string>
+    <string name="theme_light_yellow">白色字体</string>
     <string name="settings_home_display_subtitle">管理首页随机展示的媒体库范围</string>
     <string name="settings_background_image_title">全局背景图片</string>
     <string name="settings_background_image_none">未设置，点击进入背景素材库（长按可清除）</string>

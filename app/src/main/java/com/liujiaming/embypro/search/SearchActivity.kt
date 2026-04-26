@@ -107,7 +107,8 @@ class SearchActivity : AppCompatActivity() {
             loadedItems,
             R.layout.item_library_grid_card,
             connection.accessToken,
-            onItemClick = { openItem(it) }
+            onItemClick = { openItem(it) },
+            onItemLongClick = { openItemDetail(it) }
         )
         recyclerView.layoutManager = GridLayoutManager(this, 2)
         recyclerView.adapter = adapter
@@ -220,7 +221,82 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun openItem(item: MediaPosterUiModel) {
-        AppNavigator.openPosterItem(this, connection, item, loadedItems)
+        when {
+            item.id.isBlank() -> return
+            item.isFolder || item.itemType == "BoxSet" || item.itemType == "Folder" -> {
+                AppNavigator.openLibrary(this, connection, item.id, item.title)
+            }
+            item.itemType == "Audio" -> {
+                openAudioDirectly(item)
+            }
+            item.itemType == "MusicAlbum" -> {
+                openMusicContainer(item, MusicBrowseType.ALBUMS)
+            }
+            item.itemType == "MusicArtist" -> {
+                openMusicContainer(item, MusicBrowseType.ARTISTS)
+            }
+            item.itemType == "Playlist" -> {
+                openMusicContainer(item, MusicBrowseType.PLAYLISTS)
+            }
+            item.itemType in playableVideoTypes -> {
+                playVideoDirectly(
+                    connection = connection,
+                    mediaRepository = mediaRepository,
+                    itemId = item.id,
+                    queue = buildSearchVideoQueue(item.id)
+                )
+            }
+            else -> {
+                AppNavigator.openPosterItem(this, connection, item, loadedItems)
+            }
+        }
+    }
+
+    private fun openAudioDirectly(item: MediaPosterUiModel) {
+        val audioItems = loadedItems.filter { it.itemType == "Audio" }
+        val queueIndex = audioItems.indexOfFirst { it.id == item.id }
+        if (queueIndex < 0) return
+        AppNavigator.openMusicPlayer(
+            activity = this,
+            connection = connection,
+            libraryId = MusicLibraryRepository.currentState().currentLibraryId,
+            queueTitle = currentQuery.ifBlank { getString(R.string.home_search_hint) },
+            queueIds = ArrayList(audioItems.map { it.id }),
+            queueTitles = ArrayList(audioItems.map { it.title }),
+            queueSubtitles = ArrayList(audioItems.map { it.subtitle }),
+            queueImages = ArrayList(audioItems.map { it.imageUrl.orEmpty() }),
+            queueIndex = queueIndex
+        )
+    }
+
+    private fun openMusicContainer(item: MediaPosterUiModel, browseType: MusicBrowseType) {
+        AppNavigator.openMusicList(
+            activity = this,
+            connection = connection,
+            browseType = browseType,
+            libraryId = MusicLibraryRepository.currentState().currentLibraryId,
+            containerId = item.id,
+            containerTitle = item.title
+        )
+    }
+
+    private fun buildSearchVideoQueue(selectedId: String): VideoQueue {
+        val playableItems = loadedItems.filter { it.itemType in playableVideoTypes }
+        return VideoQueue(
+            itemIds = ArrayList(playableItems.map { it.id }),
+            itemTitles = ArrayList(playableItems.map { it.title }),
+            currentIndex = playableItems.indexOfFirst { it.id == selectedId }
+        )
+    }
+
+    private fun openItemDetail(item: MediaPosterUiModel) {
+        if (item.id.isBlank() || item.itemType !in playableVideoTypes) return
+        AppNavigator.openVideoDetail(
+            activity = this,
+            connection = connection,
+            itemId = item.id,
+            queue = buildSearchVideoQueue(item.id)
+        )
     }
 
     private fun hideKeyboard() {
@@ -228,3 +304,10 @@ class SearchActivity : AppCompatActivity() {
         inputMethodManager?.hideSoftInputFromWindow(searchInput.windowToken, 0)
     }
 }
+
+private val playableVideoTypes = setOf(
+    "Movie",
+    "Episode",
+    "Video",
+    "MusicVideo"
+)

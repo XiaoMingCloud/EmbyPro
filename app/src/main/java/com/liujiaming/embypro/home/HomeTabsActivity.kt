@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -71,6 +72,8 @@ class HomeTabsActivity : AppCompatActivity() {
     private var isHomeLoadFailed = false
     private var currentPrimaryCategory = PrimaryCategory.VIDEO
     private lateinit var primaryCategoryGestureDetector: GestureDetector
+    private var homeSearchExpandedHeight = 0
+    private var homeSearchCurrentHeight = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -197,6 +200,13 @@ class HomeTabsActivity : AppCompatActivity() {
         EdgeToEdgeHelper.applyInsets(topBar, applyTop = true)
         EdgeToEdgeHelper.applyInsets(mediaContainer, applyTop = true)
         EdgeToEdgeHelper.applyInsets(bottomNavigationCard, applyBottom = true)
+        homeTopBar.post {
+            if (homeSearchExpandedHeight == 0 && homeSearchCard.height > 0) {
+                homeSearchExpandedHeight = homeSearchCard.height
+                homeSearchCurrentHeight = homeSearchExpandedHeight
+                applyHomeTopBarCollapseProgress(1f)
+            }
+        }
 
         homeFeedAdapter = MediaPosterAdapter(
             homeFeedItems,
@@ -204,6 +214,9 @@ class HomeTabsActivity : AppCompatActivity() {
             connection.accessToken,
             onItemClick = { item ->
                 openHomeFeedItem(item)
+            },
+            onItemLongClick = { item ->
+                openHomeFeedItemDetail(item)
             }
         )
         homeFeedRecyclerView.layoutManager = GridLayoutManager(this, if (isTabletLayout()) 2 else 2)
@@ -211,6 +224,9 @@ class HomeTabsActivity : AppCompatActivity() {
         homeFeedRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
+                if (currentTab == Tab.HOME) {
+                    adjustHomeTopBarByScroll(dy)
+                }
                 if (dy <= 0 || isHomeLoading) return
                 val layoutManager = recyclerView.layoutManager as? GridLayoutManager ?: return
                 val lastVisible = layoutManager.findLastVisibleItemPosition()
@@ -450,6 +466,17 @@ class HomeTabsActivity : AppCompatActivity() {
         )
     }
 
+    private fun openHomeFeedItemDetail(item: MediaPosterUiModel) {
+        if (currentPrimaryCategory != PrimaryCategory.VIDEO) return
+        if (item.id.isBlank() || item.isFolder || item.itemType == "BoxSet" || item.itemType == "Folder") return
+        AppNavigator.openVideoDetail(
+            activity = this,
+            connection = connection,
+            itemId = item.id,
+            queue = AppNavigator.buildPosterVideoQueue(homeFeedItems, item.id)
+        )
+    }
+
     private fun updateHomeLoadFailedVisibility() {
         loadFailedContainer.visibility = if (currentTab == Tab.HOME && isHomeLoadFailed) View.VISIBLE else View.GONE
         loadFailedText.text = getString(R.string.home_load_failed_retry)
@@ -475,6 +502,49 @@ class HomeTabsActivity : AppCompatActivity() {
         homePrimaryCategoryBar.visibility = if (tab == Tab.HOME) View.VISIBLE else View.GONE
         updateNavigationSelection(tab)
         updateHomeLoadFailedVisibility()
+        if (tab == Tab.HOME && !homeFeedRecyclerView.canScrollVertically(-1)) {
+            expandHomeTopBar()
+        }
+    }
+
+    private fun adjustHomeTopBarByScroll(dy: Int) {
+        if (dy == 0 || homeTopBar.visibility != View.VISIBLE) return
+        if (homeSearchExpandedHeight <= 0) {
+            val measuredHeight = homeSearchCard.height
+            if (measuredHeight <= 0) return
+            homeSearchExpandedHeight = measuredHeight
+            if (homeSearchCurrentHeight == 0) {
+                homeSearchCurrentHeight = measuredHeight
+            }
+        }
+        val targetHeight = (homeSearchCurrentHeight - dy).coerceIn(0, homeSearchExpandedHeight)
+        if (targetHeight == homeSearchCurrentHeight) return
+        homeSearchCurrentHeight = targetHeight
+        val progress = targetHeight.toFloat() / homeSearchExpandedHeight.toFloat()
+        applyHomeTopBarCollapseProgress(progress)
+    }
+
+    private fun applyHomeTopBarCollapseProgress(progress: Float) {
+        val normalized = progress.coerceIn(0f, 1f)
+        val layoutParams = homeSearchCard.layoutParams
+        if (layoutParams.height != homeSearchCurrentHeight) {
+            layoutParams.height = homeSearchCurrentHeight
+            homeSearchCard.layoutParams = layoutParams
+        }
+        homeSearchCard.alpha = 0.4f + (normalized * 0.6f)
+        homeSearchCard.translationY = -(1f - normalized) * dp(6)
+        homePrimaryCategoryBar.alpha = 1f
+        homePrimaryCategoryBar.translationY = 0f
+    }
+
+    private fun expandHomeTopBar() {
+        if (homeSearchExpandedHeight <= 0) return
+        homeSearchCurrentHeight = homeSearchExpandedHeight
+        applyHomeTopBarCollapseProgress(1f)
+    }
+
+    private fun dp(value: Int): Float {
+        return value * resources.displayMetrics.density
     }
 
     private fun updatePrimaryCategorySelection(category: PrimaryCategory) {

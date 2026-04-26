@@ -82,7 +82,8 @@ class LibraryItemsActivity : AppCompatActivity() {
             loadedItems,
             R.layout.item_library_grid_card,
             connection.accessToken,
-            onItemClick = { openItem(it) }
+            onItemClick = { openItem(it) },
+            onItemLongClick = { openItemDetail(it) }
         )
         recyclerView.layoutManager = GridLayoutManager(this, if (isTabletLayout()) 4 else 2)
         recyclerView.adapter = adapter
@@ -336,6 +337,16 @@ class LibraryItemsActivity : AppCompatActivity() {
 
     private fun openItem(item: MediaPosterUiModel) {
         AppNavigator.openPosterItem(this, connection, item, loadedItems)
+    }
+
+    private fun openItemDetail(item: MediaPosterUiModel) {
+        if (item.id.isBlank() || item.isFolder || item.itemType == "BoxSet" || item.itemType == "Folder") return
+        AppNavigator.openVideoDetail(
+            activity = this,
+            connection = connection,
+            itemId = item.id,
+            queue = AppNavigator.buildPosterVideoQueue(loadedItems, item.id)
+        )
     }
 
     private fun isTabletLayout(): Boolean = resources.configuration.smallestScreenWidthDp >= 600
