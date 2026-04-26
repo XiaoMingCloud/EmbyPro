@@ -5,6 +5,7 @@ import android.app.PictureInPictureParams
 import android.app.RemoteAction
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
+import android.content.pm.ActivityInfo
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -27,6 +28,7 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
@@ -71,6 +73,8 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var playPauseButton: ImageButton
     private lateinit var centerTimeText: TextView
     private lateinit var topBar: View
+    private lateinit var favoriteActionButton: ImageButton
+    private lateinit var videoDetailButton: ImageButton
     private var playerQueueRecyclerView: RecyclerView? = null
     private var playerQueueEmptyText: TextView? = null
     private val playerQueueAdapter = PlayerQueueAdapter(mutableListOf())
@@ -106,6 +110,9 @@ class PlayerActivity : AppCompatActivity() {
     private var isFinishingForReplacement = false
     private var hasReportedPlaybackStart = false
     private var shouldReturnDeletedItem = false
+    private var isCurrentFavorite = false
+    private var favoriteRequestInFlight = false
+    private var favoriteStateRequestSerial = 0L
 
     // Gesture control state
     private lateinit var audioManager: AudioManager
@@ -151,6 +158,7 @@ class PlayerActivity : AppCompatActivity() {
         playSessionId = savedInstanceState?.getString(STATE_PLAY_SESSION_ID) ?: playSessionId
         playbackUrl = savedInstanceState?.getString(STATE_PLAYBACK_URL) ?: playbackUrl
         title = savedInstanceState?.getString(STATE_TITLE) ?: title
+        coverImageUrl = savedInstanceState?.getString(STATE_COVER_IMAGE_URL) ?: coverImageUrl
         playlistIndex = savedInstanceState?.getInt(STATE_PLAYLIST_INDEX) ?: playlistIndex
 
         if (playbackUrl.isBlank()) {
@@ -170,6 +178,8 @@ class PlayerActivity : AppCompatActivity() {
         playPauseButton = playerView.findViewById(androidx.media3.ui.R.id.exo_play_pause)
         progressTimeBar = playerView.findViewById(androidx.media3.ui.R.id.exo_progress)
         centerTimeText = playerView.findViewById(R.id.playerCenterTimeText)
+        favoriteActionButton = playerView.findViewById(R.id.playerFavoriteActionButton)
+        videoDetailButton = playerView.findViewById(R.id.playerVideoDetailButton)
         topBar = findViewById(R.id.playerTopBar)
         playerQueueRecyclerView = findViewById(R.id.playerQueueRecyclerView)
         playerQueueEmptyText = findViewById(R.id.playerQueueEmptyText)
@@ -204,13 +214,16 @@ class PlayerActivity : AppCompatActivity() {
         playerQueueRecyclerView?.adapter = playerQueueAdapter
         bindPlaylistPanel()
         bindCoverImage()
+        updatePlayerActionButtons()
         findViewById<ImageButton>(R.id.playerBackButton).setDebouncedClickListener { finish() }
         moreButton.setDebouncedClickListener { showPlayerMenu() }
+        favoriteActionButton.setDebouncedClickListener { toggleFavoriteFromPlayer() }
+        videoDetailButton.setDebouncedClickListener { openCurrentVideoDetail() }
 
         playerView.setOnTouchListener { _, event -> handleTouch(event) }
-        playerView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyVideoRotation() }
         EdgeToEdgeHelper.applyInsets(topBar, applyTop = true)
         applyImmersivePlayback(playWhenReady)
+        refreshPlayerActionState()
     }
 
     override fun onStart() {
@@ -289,6 +302,7 @@ class PlayerActivity : AppCompatActivity() {
         outState.putString(STATE_PLAY_SESSION_ID, playSessionId)
         outState.putString(STATE_PLAYBACK_URL, playbackUrl)
         outState.putString(STATE_TITLE, title)
+        outState.putString(STATE_COVER_IMAGE_URL, coverImageUrl)
         outState.putInt(STATE_PLAYLIST_INDEX, playlistIndex)
     }
 
@@ -329,7 +343,6 @@ class PlayerActivity : AppCompatActivity() {
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 currentVideoSize = videoSize
-                applyVideoRotation()
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -365,7 +378,6 @@ class PlayerActivity : AppCompatActivity() {
         exoPlayer.playWhenReady = playWhenReady
         PlayerCache.markPlayed(this, itemId)
         prefetchUpcomingVideosIfNeeded()
-        applyVideoRotation()
         syncPlaybackControls()
     }
 
@@ -536,6 +548,7 @@ class PlayerActivity : AppCompatActivity() {
             playbackPosition = prefetchedPlayback.playbackPositionMs
             playWhenReady = shouldPlayWhenReady
             bindPlaylistPanel()
+            refreshPlayerActionState()
             swapToMedia(prefetchedPlayback.playbackUrl, shouldPlayWhenReady)
             PlayerCache.markPlayed(this, itemId)
             prefetchUpcomingVideosIfNeeded()
@@ -557,7 +570,11 @@ class PlayerActivity : AppCompatActivity() {
                     titleText.text = title
                     playbackPosition = detail.playbackPositionTicks / 10_000L
                     playWhenReady = shouldPlayWhenReady
+                    coverImageUrl = detail.heroImageUrl
+                    isCurrentFavorite = detail.isFavorite
+                    updatePlayerActionButtons()
                     bindPlaylistPanel()
+                    bindCoverImage()
                     swapToMedia(detail.playbackUrl.orEmpty(), shouldPlayWhenReady)
                     PlayerCache.markPlayed(this, itemId)
                     prefetchUpcomingVideosIfNeeded()
@@ -574,9 +591,21 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun rotateVideo() {
-        manualVideoRotation = (manualVideoRotation + 90) % 360
-        applyVideoRotation()
-        showGestureLabel(getString(R.string.rotate_video_label, manualVideoRotation), 900)
+        val shouldSwitchToLandscape =
+            resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
+        manualVideoRotation = if (shouldSwitchToLandscape) 90 else 0
+        requestedOrientation = if (shouldSwitchToLandscape) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        }
+        showGestureLabel(
+            getString(
+                if (shouldSwitchToLandscape) R.string.player_orientation_landscape
+                else R.string.player_orientation_portrait
+            ),
+            900
+        )
     }
 
     private fun handleTouch(event: MotionEvent): Boolean {
@@ -880,21 +909,9 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun applyVideoRotation() {
         val surfaceView = playerView.videoSurfaceView ?: return
-        surfaceView.rotation = manualVideoRotation.toFloat()
-
-        if (manualVideoRotation % 180 == 0) {
-            surfaceView.scaleX = 1f
-            surfaceView.scaleY = 1f
-            return
-        }
-
-        val containerWidth = playerView.width.toFloat()
-        val containerHeight = playerView.height.toFloat()
-        if (containerWidth <= 0f || containerHeight <= 0f) return
-
-        val scale = minOf(containerWidth / containerHeight, containerHeight / containerWidth)
-        surfaceView.scaleX = scale
-        surfaceView.scaleY = scale
+        surfaceView.rotation = 0f
+        surfaceView.scaleX = 1f
+        surfaceView.scaleY = 1f
     }
 
     private fun syncPlaybackControls() {
@@ -976,6 +993,91 @@ class PlayerActivity : AppCompatActivity() {
                 coverImageView.visibility = View.VISIBLE
             }
         )
+    }
+
+    private fun refreshPlayerActionState() {
+        if (!connection.isValid || itemId.isBlank()) {
+            favoriteActionButton.isEnabled = false
+            videoDetailButton.isEnabled = false
+            return
+        }
+        videoDetailButton.isEnabled = true
+        favoriteActionButton.isEnabled = false
+        val requestSerial = ++favoriteStateRequestSerial
+        val requestItemId = itemId
+        networkExecutor.execute {
+            val result = mediaRepository.fetchVideoDetail(connection, requestItemId)
+            runOnUiThread {
+                if (favoriteStateRequestSerial != requestSerial || itemId != requestItemId) return@runOnUiThread
+                favoriteActionButton.isEnabled = true
+                result.onSuccess { detail ->
+                    isCurrentFavorite = detail.isFavorite
+                    if (!detail.heroImageUrl.isNullOrBlank()) {
+                        coverImageUrl = detail.heroImageUrl
+                    }
+                    updatePlayerActionButtons()
+                }.onFailure {
+                    updatePlayerActionButtons()
+                }
+            }
+        }
+    }
+
+    private fun toggleFavoriteFromPlayer() {
+        if (itemId.isBlank() || favoriteRequestInFlight) return
+        val target = !isCurrentFavorite
+        favoriteRequestInFlight = true
+        favoriteActionButton.isEnabled = false
+        networkExecutor.execute {
+            val result = mediaRepository.setFavoriteState(connection, itemId, target)
+            runOnUiThread {
+                favoriteRequestInFlight = false
+                favoriteActionButton.isEnabled = true
+                result.onSuccess {
+                    isCurrentFavorite = target
+                    updatePlayerActionButtons()
+                    Toast.makeText(
+                        this,
+                        if (isCurrentFavorite) getString(R.string.favorite_added) else getString(R.string.favorite_removed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }.onFailure { error ->
+                    updatePlayerActionButtons()
+                    Toast.makeText(
+                        this,
+                        userFriendlyErrorMessage(error, R.string.favorite_update_failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun openCurrentVideoDetail() {
+        if (itemId.isBlank()) return
+        startActivity(
+            Intent(this, VideoDetailActivity::class.java)
+                .putExtra(VideoDetailActivity.EXTRA_ITEM_ID, itemId)
+                .putStringArrayListExtra(VideoDetailActivity.EXTRA_PLAYLIST_ITEM_IDS, ArrayList(playlistItemIds))
+                .putStringArrayListExtra(VideoDetailActivity.EXTRA_PLAYLIST_ITEM_TITLES, ArrayList(playlistItemTitles))
+                .putExtra(VideoDetailActivity.EXTRA_PLAYLIST_INDEX, playlistIndex)
+                .putServerConnection(connection)
+        )
+    }
+
+    private fun updatePlayerActionButtons() {
+        favoriteActionButton.setImageResource(
+            if (isCurrentFavorite) R.drawable.ic_favorite_heart_filled else R.drawable.ic_favorite_heart_outline
+        )
+        favoriteActionButton.imageTintList = if (isCurrentFavorite) {
+            null
+        } else {
+            android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.white))
+        }
+        favoriteActionButton.alpha = if (favoriteActionButton.isEnabled) 1f else 0.55f
+        videoDetailButton.imageTintList =
+            android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.white))
+        videoDetailButton.alpha = if (videoDetailButton.isEnabled) 1f else 0.55f
     }
 
     private fun hideCoverImage() {
@@ -1247,6 +1349,7 @@ class PlayerActivity : AppCompatActivity() {
         private const val STATE_PLAY_SESSION_ID = "state_play_session_id"
         private const val STATE_PLAYBACK_URL = "state_playback_url"
         private const val STATE_TITLE = "state_title"
+        private const val STATE_COVER_IMAGE_URL = "state_cover_image_url"
         private const val STATE_PLAYLIST_INDEX = "state_playlist_index"
         private const val LONG_PRESS_SEEK_MS = 8_000L
         private const val LONG_PRESS_REPEAT_MS = 350L

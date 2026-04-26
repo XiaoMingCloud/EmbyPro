@@ -53,39 +53,68 @@
         android:elevation="12dp"
         android:orientation="vertical"
         android:paddingStart="16dp"
-        android:paddingTop="10dp"
+        android:paddingTop="8dp"
         android:paddingEnd="16dp"
-        android:paddingBottom="9dp">
-
-        <androidx.media3.ui.DefaultTimeBar
-            android:id="@id/exo_progress"
-            android:layout_width="match_parent"
-            android:layout_height="30dp"
-            android:layout_marginBottom="6dp"
-            android:paddingTop="3dp"
-            android:paddingBottom="3dp"
-            android:theme="@style/ThemeOverlay.AppCompat.Dark"
-            android:gravity="center_vertical"
-            android:minHeight="30dp"
-            android:nextFocusLeft="@id/exo_progress"
-            android:nextFocusRight="@id/exo_progress"
-            android:nextFocusUp="@id/exo_progress"
-            android:nextFocusDown="@id/exo_progress"
-            app:ad_marker_color="#66FFFFFF"
-            app:buffered_color="#59FFFFFF"
-            app:played_ad_marker_color="#FFFFFFFF"
-            app:played_color="#FFF6F7FB"
-            app:scrubber_color="@android:color/transparent"
-            app:scrubber_disabled_size="0dp"
-            app:scrubber_dragged_size="18dp"
-            app:scrubber_drawable="@drawable/player_progress_scrubber"
-            app:scrubber_enabled_size="16dp"
-            app:unplayed_color="#33FFFFFF"
-            />
+        android:paddingBottom="8dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <androidx.media3.ui.DefaultTimeBar
+                android:id="@id/exo_progress"
+                android:layout_width="0dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="10dp"
+                android:layout_weight="1"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp"
+                android:theme="@style/ThemeOverlay.AppCompat.Dark"
+                android:gravity="center_vertical"
+                android:minHeight="28dp"
+                android:nextFocusLeft="@id/exo_progress"
+                android:nextFocusRight="@id/exo_progress"
+                android:nextFocusUp="@id/exo_progress"
+                android:nextFocusDown="@id/exo_progress"
+                app:ad_marker_color="#66FFFFFF"
+                app:buffered_color="#59FFFFFF"
+                app:played_ad_marker_color="#FFFFFFFF"
+                app:played_color="#FFF6F7FB"
+                app:scrubber_color="@android:color/transparent"
+                app:scrubber_disabled_size="0dp"
+                app:scrubber_dragged_size="18dp"
+                app:scrubber_drawable="@drawable/player_progress_scrubber"
+                app:scrubber_enabled_size="16dp"
+                app:unplayed_color="#33FFFFFF" />
+
+            <ImageButton
+                android:id="@+id/playerFavoriteActionButton"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@drawable/bg_player_icon_button"
+                android:contentDescription="@string/player_toggle_favorite"
+                android:padding="8dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_favorite_heart_outline" />
+
+            <ImageButton
+                android:id="@+id/playerVideoDetailButton"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_player_icon_button"
+                android:contentDescription="@string/player_open_video_detail"
+                android:padding="8dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_player_video_detail" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 

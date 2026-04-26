@@ -283,6 +283,8 @@
     <string name="favorite_added">已加入收藏</string>
     <string name="favorite_removed">已取消收藏</string>
     <string name="favorite_update_failed">更新收藏状态失败</string>
+    <string name="player_toggle_favorite">收藏或取消收藏</string>
+    <string name="player_open_video_detail">打开视频详情</string>
     <string name="video_detail_load_failed">加载视频详情失败</string>
     <string name="playback_url_missing">播放地址缺失</string>
     <string name="player_error">播放器加载失败</string>
@@ -336,4 +338,6 @@
     <string name="music_player_sleep_timer_update">更新</string>
     <string name="music_player_sleep_timer_minutes">%1$d 分钟</string>
     <string name="music_player_sleep_timer_slider_hint">左右拖动滑杆设置睡眠时间</string>
+    <string name="player_orientation_landscape">已切换横屏</string>
+    <string name="player_orientation_portrait">已切换竖屏</string>
 </resources>
