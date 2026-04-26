@@ -310,7 +310,6 @@ class MusicPlayerActivity : AppCompatActivity() {
         lyricsButton.setDebouncedClickListener { switchContentPage(MusicPlayerContentPage.LYRICS) }
         songTabButton.setDebouncedClickListener { switchContentPage(MusicPlayerContentPage.SONG) }
         lyricsTabButton.setDebouncedClickListener { switchContentPage(MusicPlayerContentPage.LYRICS) }
-        lyricsButton.visibility = View.GONE
         queueTitleTextView.text = queueTitle
         updateFavoriteIcon()
         applyBottomControlButtonTint()
@@ -378,12 +377,16 @@ class MusicPlayerActivity : AppCompatActivity() {
                     val absDiffX = kotlin.math.abs(diffX)
                     val absDiffY = kotlin.math.abs(diffY)
 
-                    // Require minimum 120px horizontal movement and horizontal dominance
+                    // Horizontal swipe now switches between the song page and lyrics page.
                     if (absDiffX > 120 && absDiffX > absDiffY * 2) {
                         if (diffX < 0) {
-                            playNext()
+                            if (currentContentPage == MusicPlayerContentPage.SONG) {
+                                switchContentPage(MusicPlayerContentPage.LYRICS)
+                            }
                         } else {
-                            playPrevious()
+                            if (currentContentPage == MusicPlayerContentPage.LYRICS) {
+                                switchContentPage(MusicPlayerContentPage.SONG)
+                            }
                         }
                     }
                 }

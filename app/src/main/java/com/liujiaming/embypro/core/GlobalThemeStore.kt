@@ -5,22 +5,22 @@ import androidx.annotation.ColorRes
 import androidx.annotation.StringRes
 
 /**
- * Enum representing all available theme options in the application.
- * Each theme defines a key, label, background color resource, and system bar appearance.
+ * Enum representing all available global font color options in the application.
+ * Existing keys are kept stable so prior settings migrate cleanly.
  */
 enum class GlobalThemeOption(
     val key: String,
     @StringRes val labelRes: Int,
-    @ColorRes val backgroundRes: Int,
+    @ColorRes val fontColorRes: Int,
     val lightSystemBars: Boolean
 ) {
-    LIGHT_GREEN("light_green", R.string.theme_light_green, R.color.theme_bg_light_green, true),
-    PINK("pink", R.string.theme_pink, R.color.theme_bg_pink, true),
-    WHITE("white", R.string.theme_white, R.color.theme_bg_white, true),
-    BLACK("black", R.string.theme_black, R.color.theme_bg_black, false),
-    LIGHT_PURPLE("light_purple", R.string.theme_light_purple, R.color.theme_bg_light_purple, true),
-    LIGHT_BLUE("light_blue", R.string.theme_light_blue, R.color.theme_bg_light_blue, true),
-    LIGHT_YELLOW("light_yellow", R.string.theme_light_yellow, R.color.theme_bg_light_yellow, true);
+    LIGHT_GREEN("light_green", R.string.theme_light_green, R.color.global_font_green, true),
+    PINK("pink", R.string.theme_pink, R.color.global_font_pink, true),
+    WHITE("white", R.string.theme_white, R.color.global_font_white, true),
+    BLACK("black", R.string.theme_black, R.color.global_font_black, true),
+    LIGHT_PURPLE("light_purple", R.string.theme_light_purple, R.color.global_font_purple, true),
+    LIGHT_BLUE("light_blue", R.string.theme_light_blue, R.color.global_font_blue, true),
+    LIGHT_YELLOW("light_yellow", R.string.theme_light_yellow, R.color.global_font_gold, true);
 
     companion object {
         /**

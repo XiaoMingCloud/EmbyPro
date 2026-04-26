@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.Drawable
+import java.io.File
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -60,13 +61,13 @@ object GlobalThemeManager {
         val option = themeStore.loadTheme()
         val content = activity.findViewById<ViewGroup>(android.R.id.content) ?: return
         val root = content.getChildAt(0) ?: return
-        val backgroundColor = activity.getColor(option.backgroundRes)
+        val backgroundColor = Color.WHITE
         val backgroundDrawable = resolveBackgroundDrawable(activity, themeStore, backgroundColor)
         root.background = backgroundDrawable
         content.background = backgroundDrawable.constantState?.newDrawable()?.mutate() ?: backgroundDrawable
         WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
-            isAppearanceLightStatusBars = option.lightSystemBars
-            isAppearanceLightNavigationBars = option.lightSystemBars
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
         }
         applyForegroundColors(root, option)
     }
@@ -86,10 +87,16 @@ object GlobalThemeManager {
         }
 
         return runCatching {
-            activity.contentResolver.openInputStream(android.net.Uri.parse(backgroundUri)).use { stream ->
-                Drawable.createFromStream(stream, backgroundUri)
-                    ?: android.graphics.drawable.ColorDrawable(fallbackColor)
+            val drawable = if (backgroundUri.startsWith("content://")) {
+                activity.contentResolver.openInputStream(android.net.Uri.parse(backgroundUri)).use { stream ->
+                    Drawable.createFromStream(stream, backgroundUri)
+                }
+            } else {
+                File(backgroundUri).inputStream().use { stream ->
+                    Drawable.createFromStream(stream, backgroundUri)
+                }
             }
+            drawable ?: android.graphics.drawable.ColorDrawable(fallbackColor)
         }.getOrElse {
             themeStore.clearBackgroundImageUri()
             android.graphics.drawable.ColorDrawable(fallbackColor)
@@ -152,37 +159,30 @@ object GlobalThemeManager {
      * Resolves card background color based on theme option.
      * Black theme uses darker semi-transparent white, others use lighter transparency.
      */
-    private fun resolveCardBackgroundColor(option: GlobalThemeOption): Int {
-        return if (option == GlobalThemeOption.BLACK) {
-            Color.parseColor("#33FFFFFF")
-        } else {
-            ColorUtils.setAlphaComponent(Color.WHITE, 0x66)
-        }
+    private fun resolveCardBackgroundColor(@Suppress("UNUSED_PARAMETER") option: GlobalThemeOption): Int {
+        return ColorUtils.setAlphaComponent(Color.WHITE, 0x66)
     }
 
     /**
      * Resolves card stroke (border) color based on theme option.
      */
-    private fun resolveCardStrokeColor(option: GlobalThemeOption): Int {
-        return if (option == GlobalThemeOption.BLACK) {
-            Color.parseColor("#66FFFFFF")
-        } else {
-            Color.parseColor("#99FFFFFF")
-        }
+    private fun resolveCardStrokeColor(@Suppress("UNUSED_PARAMETER") option: GlobalThemeOption): Int {
+        return Color.parseColor("#99FFFFFF")
     }
 
     /**
      * Resolves primary text color. Dark color for light system bars, white for dark bars.
      */
     private fun resolvePrimaryTextColor(option: GlobalThemeOption): Int {
-        return if (option.lightSystemBars) Color.parseColor("#FF272336") else Color.WHITE
+        return GlobalThemeStoreColorCache.colorFor(option)
     }
 
     /**
      * Resolves secondary text color. Muted color for light system bars, semi-transparent white for dark.
      */
     private fun resolveSecondaryTextColor(option: GlobalThemeOption): Int {
-        return if (option.lightSystemBars) Color.parseColor("#FF7E748E") else Color.parseColor("#CCFFFFFF")
+        val primary = resolvePrimaryTextColor(option)
+        return ColorUtils.setAlphaComponent(primary, 0xB8)
     }
 
     /**
@@ -214,13 +214,13 @@ object GlobalThemeManager {
     private object GlobalThemeStoreColorCache {
         fun colorFor(option: GlobalThemeOption): Int {
             return when (option) {
-                GlobalThemeOption.LIGHT_GREEN -> Color.parseColor("#FFF1FAEF")
-                GlobalThemeOption.PINK -> Color.parseColor("#FFFFF0F6")
-                GlobalThemeOption.WHITE -> Color.parseColor("#FFFFFFFF")
-                GlobalThemeOption.BLACK -> Color.parseColor("#FF121212")
-                GlobalThemeOption.LIGHT_PURPLE -> Color.parseColor("#FFF4EEFF")
-                GlobalThemeOption.LIGHT_BLUE -> Color.parseColor("#FFEEF6FF")
-                GlobalThemeOption.LIGHT_YELLOW -> Color.parseColor("#FFF7F4FB")
+                GlobalThemeOption.LIGHT_GREEN -> Color.parseColor("#FF2F7D32")
+                GlobalThemeOption.PINK -> Color.parseColor("#FFB03A72")
+                GlobalThemeOption.WHITE -> Color.parseColor("#FF6E7385")
+                GlobalThemeOption.BLACK -> Color.parseColor("#FF272336")
+                GlobalThemeOption.LIGHT_PURPLE -> Color.parseColor("#FF6B4FB3")
+                GlobalThemeOption.LIGHT_BLUE -> Color.parseColor("#FF2F6FD6")
+                GlobalThemeOption.LIGHT_YELLOW -> Color.parseColor("#FF9A6A00")
             }
         }
     }

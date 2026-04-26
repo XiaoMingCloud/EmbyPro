@@ -183,7 +183,12 @@ class VideoDetailActivity : AppCompatActivity() {
                 )
             },
             cardLayout = R.layout.item_chapter_card,
-            accessToken = connection.accessToken
+            accessToken = connection.accessToken,
+            onItemClick = { item ->
+                val chapterIndex = item.id.substringAfterLast("_").toIntOrNull() ?: return@MediaPosterAdapter
+                val chapter = detail.chapters.getOrNull(chapterIndex) ?: return@MediaPosterAdapter
+                openPlayer(chapter.startPositionTicks / 10_000L)
+            }
         )
 
         EmbyImageLoader.load(
@@ -204,7 +209,7 @@ class VideoDetailActivity : AppCompatActivity() {
         )
     }
 
-    private fun openPlayer() {
+    private fun openPlayer(startPositionMs: Long? = null) {
         val detail = currentDetail ?: return
         if (detail.playbackUrl.isNullOrBlank()) {
             Toast.makeText(this, getString(R.string.playback_url_missing), Toast.LENGTH_SHORT).show()
@@ -225,7 +230,7 @@ class VideoDetailActivity : AppCompatActivity() {
                         currentIndex = playlistIndex
                     ),
                     itemId = itemId,
-                    preferredStartPositionMs = (detail.playbackPositionTicks) / 10_000L
+                    preferredStartPositionMs = startPositionMs ?: (detail.playbackPositionTicks / 10_000L)
                 )
             )
         }.onFailure {

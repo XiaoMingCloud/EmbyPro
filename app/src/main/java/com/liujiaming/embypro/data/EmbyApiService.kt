@@ -163,11 +163,12 @@ enum class LibrarySortField(val apiValue: String, val labelRes: Int) {
 
 /**
  * Data class representing a chapter in a media item.
- * Contains chapter title, start time label, and optional image URL.
+ * Contains chapter title, start time label, start position, and optional image URL.
  */
 data class ChapterUiModel(
     val title: String,
     val startLabel: String,
+    val startPositionTicks: Long,
     val imageUrl: String?
 )
 
@@ -2090,6 +2091,7 @@ class EmbyApiService(
                     ChapterUiModel(
                         title = chapter.optString("Name", "章节 ${index + 1}"),
                         startLabel = formatTicks(chapter.optLong("StartPositionTicks")),
+                        startPositionTicks = chapter.optLong("StartPositionTicks"),
                         imageUrl = buildChapterImageUrl(
                             baseUrl = baseUrl,
                             itemId = item.optString("Id"),

@@ -1,18 +1,16 @@
 package com.liujiaming.embypro
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 
 /**
  * Settings activity for application-level configurations.
- * Allows users to customize theme, background image, and access music/home settings.
+ * Allows users to customize font color, background image library, and access music/home settings.
  */
 class SettingsActivity : AppCompatActivity() {
     private lateinit var topBar: View
@@ -22,16 +20,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var connection: ServerConnection
     private lateinit var backgroundValueText: TextView
 
-    private val backgroundPickerLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri == null) return@registerForActivityResult
-        val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-        runCatching {
-            contentResolver.takePersistableUriPermission(uri, takeFlags)
-        }
-        themeStore.saveBackgroundImageUri(uri.toString())
-        GlobalThemeManager.apply(this)
-        updateBackgroundSummary()
-    }
+    private val backgroundLibrary by lazy { GlobalBackgroundLibrary(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,7 +38,7 @@ class SettingsActivity : AppCompatActivity() {
             startActivity(Intent(this, ThemeSettingsActivity::class.java))
         }
         findViewById<View>(R.id.settingsBackgroundImageEntry).setDebouncedClickListener {
-            backgroundPickerLauncher.launch(arrayOf("image/*"))
+            startActivity(Intent(this, GlobalBackgroundSettingsActivity::class.java))
         }
         findViewById<View>(R.id.settingsBackgroundImageEntry).setOnLongClickListener {
             clearBackgroundImage()
@@ -75,10 +64,12 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun updateBackgroundSummary() {
-        backgroundValueText.text = if (themeStore.loadBackgroundImageUri().isNullOrBlank()) {
-            getString(R.string.settings_background_image_none)
+        val selected = !themeStore.loadBackgroundImageUri().isNullOrBlank()
+        val count = backgroundLibrary.imageCount()
+        backgroundValueText.text = if (!selected) {
+            getString(R.string.settings_background_image_builtin_default)
         } else {
-            getString(R.string.settings_background_image_selected)
+            getString(R.string.settings_background_image_selected_with_count, count)
         }
     }
 

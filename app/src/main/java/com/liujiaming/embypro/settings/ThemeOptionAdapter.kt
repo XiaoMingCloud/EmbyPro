@@ -46,7 +46,7 @@ class ThemeOptionAdapter(
         fun bind(item: GlobalThemeOption, selected: Boolean) {
             val context = itemView.context
             card.setCardBackgroundColor(GlobalThemeManager.cardBackgroundColor(context))
-            swatch.backgroundTintList = ContextCompat.getColorStateList(context, item.backgroundRes)
+            swatch.backgroundTintList = ContextCompat.getColorStateList(context, item.fontColorRes)
             title.text = context.getString(item.labelRes)
             title.setTextColor(GlobalThemeManager.primaryTextColor(context))
             check.visibility = if (selected) View.VISIBLE else View.INVISIBLE

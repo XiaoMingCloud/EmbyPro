@@ -28,6 +28,13 @@
     <color name="theme_bg_light_purple">#FFF4EEFF</color>
     <color name="theme_bg_light_blue">#FFEEF6FF</color>
     <color name="theme_bg_light_yellow">#FFF7F4FB</color>
+    <color name="global_font_black">#FF272336</color>
+    <color name="global_font_green">#FF2F7D32</color>
+    <color name="global_font_pink">#FFB03A72</color>
+    <color name="global_font_white">#FF6E7385</color>
+    <color name="global_font_purple">#FF6B4FB3</color>
+    <color name="global_font_blue">#FF2F6FD6</color>
+    <color name="global_font_gold">#FF9A6A00</color>
     <color name="home_search_surface">#FFF3EFF7</color>
     <color name="home_search_stroke">#1F1B1B1F</color>
     <color name="home_tab_video_bg">#FFFFD7E6</color>

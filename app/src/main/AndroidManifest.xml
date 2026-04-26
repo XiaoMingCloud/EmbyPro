@@ -51,6 +51,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".GlobalBackgroundSettingsActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".MusicPlayerActivity"
             android:exported="false" />
 
