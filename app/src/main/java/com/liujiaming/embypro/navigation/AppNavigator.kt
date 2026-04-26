@@ -19,6 +19,8 @@ data class VideoQueue(
  * Provides helper methods for opening different screens with proper intent extras.
  */
 object AppNavigator {
+    private val directlyPlayablePosterTypes = setOf("Movie", "Episode", "Video", "MusicVideo")
+
     /**
      * Opens the home screen activity.
      */
@@ -181,10 +183,23 @@ object AppNavigator {
         sourceItems: List<MediaPosterUiModel>
     ) {
         if (item.id.isBlank()) return
-        if (item.isFolder || item.itemType == "BoxSet" || item.itemType == "Folder") {
+        if (isPosterLibraryContainer(item)) {
             openLibrary(activity, connection, item.id, item.title)
             return
         }
+        openPosterItemDetail(activity, connection, item, sourceItems)
+    }
+
+    /**
+     * Opens the detail page for a non-folder poster item.
+     */
+    fun openPosterItemDetail(
+        activity: AppCompatActivity,
+        connection: ServerConnection,
+        item: MediaPosterUiModel,
+        sourceItems: List<MediaPosterUiModel>
+    ) {
+        if (item.id.isBlank() || isPosterLibraryContainer(item)) return
         openVideoDetail(activity, connection, item.id, buildPosterVideoQueue(sourceItems, item.id))
     }
 
@@ -238,11 +253,11 @@ object AppNavigator {
      * Filters out folders and non-playable items.
      */
     fun buildPosterVideoQueue(items: List<MediaPosterUiModel>, selectedId: String): VideoQueue {
-        val playableItems = items.filter { !it.isFolder && it.itemType != "BoxSet" && it.itemType != "Folder" }
-        return VideoQueue(
-            itemIds = ArrayList(playableItems.map { it.id }),
-            itemTitles = ArrayList(playableItems.map { it.title }),
-            currentIndex = playableItems.indexOfFirst { it.id == selectedId }
+        return buildVideoQueue(
+            items = items.filterNot(::isPosterLibraryContainer),
+            selectedId = selectedId,
+            idSelector = { it.id },
+            titleSelector = { it.title }
         )
     }
 
@@ -250,10 +265,32 @@ object AppNavigator {
      * Builds a video queue from playback history items.
      */
     fun buildHistoryVideoQueue(items: List<PlaybackHistoryItemUiModel>, selectedId: String): VideoQueue {
+        return buildVideoQueue(
+            items = items,
+            selectedId = selectedId,
+            idSelector = { it.itemId },
+            titleSelector = { it.title }
+        )
+    }
+
+    fun isPosterLibraryContainer(item: MediaPosterUiModel): Boolean {
+        return item.isFolder || item.itemType == "BoxSet" || item.itemType == "Folder"
+    }
+
+    fun isPosterDirectlyPlayableVideo(item: MediaPosterUiModel): Boolean {
+        return item.itemType in directlyPlayablePosterTypes
+    }
+
+    private fun <T> buildVideoQueue(
+        items: List<T>,
+        selectedId: String,
+        idSelector: (T) -> String,
+        titleSelector: (T) -> String
+    ): VideoQueue {
         return VideoQueue(
-            itemIds = ArrayList(items.map { it.itemId }),
-            itemTitles = ArrayList(items.map { it.title }),
-            currentIndex = items.indexOfFirst { it.itemId == selectedId }
+            itemIds = ArrayList(items.map(idSelector)),
+            itemTitles = ArrayList(items.map(titleSelector)),
+            currentIndex = items.indexOfFirst { idSelector(it) == selectedId }
         )
     }
 }

@@ -340,13 +340,7 @@ class LibraryItemsActivity : AppCompatActivity() {
     }
 
     private fun openItemDetail(item: MediaPosterUiModel) {
-        if (item.id.isBlank() || item.isFolder || item.itemType == "BoxSet" || item.itemType == "Folder") return
-        AppNavigator.openVideoDetail(
-            activity = this,
-            connection = connection,
-            itemId = item.id,
-            queue = AppNavigator.buildPosterVideoQueue(loadedItems, item.id)
-        )
+        AppNavigator.openPosterItemDetail(this, connection, item, loadedItems)
     }
 
     private fun isTabletLayout(): Boolean = resources.configuration.smallestScreenWidthDp >= 600

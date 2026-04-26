@@ -6,7 +6,6 @@ import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -468,13 +467,7 @@ class HomeTabsActivity : AppCompatActivity() {
 
     private fun openHomeFeedItemDetail(item: MediaPosterUiModel) {
         if (currentPrimaryCategory != PrimaryCategory.VIDEO) return
-        if (item.id.isBlank() || item.isFolder || item.itemType == "BoxSet" || item.itemType == "Folder") return
-        AppNavigator.openVideoDetail(
-            activity = this,
-            connection = connection,
-            itemId = item.id,
-            queue = AppNavigator.buildPosterVideoQueue(homeFeedItems, item.id)
-        )
+        AppNavigator.openPosterItemDetail(this, connection, item, homeFeedItems)
     }
 
     private fun updateHomeLoadFailedVisibility() {

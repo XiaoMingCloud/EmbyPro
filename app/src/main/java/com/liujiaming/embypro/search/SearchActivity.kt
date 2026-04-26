@@ -223,7 +223,7 @@ class SearchActivity : AppCompatActivity() {
     private fun openItem(item: MediaPosterUiModel) {
         when {
             item.id.isBlank() -> return
-            item.isFolder || item.itemType == "BoxSet" || item.itemType == "Folder" -> {
+            AppNavigator.isPosterLibraryContainer(item) -> {
                 AppNavigator.openLibrary(this, connection, item.id, item.title)
             }
             item.itemType == "Audio" -> {
@@ -238,7 +238,7 @@ class SearchActivity : AppCompatActivity() {
             item.itemType == "Playlist" -> {
                 openMusicContainer(item, MusicBrowseType.PLAYLISTS)
             }
-            item.itemType in playableVideoTypes -> {
+            AppNavigator.isPosterDirectlyPlayableVideo(item) -> {
                 playVideoDirectly(
                     connection = connection,
                     mediaRepository = mediaRepository,
@@ -281,7 +281,7 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun buildSearchVideoQueue(selectedId: String): VideoQueue {
-        val playableItems = loadedItems.filter { it.itemType in playableVideoTypes }
+        val playableItems = loadedItems.filter(AppNavigator::isPosterDirectlyPlayableVideo)
         return VideoQueue(
             itemIds = ArrayList(playableItems.map { it.id }),
             itemTitles = ArrayList(playableItems.map { it.title }),
@@ -290,7 +290,7 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun openItemDetail(item: MediaPosterUiModel) {
-        if (item.id.isBlank() || item.itemType !in playableVideoTypes) return
+        if (item.id.isBlank() || !AppNavigator.isPosterDirectlyPlayableVideo(item)) return
         AppNavigator.openVideoDetail(
             activity = this,
             connection = connection,
@@ -304,10 +304,3 @@ class SearchActivity : AppCompatActivity() {
         inputMethodManager?.hideSoftInputFromWindow(searchInput.windowToken, 0)
     }
 }
-
-private val playableVideoTypes = setOf(
-    "Movie",
-    "Episode",
-    "Video",
-    "MusicVideo"
-)
