@@ -36,6 +36,7 @@ class HomeTabsActivity : AppCompatActivity() {
     private lateinit var mediaContainer: View
     private lateinit var musicContainer: View
     private lateinit var myContainer: View
+    private lateinit var homeTopBar: View
     private lateinit var homeSearchCard: View
     private lateinit var homePrimaryCategoryBar: View
     private lateinit var homeCategoryVideoTab: TextView
@@ -103,6 +104,7 @@ class HomeTabsActivity : AppCompatActivity() {
         mediaContainer = findViewById(R.id.mediaTabContainer)
         musicContainer = findViewById(R.id.musicTabContainer)
         myContainer = findViewById(R.id.myTabContainer)
+        homeTopBar = findViewById(R.id.homeTabsTopBar)
         homeSearchCard = findViewById(R.id.homeSearchCard)
         homePrimaryCategoryBar = findViewById(R.id.homePrimaryCategoryBar)
         homeCategoryVideoTab = findViewById(R.id.homeCategoryVideoTab)
@@ -193,6 +195,7 @@ class HomeTabsActivity : AppCompatActivity() {
         }
 
         EdgeToEdgeHelper.applyInsets(topBar, applyTop = true)
+        EdgeToEdgeHelper.applyInsets(mediaContainer, applyTop = true)
         EdgeToEdgeHelper.applyInsets(bottomNavigationCard, applyBottom = true)
 
         homeFeedAdapter = MediaPosterAdapter(
@@ -463,6 +466,7 @@ class HomeTabsActivity : AppCompatActivity() {
 
     private fun showTab(tab: Tab) {
         currentTab = tab
+        homeTopBar.visibility = if (tab == Tab.HOME) View.VISIBLE else View.GONE
         homeContainer.visibility = if (tab == Tab.HOME) View.VISIBLE else View.GONE
         mediaContainer.visibility = if (tab == Tab.MEDIA) View.VISIBLE else View.GONE
         musicContainer.visibility = if (tab == Tab.MUSIC) View.VISIBLE else View.GONE

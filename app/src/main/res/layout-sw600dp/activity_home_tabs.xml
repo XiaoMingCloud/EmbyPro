@@ -20,7 +20,7 @@
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingTop="18dp"
+            android:paddingTop="10dp"
             android:paddingBottom="12dp">
 
             <com.google.android.material.card.MaterialCardView
@@ -82,36 +82,36 @@
                     <TextView
                         android:id="@+id/homeCategoryVideoTab"
                         android:layout_width="wrap_content"
-                        android:layout_height="42dp"
+                        android:layout_height="36dp"
                         android:background="@drawable/bg_home_primary_tab_video"
                         android:clickable="true"
                         android:focusable="true"
                         android:foreground="?attr/selectableItemBackgroundBorderless"
                         android:gravity="center"
-                        android:minWidth="82dp"
-                        android:paddingStart="18dp"
-                        android:paddingEnd="18dp"
+                        android:minWidth="72dp"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
                         android:text="@string/home_category_video"
                         android:textColor="@color/home_primary_tab_video_text"
-                        android:textSize="14sp"
+                        android:textSize="13sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/homeCategoryAudioTab"
                         android:layout_width="wrap_content"
-                        android:layout_height="42dp"
-                        android:layout_marginStart="10dp"
+                        android:layout_height="36dp"
+                        android:layout_marginStart="8dp"
                         android:background="@drawable/bg_home_secondary_tab"
                         android:clickable="true"
                         android:focusable="true"
                         android:foreground="?attr/selectableItemBackgroundBorderless"
                         android:gravity="center"
-                        android:minWidth="82dp"
-                        android:paddingStart="18dp"
-                        android:paddingEnd="18dp"
+                        android:minWidth="72dp"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
                         android:text="@string/home_category_audio"
                         android:textColor="@color/home_primary_tab_unselected_text"
-                        android:textSize="14sp"
+                        android:textSize="13sp"
                         android:textStyle="bold" />
                 </LinearLayout>
             </LinearLayout>
