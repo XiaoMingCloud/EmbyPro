@@ -17,8 +17,11 @@ class SettingsActivity : AppCompatActivity() {
     private val sessionStore by lazy { ServerSessionStore(this) }
     private val serverRepository by lazy { ServerRepository(this) }
     private val themeStore by lazy { GlobalThemeStore(this) }
+    private val preferenceStore by lazy { AppPreferenceStore(this) }
     private lateinit var connection: ServerConnection
     private lateinit var backgroundValueText: TextView
+    private lateinit var continuousPlayValueText: TextView
+    private lateinit var continuousPlaySwitch: androidx.appcompat.widget.SwitchCompat
 
     private val backgroundLibrary by lazy { GlobalBackgroundLibrary(this) }
 
@@ -33,9 +36,18 @@ class SettingsActivity : AppCompatActivity() {
         topBar = findViewById(R.id.settingsTopBar)
         val currentThemeValueText = findViewById<TextView>(R.id.settingsThemeValueText)
         backgroundValueText = findViewById(R.id.settingsBackgroundImageValueText)
+        continuousPlayValueText = findViewById(R.id.settingsContinuousPlayValueText)
+        continuousPlaySwitch = findViewById(R.id.settingsContinuousPlaySwitch)
         findViewById<ImageButton>(R.id.settingsBackButton).setDebouncedClickListener { finish() }
         findViewById<View>(R.id.settingsThemeEntry).setDebouncedClickListener {
             startActivity(Intent(this, ThemeSettingsActivity::class.java))
+        }
+        findViewById<View>(R.id.settingsContinuousPlayEntry).setDebouncedClickListener {
+            continuousPlaySwitch.isChecked = !continuousPlaySwitch.isChecked
+        }
+        continuousPlaySwitch.setOnCheckedChangeListener { _, isChecked ->
+            preferenceStore.saveGlobalContinuousPlay(isChecked)
+            updateContinuousPlaySummary(isChecked)
         }
         findViewById<View>(R.id.settingsBackgroundImageEntry).setDebouncedClickListener {
             startActivity(Intent(this, GlobalBackgroundSettingsActivity::class.java))
@@ -53,6 +65,7 @@ class SettingsActivity : AppCompatActivity() {
 
         currentThemeValueText.text = GlobalThemeManager.currentThemeLabel(this)
         updateBackgroundSummary()
+        updateContinuousPlaySummary(preferenceStore.loadGlobalContinuousPlay())
         EdgeToEdgeHelper.applyInsets(topBar, applyTop = true)
     }
 
@@ -61,6 +74,16 @@ class SettingsActivity : AppCompatActivity() {
         GlobalThemeManager.apply(this)
         findViewById<TextView>(R.id.settingsThemeValueText).text = GlobalThemeManager.currentThemeLabel(this)
         updateBackgroundSummary()
+        val isContinuousEnabled = preferenceStore.loadGlobalContinuousPlay()
+        continuousPlaySwitch.isChecked = isContinuousEnabled
+        updateContinuousPlaySummary(isContinuousEnabled)
+    }
+
+    private fun updateContinuousPlaySummary(enabled: Boolean) {
+        continuousPlayValueText.text = getString(
+            if (enabled) R.string.settings_continuous_play_subtitle_on
+            else R.string.settings_continuous_play_subtitle_off
+        )
     }
 
     private fun updateBackgroundSummary() {

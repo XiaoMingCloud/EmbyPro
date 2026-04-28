@@ -137,6 +137,23 @@ class AppPreferenceStore(context: Context) {
     }
 
     /**
+     * Loads the global continuous play setting for video playback.
+     * Returns true if continuous play is enabled by default, false otherwise.
+     */
+    fun loadGlobalContinuousPlay(): Boolean {
+        return preferences.getBoolean(KEY_GLOBAL_CONTINUOUS_PLAY, false)
+    }
+
+    /**
+     * Saves the global continuous play setting for video playback.
+     */
+    fun saveGlobalContinuousPlay(enabled: Boolean) {
+        preferences.edit()
+            .putBoolean(KEY_GLOBAL_CONTINUOUS_PLAY, enabled)
+            .apply()
+    }
+
+    /**
      * Builds a scoped preference key by combining prefix with server/user/library identifiers.
      * Uses "::" as separator to create unique keys per context.
      */
@@ -156,6 +173,7 @@ class AppPreferenceStore(context: Context) {
         private const val KEY_HOME_EXCLUDED_LIBRARIES = "home_excluded_libraries"
         private const val KEY_MUSIC_LIBRARY_ALIAS = "music_library_alias"
         private const val KEY_SELECTED_MUSIC_LIBRARY = "selected_music_library"
+        private const val KEY_GLOBAL_CONTINUOUS_PLAY = "global_continuous_play"
         private const val MAX_SEARCH_HISTORY_ITEMS = 12
     }
 }

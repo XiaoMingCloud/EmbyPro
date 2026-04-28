@@ -15,11 +15,16 @@ import java.util.concurrent.Executors
  */
 class MusicOfflineCache(context: Context) {
     private val appContext = context.applicationContext
-    private val rootDir = File(appContext.filesDir, "music_offline").apply { mkdirs() }
+    private val legacyRootDir = File(appContext.filesDir, "music_offline")
+    private val rootDir = File(appContext.cacheDir, "music_offline").apply { mkdirs() }
     private val audioDir = File(rootDir, "audio").apply { mkdirs() }
     private val lyricsDir = File(rootDir, "lyrics").apply { mkdirs() }
     private val indexFile = File(rootDir, "index.json")
     private val client = NetworkClientProvider.client
+
+    init {
+        migrateLegacyStorageIfNeeded()
+    }
 
     fun buildLocalPage(
         connection: ServerConnection,
@@ -349,8 +354,15 @@ class MusicOfflineCache(context: Context) {
     }
 
     private fun readEntriesLocked(): List<CachedMusicEntry> {
-        if (!indexFile.exists()) return emptyList()
-        val json = runCatching { JSONArray(indexFile.readText(Charsets.UTF_8)) }.getOrElse { JSONArray() }
+        return readEntriesFromFile(indexFile) { path -> File(path).exists() }
+    }
+
+    private fun readEntriesFromFile(
+        file: File,
+        shouldKeepEntry: (String) -> Boolean = { true }
+    ): List<CachedMusicEntry> {
+        if (!file.exists()) return emptyList()
+        val json = runCatching { JSONArray(file.readText(Charsets.UTF_8)) }.getOrElse { JSONArray() }
         val entries = mutableListOf<CachedMusicEntry>()
         for (index in 0 until json.length()) {
             val item = json.optJSONObject(index) ?: continue
@@ -369,7 +381,7 @@ class MusicOfflineCache(context: Context) {
                 cachedAtMs = item.optLong("cachedAtMs")
             )
             if (entry.itemId.isBlank() || entry.localPath.isBlank()) continue
-            if (!File(entry.localPath).exists()) continue
+            if (!shouldKeepEntry(entry.localPath)) continue
             entries.add(entry)
         }
         return entries
@@ -410,6 +422,57 @@ class MusicOfflineCache(context: Context) {
             buildLyricsFile(buildEntryKeyFromEntry(entry)).delete()
             iterator.remove()
             totalSize -= fileSize
+        }
+    }
+
+    private fun migrateLegacyStorageIfNeeded() {
+        synchronized(lock) {
+            if (!legacyRootDir.exists() || legacyRootDir.absolutePath == rootDir.absolutePath) return@synchronized
+
+            val legacyAudioDir = File(legacyRootDir, "audio")
+            val legacyLyricsDir = File(legacyRootDir, "lyrics")
+            legacyAudioDir.listFiles()?.filter(File::isFile)?.forEach { legacyFile ->
+                moveFileToDirectory(legacyFile, audioDir)
+            }
+            legacyLyricsDir.listFiles()?.filter(File::isFile)?.forEach { legacyFile ->
+                moveFileToDirectory(legacyFile, lyricsDir)
+            }
+
+            val migratedEntries = readEntriesFromFile(File(legacyRootDir, "index.json")) { true }
+                .mapNotNull { entry ->
+                    val migratedFile = File(audioDir, File(entry.localPath).name)
+                    migratedFile.takeIf(File::exists)?.let {
+                        entry.copy(localPath = it.absolutePath)
+                    }
+                }
+            if (migratedEntries.isNotEmpty()) {
+                val mergedEntries = (readEntriesLocked() + migratedEntries)
+                    .groupBy { "${it.baseUrl}::${it.userId}::${it.itemId}" }
+                    .map { (_, duplicates) -> duplicates.maxByOrNull { it.cachedAtMs } ?: duplicates.first() }
+                    .toMutableList()
+                trimToSizeLocked(mergedEntries)
+                writeEntriesLocked(mergedEntries)
+            }
+
+            legacyRootDir.deleteRecursively()
+        }
+    }
+
+    private fun moveFileToDirectory(source: File, targetDir: File) {
+        val target = File(targetDir, source.name)
+        if (target.exists()) {
+            source.delete()
+            return
+        }
+        if (!source.renameTo(target)) {
+            runCatching {
+                source.inputStream().use { input ->
+                    target.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                source.delete()
+            }
         }
     }
 

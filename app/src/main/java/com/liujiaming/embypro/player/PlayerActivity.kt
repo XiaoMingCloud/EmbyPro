@@ -62,6 +62,7 @@ class PlayerActivity : AppCompatActivity() {
     private val mediaRepository by lazy { MediaRepository(this) }
     private val sessionStore by lazy { ServerSessionStore(this) }
     private val serverRepository by lazy { ServerRepository(this) }
+    private val preferenceStore by lazy { AppPreferenceStore(this) }
 
     // UI components
     private lateinit var playerView: PlayerView
@@ -152,7 +153,8 @@ class PlayerActivity : AppCompatActivity() {
         playWhenReady = savedInstanceState?.getBoolean(STATE_PLAY_WHEN_READY) ?: true
         currentSpeedIndex = savedInstanceState?.getInt(STATE_SPEED_INDEX) ?: 0
         manualVideoRotation = savedInstanceState?.getInt(STATE_MANUAL_ROTATION) ?: 0
-        isContinuousPlayEnabled = savedInstanceState?.getBoolean(STATE_CONTINUOUS_PLAY) ?: false
+        isContinuousPlayEnabled = savedInstanceState?.getBoolean(STATE_CONTINUOUS_PLAY)
+            ?: preferenceStore.loadGlobalContinuousPlay()
         itemId = savedInstanceState?.getString(STATE_ITEM_ID) ?: itemId
         mediaSourceId = savedInstanceState?.getString(STATE_MEDIA_SOURCE_ID) ?: mediaSourceId
         playSessionId = savedInstanceState?.getString(STATE_PLAY_SESSION_ID) ?: playSessionId

@@ -173,6 +173,9 @@
     <string name="theme_light_yellow">白色字体</string>
     <string name="settings_home_display_subtitle">管理首页随机展示的媒体库范围</string>
     <string name="settings_background_image_title">全局背景图片</string>
+    <string name="settings_continuous_play_title">全局连续播放</string>
+    <string name="settings_continuous_play_subtitle_off">关闭后每次播放视频默认不自动连播</string>
+    <string name="settings_continuous_play_subtitle_on">开启后每次播放视频默认自动连播</string>
     <string name="settings_background_image_none">未设置，点击进入背景素材库（长按可清除）</string>
     <string name="settings_background_image_selected">已设置全局背景（长按可清除）</string>
     <string name="settings_background_image_selected_with_count">已选中背景，素材库共 %1$d 张</string>
