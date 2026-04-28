@@ -109,10 +109,12 @@ class VideoDetailActivity : AppCompatActivity() {
     private var initialPullY = 0f
     private var isStretchingHero = false
     private var heroBaseHeight = 0
+    private var heroBlendBaseHeight = 0
     private var currentPageBackgroundColor = Color.parseColor("#EAF3F6")
     private var currentCoverScheme = CoverColorExtractor.defaultScheme()
     private var currentImageKey: String = ""
     private var colorAnimator: ValueAnimator? = null
+    private var stretchResetAnimator: ValueAnimator? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -509,8 +511,9 @@ class VideoDetailActivity : AppCompatActivity() {
         heroContainer.layoutParams = heroContainer.layoutParams.apply {
             height = heroBaseHeight
         }
+        heroBlendBaseHeight = (heroBaseHeight * 0.54f).toInt()
         heroBottomBlend.layoutParams = heroBottomBlend.layoutParams.apply {
-            height = (heroBaseHeight * 0.54f).toInt()
+            height = heroBlendBaseHeight
         }
     }
 
@@ -539,8 +542,8 @@ class VideoDetailActivity : AppCompatActivity() {
     }
 
     private fun resolveCollapsedBarContentColor(): Int {
-        return if (ColorUtils.calculateLuminance(currentPageBackgroundColor) > 0.62) {
-            getColor(R.color.text_primary)
+        return if (ColorUtils.calculateLuminance(currentPageBackgroundColor) > 0.38) {
+            GlobalThemeManager.primaryTextColor(this)
         } else {
             Color.WHITE
         }
@@ -611,7 +614,7 @@ class VideoDetailActivity : AppCompatActivity() {
         playButton.iconTint = ColorStateList.valueOf(contentColor)
         actionMoreCard.setCardBackgroundColor(currentCoverScheme.cardColor)
         actionMoreCard.strokeColor = currentCoverScheme.cardStrokeColor
-        actionMoreButton.imageTintList = ColorStateList.valueOf(currentCoverScheme.textPrimaryColor)
+        actionMoreButton.imageTintList = ColorStateList.valueOf(GlobalThemeManager.primaryTextColor(this))
     }
 
     private fun updatePlayButtonText(playbackPositionTicks: Long) {
@@ -780,21 +783,23 @@ class VideoDetailActivity : AppCompatActivity() {
     }
 
     private fun applyContentColors(scheme: CoverColorScheme) {
-        titleText.setTextColor(scheme.textPrimaryColor)
-        runtimeText.setTextColor(scheme.textSecondaryColor)
-        versionLabelText.setTextColor(scheme.textPrimaryColor)
-        versionText.setTextColor(scheme.textPrimaryColor)
-        audioLabelText.setTextColor(scheme.textPrimaryColor)
-        audioText.setTextColor(scheme.textPrimaryColor)
-        studioText.setTextColor(scheme.textSecondaryColor)
-        packedByText.setTextColor(scheme.textPrimaryColor)
-        chaptersHeaderText.setTextColor(scheme.textPrimaryColor)
-        mediaInfoHeaderText.setTextColor(scheme.textPrimaryColor)
-        mediaTitleText.setTextColor(scheme.textPrimaryColor)
-        videoInfoCardTitleText.setTextColor(scheme.textPrimaryColor)
-        audioInfoCardTitleText.setTextColor(scheme.textPrimaryColor)
-        videoInfoText.setTextColor(scheme.textSecondaryColor)
-        audioInfoText.setTextColor(scheme.textSecondaryColor)
+        val primaryTextColor = GlobalThemeManager.primaryTextColor(this)
+        val secondaryTextColor = GlobalThemeManager.secondaryTextColor(this)
+        titleText.setTextColor(primaryTextColor)
+        runtimeText.setTextColor(secondaryTextColor)
+        versionLabelText.setTextColor(primaryTextColor)
+        versionText.setTextColor(primaryTextColor)
+        audioLabelText.setTextColor(primaryTextColor)
+        audioText.setTextColor(primaryTextColor)
+        studioText.setTextColor(secondaryTextColor)
+        packedByText.setTextColor(primaryTextColor)
+        chaptersHeaderText.setTextColor(primaryTextColor)
+        mediaInfoHeaderText.setTextColor(primaryTextColor)
+        mediaTitleText.setTextColor(primaryTextColor)
+        videoInfoCardTitleText.setTextColor(primaryTextColor)
+        audioInfoCardTitleText.setTextColor(primaryTextColor)
+        videoInfoText.setTextColor(secondaryTextColor)
+        audioInfoText.setTextColor(secondaryTextColor)
         videoInfoCard.background = createInfoCardBackground(scheme)
         audioInfoCard.background = createInfoCardBackground(scheme)
     }
@@ -811,8 +816,18 @@ class VideoDetailActivity : AppCompatActivity() {
     }
 
     private fun setupHeroStretch() {
-        heroImage.pivotY = 0f
-        heroImage.pivotX = resources.displayMetrics.widthPixels / 2f
+        val centerX = resources.displayMetrics.widthPixels / 2f
+        val centerY = heroBaseHeight / 2f
+        heroImage.pivotX = centerX
+        heroImage.pivotY = centerY
+        heroBlurImage.pivotX = centerX
+        heroBlurImage.pivotY = centerY
+        heroColorDiffuse.pivotX = centerX
+        heroColorDiffuse.pivotY = centerY
+        heroDimOverlay.pivotX = centerX
+        heroDimOverlay.pivotY = centerY
+        heroBottomBlend.pivotX = centerX
+        heroBottomBlend.pivotY = heroBottomBlend.height / 2f
         rootView.setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -848,26 +863,87 @@ class VideoDetailActivity : AppCompatActivity() {
     }
 
     private fun applyHeroStretch(pullDistance: Float) {
-        val damped = pullDistance * 0.42f
-        val scaleBoost = (damped / heroContainer.height.coerceAtLeast(1)).coerceAtMost(0.26f)
+        stretchResetAnimator?.cancel()
+        val maxStretchPx = (resources.displayMetrics.ydpi / 2.54f * 5f).toInt()
+            .coerceAtLeast((resources.displayMetrics.density * 220f).toInt())
+        val responseDistance = maxStretchPx * 0.72f
+        val easedPull = (1.0 - Math.exp((-pullDistance / responseDistance.toFloat().coerceAtLeast(1f)).toDouble())).toFloat()
+        val extraHeight = (maxStretchPx.toFloat() * easedPull).toInt().coerceAtMost(maxStretchPx)
+        val scaleBoost = (extraHeight / heroBaseHeight.toFloat().coerceAtLeast(1f)).coerceAtMost(0.22f)
         val scale = 1f + scaleBoost
+
+        heroContainer.layoutParams = heroContainer.layoutParams.apply {
+            height = heroBaseHeight + extraHeight
+        }
+        heroBottomBlend.layoutParams = heroBottomBlend.layoutParams.apply {
+            height = heroBlendBaseHeight + extraHeight
+        }
+
         heroImage.scaleX = scale
         heroImage.scaleY = scale
-        heroContainer.translationY = damped * 0.08f
-        heroBottomBlend.translationY = damped * 0.12f
-        contentContainer.translationY = damped * 0.04f
+        heroBlurImage.scaleX = scale
+        heroBlurImage.scaleY = scale
+        heroColorDiffuse.scaleX = 1f + scaleBoost * 0.24f
+        heroColorDiffuse.scaleY = 1f + scaleBoost * 0.24f
+        heroDimOverlay.scaleX = 1f + scaleBoost * 0.12f
+        heroDimOverlay.scaleY = 1f + scaleBoost * 0.12f
+        heroBottomBlend.scaleX = 1f + scaleBoost * 0.08f
+        heroBottomBlend.scaleY = 1f + scaleBoost * 0.08f
+        contentContainer.translationY = 0f
     }
 
     private fun releaseHeroStretch() {
-        heroImage.animate().scaleX(1f).scaleY(1f).setDuration(220L).start()
-        heroContainer.animate().translationY(0f).setDuration(220L).start()
-        heroBottomBlend.animate().translationY(0f).setDuration(220L).start()
-        contentContainer.animate().translationY(0f).setDuration(220L).start()
+        val startHeroHeight = heroContainer.layoutParams.height
+        val startBlendHeight = heroBottomBlend.layoutParams.height
+        val startHeroScaleX = heroImage.scaleX
+        val startHeroScaleY = heroImage.scaleY
+        val startBlurScaleX = heroBlurImage.scaleX
+        val startBlurScaleY = heroBlurImage.scaleY
+        val startDiffuseScaleX = heroColorDiffuse.scaleX
+        val startDiffuseScaleY = heroColorDiffuse.scaleY
+        val startDimScaleX = heroDimOverlay.scaleX
+        val startDimScaleY = heroDimOverlay.scaleY
+        val startBlendScaleX = heroBottomBlend.scaleX
+        val startBlendScaleY = heroBottomBlend.scaleY
+
+        stretchResetAnimator?.cancel()
+        stretchResetAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 320L
+            interpolator = FastOutSlowInInterpolator()
+            addUpdateListener { animator ->
+                val t = animator.animatedFraction
+                heroContainer.layoutParams = heroContainer.layoutParams.apply {
+                    height = lerpInt(startHeroHeight, heroBaseHeight, t)
+                }
+                heroBottomBlend.layoutParams = heroBottomBlend.layoutParams.apply {
+                    height = lerpInt(startBlendHeight, heroBlendBaseHeight, t)
+                }
+                heroImage.scaleX = lerpFloat(startHeroScaleX, 1f, t)
+                heroImage.scaleY = lerpFloat(startHeroScaleY, 1f, t)
+                heroBlurImage.scaleX = lerpFloat(startBlurScaleX, 1f, t)
+                heroBlurImage.scaleY = lerpFloat(startBlurScaleY, 1f, t)
+                heroColorDiffuse.scaleX = lerpFloat(startDiffuseScaleX, 1f, t)
+                heroColorDiffuse.scaleY = lerpFloat(startDiffuseScaleY, 1f, t)
+                heroDimOverlay.scaleX = lerpFloat(startDimScaleX, 1f, t)
+                heroDimOverlay.scaleY = lerpFloat(startDimScaleY, 1f, t)
+                heroBottomBlend.scaleX = lerpFloat(startBlendScaleX, 1f, t)
+                heroBottomBlend.scaleY = lerpFloat(startBlendScaleY, 1f, t)
+            }
+        }
+        stretchResetAnimator?.start()
     }
 
     private fun adjustAlpha(color: Int, factor: Float): Int {
         val alpha = (Color.alpha(color) * factor).toInt()
         return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
+    }
+
+    private fun lerpFloat(start: Float, end: Float, fraction: Float): Float {
+        return start + (end - start) * fraction.coerceIn(0f, 1f)
+    }
+
+    private fun lerpInt(start: Int, end: Int, fraction: Float): Int {
+        return (start + (end - start) * fraction.coerceIn(0f, 1f)).toInt()
     }
 
     private fun appendQueryParameter(url: String, key: String, value: String): String {

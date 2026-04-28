@@ -2059,16 +2059,22 @@ class EmbyApiService(
             when (stream.optString("Type")) {
                 "Video" -> {
                     videoStreams.add("类型：${stream.optString("Type", "Video")}")
-                    if (stream.optString("Codec").isNotBlank()) videoStreams.add("编码：${stream.optString("Codec")}")
+                    videoStreams.add("索引：${stream.optInt("Index", index)}")
                     if (stream.optString("DisplayTitle").isNotBlank()) videoStreams.add("显示标题：${stream.optString("DisplayTitle")}")
                     if (stream.optString("Language").isNotBlank()) videoStreams.add("语言：${stream.optString("Language")}")
+                    if (stream.optString("Codec").isNotBlank()) videoStreams.add("编码器：${stream.optString("Codec")}")
+                    if (stream.optString("VideoRangeType").isNotBlank()) videoStreams.add("动态范围：${stream.optString("VideoRangeType")}")
                     val bitrate = stream.optLong("BitRate")
                     if (bitrate > 0) videoStreams.add("码率：${formatBitrate(bitrate)}")
-                    if (stream.optInt("Width") > 0 && stream.optInt("Height") > 0) {
-                        videoStreams.add("宽高：${stream.optInt("Width")} x ${stream.optInt("Height")}")
-                    }
+                    stream.optInt("BitDepth").takeIf { it > 0 }?.let { videoStreams.add("位深度：$it") }
+                    if (stream.optString("PixelFormat").isNotBlank()) videoStreams.add("像素格式：${stream.optString("PixelFormat")}")
+                    stream.optInt("Width").takeIf { it > 0 }?.let { videoStreams.add("宽度：$it") }
+                    stream.optInt("Height").takeIf { it > 0 }?.let { videoStreams.add("高度：$it") }
+                    if (stream.optString("AspectRatio").isNotBlank()) videoStreams.add("长宽比：${stream.optString("AspectRatio")}")
                     val frameRate = stream.optDouble("RealFrameRate", Double.NaN)
-                    if (!frameRate.isNaN()) videoStreams.add("帧率：${"%.3f".format(frameRate)}")
+                    if (!frameRate.isNaN()) videoStreams.add("帧率：${"%.1f".format(frameRate)}")
+                    videoStreams.add("默认：${stream.optBoolean("IsDefault")}")
+                    videoStreams.add("外部：${stream.optBoolean("IsExternal")}")
                 }
 
                 "Audio" -> {
@@ -2224,8 +2230,6 @@ class EmbyApiService(
         people: JSONArray?
     ): String {
         val parts = mutableListOf<String>()
-        val container = mediaSource.optString("Container")
-        if (container.isNotBlank()) parts.add(container.uppercase())
         val actors = buildPeopleLine(people)
         if (actors.isNotBlank()) parts.add(actors)
         val studioText = studios?.optJSONObject(0)?.optString("Name").orEmpty()
