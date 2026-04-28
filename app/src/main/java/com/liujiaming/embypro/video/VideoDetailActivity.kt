@@ -1,8 +1,11 @@
 package com.liujiaming.embypro
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -117,6 +120,8 @@ class VideoDetailActivity : AppCompatActivity() {
         actionMoreButton = findViewById(R.id.videoActionMoreButton)
         val topBar = findViewById<LinearLayout>(R.id.videoTopBar)
 
+        prepareDynamicActionButtons()
+
         findViewById<ImageButton>(R.id.videoBackButton).setDebouncedClickListener { finish() }
         findViewById<ImageButton>(R.id.videoMoreButton).setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.more_actions_pending), Toast.LENGTH_SHORT).show()
@@ -158,10 +163,14 @@ class VideoDetailActivity : AppCompatActivity() {
 
     private fun bindDetail(detail: VideoDetailUiModel) {
         currentDetail = detail
+        prepareDynamicActionButtons()
         titleText.text = detail.title
         runtimeText.text = detail.runtimeLabel
         versionText.text = detail.versionLine
         audioText.text = detail.audioLine
+        runtimeText.visibility = if (detail.runtimeLabel.isBlank()) View.GONE else View.VISIBLE
+        versionText.visibility = if (detail.versionLine.isBlank()) View.GONE else View.VISIBLE
+        audioText.visibility = if (detail.audioLine.isBlank()) View.GONE else View.VISIBLE
         studioText.text = listOf(detail.subtitleLine, detail.studioLine)
             .filter { it.isNotBlank() }
             .joinToString("\n")
@@ -199,12 +208,14 @@ class VideoDetailActivity : AppCompatActivity() {
                 val fallbackColor = Color.parseColor(ServerIconStyle.INDIGO.fillColor)
                 applyFallbackGradient(ServerIconStyle.INDIGO.fillColor)
                 applyDynamicPlayButtonColor(fallbackColor, Color.WHITE)
+                showDynamicActionButtons()
             },
             onSuccess = { bitmap ->
                 val fallbackColor = Color.parseColor(ServerIconStyle.INDIGO.fillColor)
                 val buttonColors = MaterialYouColorHelper.extractButtonColors(bitmap, fallbackColor)
                 applyDynamicGradient(buttonColors.seed)
                 applyDynamicPlayButtonColor(buttonColors.container, buttonColors.content)
+                showDynamicActionButtons()
             }
         )
     }
@@ -295,13 +306,15 @@ class VideoDetailActivity : AppCompatActivity() {
         }
         actionTitle.text = detail.title
         sheetView.findViewById<View>(R.id.videoActionReplayRow).setDebouncedClickListener {
-            Toast.makeText(this, getString(R.string.action_replay_from_start), Toast.LENGTH_SHORT).show()
+            dialog.dismiss()
+            openPlayer(startPositionMs = 0L)
         }
         sheetView.findViewById<View>(R.id.videoActionCastRow).setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.action_cast), Toast.LENGTH_SHORT).show()
         }
         sheetView.findViewById<View>(R.id.videoActionExternalRow).setDebouncedClickListener {
-            Toast.makeText(this, getString(R.string.action_external_player), Toast.LENGTH_SHORT).show()
+            dialog.dismiss()
+            openExternalPlayer()
         }
         sheetView.findViewById<View>(R.id.videoActionSourceRow).setDebouncedClickListener {
             Toast.makeText(this, getString(R.string.action_search_other_source), Toast.LENGTH_SHORT).show()
@@ -388,8 +401,49 @@ class VideoDetailActivity : AppCompatActivity() {
         }
     }
 
+    private fun openExternalPlayer() {
+        val detail = currentDetail ?: return
+        val rawUrl = detail.playbackUrl
+        if (rawUrl.isNullOrBlank()) {
+            Toast.makeText(this, getString(R.string.playback_url_missing), Toast.LENGTH_SHORT).show()
+            return
+        }
+        val playbackUri = Uri.parse(appendQueryParameter(rawUrl, "api_key", connection.accessToken))
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(playbackUri, "video/*")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching {
+            startActivity(intent)
+        }.onFailure { error ->
+            if (error is ActivityNotFoundException) {
+                Toast.makeText(this, getString(R.string.player_error), Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, userFriendlyErrorMessage(error, R.string.player_error), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private fun applyFallbackGradient(baseHex: String) {
         applyDynamicGradient(Color.parseColor(baseHex))
+    }
+
+    private fun prepareDynamicActionButtons() {
+        playButton.clearAnimation()
+        playButton.alpha = 0f
+        playButton.isEnabled = false
+        playButton.backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+        playButton.setTextColor(Color.TRANSPARENT)
+        playButton.iconTint = ColorStateList.valueOf(Color.TRANSPARENT)
+    }
+
+    private fun showDynamicActionButtons() {
+        playButton.isEnabled = true
+        if (playButton.alpha >= 1f) return
+        playButton.animate()
+            .alpha(1f)
+            .setDuration(160L)
+            .start()
     }
 
     private fun applyDynamicPlayButtonColor(containerColor: Int, contentColor: Int) {
@@ -427,16 +481,23 @@ class VideoDetailActivity : AppCompatActivity() {
         val backdrop = MaterialYouColorHelper.extractBackdropColors(baseColor)
         rootView.background = GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(backdrop.pageTop, backdrop.pageMid, backdrop.pageBottom)
+            intArrayOf(
+                backdrop.pageTop,
+                backdrop.pageUpper,
+                backdrop.pageMid,
+                backdrop.pageBottom
+            )
         )
         rootContent.background = null
         heroBottomBlend.background = GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(
                 backdrop.heroBlendTop,
-                adjustAlpha(backdrop.heroBlendBottom, 0.88f),
-                adjustAlpha(backdrop.pageTop, 0.96f),
-                backdrop.pageMid
+                backdrop.heroBlendUpper,
+                backdrop.heroBlendMid,
+                backdrop.heroBlendBottom,
+                backdrop.pageMid,
+                backdrop.pageBottom
             )
         )
         contentContainer.background = null
@@ -500,6 +561,13 @@ class VideoDetailActivity : AppCompatActivity() {
     private fun adjustAlpha(color: Int, factor: Float): Int {
         val alpha = (Color.alpha(color) * factor).toInt()
         return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
+    }
+
+    private fun appendQueryParameter(url: String, key: String, value: String): String {
+        if (url.isBlank() || value.isBlank()) return url
+        if (url.contains("$key=")) return url
+        val separator = if (url.contains("?")) "&" else "?"
+        return url + separator + key + "=" + Uri.encode(value)
     }
 
     companion object {

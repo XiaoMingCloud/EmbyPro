@@ -171,6 +171,8 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:alpha="0"
+                        android:enabled="false"
                         android:minHeight="52dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"

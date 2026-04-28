@@ -2108,7 +2108,6 @@ class EmbyApiService(
         val people = item.optJSONArray("People")
         val userData = item.optJSONObject("UserData")
         val playbackPositionTicks = userData?.optLong("PlaybackPositionTicks") ?: 0L
-        val tagLines = item.optJSONArray("Taglines")
         val mediaSourceId = firstMediaSource.optString("Id")
         val directStreamUrl = firstMediaSource.optString("DirectStreamUrl")
         val playSessionId = playbackInfo.optString("PlaySessionId")
@@ -2117,8 +2116,8 @@ class EmbyApiService(
             itemId = item.optString("Id"),
             title = item.optString("Name", context.getString(R.string.untitled_media)),
             overview = item.optString("Overview").ifBlank { item.optString("Tagline") },
-            runtimeLabel = formatTicks(item.optLong("RunTimeTicks")),
-            versionLine = buildVersionLine(item, firstMediaSource, tagLines),
+            runtimeLabel = buildRuntimeLabel(item.optString("DateCreated")),
+            versionLine = buildVersionLine(item, firstMediaSource),
             audioLine = buildAudioLine(mediaStreams),
             subtitleLine = buildSubtitleLine(firstMediaSource, studios, people),
             studioLine = buildStudioLine(studios, people),
@@ -2151,19 +2150,47 @@ class EmbyApiService(
         )
     }
 
-    private fun buildVersionLine(item: JSONObject, mediaSource: JSONObject, tagLines: JSONArray?): String {
-        val parts = mutableListOf<String>()
-        val fileName = mediaSource.optString("Name").ifBlank { item.optString("Name") }
-        if (fileName.isNotBlank()) parts.add(fileName)
-        val dateCreated = item.optString("DateCreated")
-        if (dateCreated.isNotBlank()) parts.add(dateCreated.replace("T", " ").replace("Z", ""))
+    private fun buildRuntimeLabel(dateCreated: String): String {
+        return dateCreated.takeIf { it.isNotBlank() }?.let(::formatCreatedDate).orEmpty()
+    }
+
+    private fun buildVersionLine(item: JSONObject, mediaSource: JSONObject): String {
+        val metadataParts = mutableListOf<String>()
+        val container = mediaSource.optString("Container")
+        if (container.isNotBlank()) metadataParts.add(container.uppercase())
         val size = mediaSource.optLong("Size")
-        if (size > 0) parts.add(formatBytes(size))
-        if (tagLines != null && tagLines.length() > 0) {
-            val tag = tagLines.optString(0)
-            if (tag.isNotBlank()) parts.add(tag)
+        if (size > 0) metadataParts.add(formatBytes(size))
+        val runtime = formatTicks(item.optLong("RunTimeTicks"))
+        if (runtime.isNotBlank()) metadataParts.add(runtime)
+        return metadataParts.joinToString("  ")
+    }
+
+    private fun formatCreatedDate(rawValue: String): String {
+        val trimmed = rawValue.trim()
+        if (trimmed.isBlank()) return rawValue
+
+        val inputPatterns = listOf(
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss"
+        )
+        inputPatterns.forEach { pattern ->
+            runCatching {
+                val parser = SimpleDateFormat(pattern, Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                    isLenient = false
+                }
+                val parsed = parser.parse(trimmed) ?: return@runCatching null
+                SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(parsed)
+            }.getOrNull()?.let { return it }
         }
-        return parts.joinToString("  ")
+        return trimmed
+            .replace("T", " ")
+            .replace("Z", "")
+            .substringBefore(".")
+            .replace(Regex(":(\\d{2})$"), "")
     }
 
     private fun buildAudioLine(mediaStreams: JSONArray): String {
