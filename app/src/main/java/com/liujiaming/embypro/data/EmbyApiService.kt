@@ -200,6 +200,7 @@ data class VideoDetailUiModel(
     val mediaInfoCards: List<MediaInfoCardUiModel>,
     val heroImageUrl: String?,
     val isFavorite: Boolean,
+    val isPlayed: Boolean,
     val playbackPositionTicks: Long,
     val mediaSourceId: String,
     val playbackUrl: String?,
@@ -2107,6 +2108,7 @@ class EmbyApiService(
         val studios = item.optJSONArray("Studios")
         val people = item.optJSONArray("People")
         val userData = item.optJSONObject("UserData")
+        val createdAtLabel = formatCreatedDate(item.optString("DateCreated"))
         val playbackPositionTicks = userData?.optLong("PlaybackPositionTicks") ?: 0L
         val mediaSourceId = firstMediaSource.optString("Id")
         val directStreamUrl = firstMediaSource.optString("DirectStreamUrl")
@@ -2116,12 +2118,12 @@ class EmbyApiService(
             itemId = item.optString("Id"),
             title = item.optString("Name", context.getString(R.string.untitled_media)),
             overview = item.optString("Overview").ifBlank { item.optString("Tagline") },
-            runtimeLabel = buildRuntimeLabel(item.optString("DateCreated")),
-            versionLine = buildVersionLine(item, firstMediaSource),
+            runtimeLabel = formatDurationLabel(item.optLong("RunTimeTicks")),
+            versionLine = buildVersionLine(item, firstMediaSource, mediaStreams),
             audioLine = buildAudioLine(mediaStreams),
             subtitleLine = buildSubtitleLine(firstMediaSource, studios, people),
             studioLine = buildStudioLine(studios, people),
-            mediaTitleLine = buildMediaTitleLine(item),
+            mediaTitleLine = buildMediaTitleLine(item, firstMediaSource, createdAtLabel),
             chapters = chapters,
             mediaInfoCards = listOf(
                 MediaInfoCardUiModel("视频", if (videoStreams.isEmpty()) listOf("暂无视频流信息") else videoStreams),
@@ -2136,6 +2138,7 @@ class EmbyApiService(
                 maxHeight = 720
             ),
             isFavorite = userData?.optBoolean("IsFavorite") == true,
+            isPlayed = userData?.optBoolean("Played") == true,
             playbackPositionTicks = playbackPositionTicks,
             mediaSourceId = mediaSourceId,
             playbackUrl = buildPlaybackUrl(
@@ -2150,19 +2153,17 @@ class EmbyApiService(
         )
     }
 
-    private fun buildRuntimeLabel(dateCreated: String): String {
-        return dateCreated.takeIf { it.isNotBlank() }?.let(::formatCreatedDate).orEmpty()
-    }
-
-    private fun buildVersionLine(item: JSONObject, mediaSource: JSONObject): String {
-        val metadataParts = mutableListOf<String>()
-        val container = mediaSource.optString("Container")
-        if (container.isNotBlank()) metadataParts.add(container.uppercase())
-        val size = mediaSource.optLong("Size")
-        if (size > 0) metadataParts.add(formatBytes(size))
-        val runtime = formatTicks(item.optLong("RunTimeTicks"))
-        if (runtime.isNotBlank()) metadataParts.add(runtime)
-        return metadataParts.joinToString("  ")
+    private fun buildVersionLine(item: JSONObject, mediaSource: JSONObject, mediaStreams: JSONArray): String {
+        val fileName = mediaSource.optString("Name").ifBlank { item.optString("Name") }
+        val specs = mutableListOf<String>()
+        extractResolutionLabel(mediaStreams)?.let(specs::add)
+        extractVideoCodecLabel(mediaStreams)?.let(specs::add)
+        mediaSource.optLong("Size").takeIf { it > 0L }?.let { specs.add(formatBytes(it)) }
+        extractVideoBitrateLabel(mediaStreams, mediaSource)?.let(specs::add)
+        return listOf(
+            fileName.takeIf { it.isNotBlank() },
+            specs.takeIf { it.isNotEmpty() }?.joinToString(" / ")
+        ).filterNotNull().joinToString("\n")
     }
 
     private fun formatCreatedDate(rawValue: String): String {
@@ -2197,11 +2198,21 @@ class EmbyApiService(
         for (index in 0 until mediaStreams.length()) {
             val stream = mediaStreams.optJSONObject(index) ?: continue
             if (stream.optString("Type") == "Audio") {
-                val parts = mutableListOf<String>()
-                if (stream.optString("Language").isNotBlank()) parts.add(stream.optString("Language"))
-                if (stream.optString("DisplayTitle").isNotBlank()) parts.add(stream.optString("DisplayTitle"))
-                if (stream.optString("Codec").isNotBlank()) parts.add(stream.optString("Codec"))
-                return parts.joinToString(" ")
+                val displayTitle = stream.optString("DisplayTitle").trim()
+                if (displayTitle.isNotBlank()) return displayTitle
+                val codec = stream.optString("Codec").uppercase().takeIf { it.isNotBlank() }
+                val channelLabel = when (stream.optInt("Channels")) {
+                    1 -> "mono"
+                    2 -> "stereo"
+                    6 -> "5.1"
+                    8 -> "7.1"
+                    else -> null
+                }
+                val parts = listOfNotNull(codec, channelLabel)
+                if (parts.isNotEmpty()) {
+                    val suffix = if (stream.optBoolean("IsDefault")) "（默认）" else ""
+                    return parts.joinToString(" ") + suffix
+                }
             }
         }
         return "暂无音频信息"
@@ -2234,12 +2245,44 @@ class EmbyApiService(
         return listOf(studioNames.joinToString(", "), actorNames).filter { it.isNotBlank() }.joinToString("\n")
     }
 
-    private fun buildMediaTitleLine(item: JSONObject): String {
-        val parts = mutableListOf<String>()
-        val productionYear = item.optInt("ProductionYear")
-        if (productionYear > 0) parts.add(productionYear.toString())
-        if (item.optLong("RunTimeTicks") > 0) parts.add(formatTicks(item.optLong("RunTimeTicks")))
-        return parts.joinToString(" ")
+    private fun buildMediaTitleLine(item: JSONObject, mediaSource: JSONObject, createdAtLabel: String): String {
+        val summaryParts = mutableListOf<String>()
+        mediaSource.optString("Container").takeIf { it.isNotBlank() }?.let { summaryParts.add(it.uppercase()) }
+        mediaSource.optLong("Size").takeIf { it > 0L }?.let { summaryParts.add(formatBytes(it)) }
+        item.optLong("RunTimeTicks").takeIf { it > 0L }?.let { summaryParts.add(formatDurationLabel(it)) }
+        return listOf(
+            item.optString("Name").takeIf { it.isNotBlank() },
+            createdAtLabel.takeIf { it.isNotBlank() },
+            summaryParts.takeIf { it.isNotEmpty() }?.joinToString("  ")
+        ).filterNotNull().joinToString("\n")
+    }
+
+    private fun extractResolutionLabel(mediaStreams: JSONArray): String? {
+        for (index in 0 until mediaStreams.length()) {
+            val stream = mediaStreams.optJSONObject(index) ?: continue
+            if (stream.optString("Type") != "Video") continue
+            val height = stream.optInt("Height")
+            if (height > 0) return "${height}p"
+        }
+        return null
+    }
+
+    private fun extractVideoCodecLabel(mediaStreams: JSONArray): String? {
+        for (index in 0 until mediaStreams.length()) {
+            val stream = mediaStreams.optJSONObject(index) ?: continue
+            if (stream.optString("Type") != "Video") continue
+            return stream.optString("Codec").uppercase().takeIf { it.isNotBlank() }
+        }
+        return null
+    }
+
+    private fun extractVideoBitrateLabel(mediaStreams: JSONArray, mediaSource: JSONObject): String? {
+        for (index in 0 until mediaStreams.length()) {
+            val stream = mediaStreams.optJSONObject(index) ?: continue
+            if (stream.optString("Type") != "Video") continue
+            stream.optLong("BitRate").takeIf { it > 0L }?.let { return formatBitrate(it) }
+        }
+        return mediaSource.optLong("BitRate").takeIf { it > 0L }?.let(::formatBitrate)
     }
 
     private fun buildPeopleLine(people: JSONArray?): String {
@@ -2365,6 +2408,19 @@ class EmbyApiService(
                     throw IllegalStateException("视频播放会话上报失败：${response.code}")
                 }
             }
+        }
+    }
+
+    private fun formatDurationLabel(ticks: Long): String {
+        if (ticks <= 0L) return ""
+        val totalSeconds = ticks / 10_000_000L
+        val hours = totalSeconds / 3600L
+        val minutes = (totalSeconds % 3600L) / 60L
+        val seconds = totalSeconds % 60L
+        return buildString {
+            if (hours > 0L) append("${hours}小时")
+            if (minutes > 0L || hours > 0L) append("${minutes}分")
+            append("${seconds}秒")
         }
     }
 

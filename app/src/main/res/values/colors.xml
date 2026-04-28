@@ -75,4 +75,6 @@
     <color name="partition_dialog_option_selected_stroke">#66B68AF9</color>
     <color name="partition_dialog_check">#FF6A6FB2</color>
     <color name="partition_dialog_cancel_surface">#33FFFFFF</color>
+    <color name="video_detail_default_bg">#FFEAF3F6</color>
+    <color name="video_detail_default_button">#FF147A8B</color>
 </resources>

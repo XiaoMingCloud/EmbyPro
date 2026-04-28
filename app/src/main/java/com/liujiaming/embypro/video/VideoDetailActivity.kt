@@ -2,8 +2,11 @@ package com.liujiaming.embypro
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.animation.ValueAnimator
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.RenderEffect
+import android.graphics.Shader
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
@@ -11,6 +14,7 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -19,10 +23,13 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.graphics.ColorUtils
+import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.color.DynamicColors
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.shape.MaterialShapeDrawable
@@ -58,28 +65,54 @@ class VideoDetailActivity : AppCompatActivity() {
     private var playlistIndex: Int = -1
 
     private lateinit var rootView: androidx.core.widget.NestedScrollView
+    private lateinit var pageRoot: FrameLayout
     private lateinit var rootContent: LinearLayout
     private lateinit var heroContainer: View
     private lateinit var heroImage: ImageView
+    private lateinit var heroBlurImage: ImageView
+    private lateinit var heroColorDiffuse: View
+    private lateinit var heroDimOverlay: View
     private lateinit var heroBottomBlend: View
+    private lateinit var heroTopBar: LinearLayout
+    private lateinit var collapsedAppBar: LinearLayout
     private lateinit var contentContainer: LinearLayout
     private lateinit var titleText: TextView
     private lateinit var runtimeText: TextView
+    private lateinit var versionLabelText: TextView
     private lateinit var versionText: TextView
+    private lateinit var audioLabelText: TextView
     private lateinit var audioText: TextView
     private lateinit var studioText: TextView
+    private lateinit var packedByText: TextView
+    private lateinit var chaptersHeaderText: TextView
+    private lateinit var mediaInfoHeaderText: TextView
     private lateinit var mediaTitleText: TextView
+    private lateinit var videoInfoCard: LinearLayout
+    private lateinit var audioInfoCard: LinearLayout
+    private lateinit var videoInfoCardTitleText: TextView
+    private lateinit var audioInfoCardTitleText: TextView
     private lateinit var videoInfoText: TextView
     private lateinit var audioInfoText: TextView
     private lateinit var chaptersRecyclerView: RecyclerView
     private lateinit var favoriteButton: ImageButton
+    private lateinit var watchedButton: ImageButton
+    private lateinit var collapsedFavoriteButton: ImageButton
+    private lateinit var collapsedWatchedButton: ImageButton
+    private lateinit var collapsedTitleText: TextView
     private lateinit var playButton: MaterialButton
     private lateinit var actionMoreButton: ImageButton
+    private lateinit var actionMoreCard: MaterialCardView
 
     private var isFavorite = false
+    private var isPlayed = false
     private var currentDetail: VideoDetailUiModel? = null
     private var initialPullY = 0f
     private var isStretchingHero = false
+    private var heroBaseHeight = 0
+    private var currentPageBackgroundColor = Color.parseColor("#EAF3F6")
+    private var currentCoverScheme = CoverColorExtractor.defaultScheme()
+    private var currentImageKey: String = ""
+    private var colorAnimator: ValueAnimator? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -100,32 +133,52 @@ class VideoDetailActivity : AppCompatActivity() {
             return
         }
 
+        pageRoot = findViewById(R.id.videoDetailPageRoot)
         rootView = findViewById(R.id.videoDetailScrollView)
         rootContent = findViewById(R.id.videoDetailRootContent)
         heroContainer = findViewById(R.id.videoHeroContainer)
         heroImage = findViewById(R.id.videoHeroImage)
+        heroBlurImage = findViewById(R.id.videoHeroBlurImage)
+        heroColorDiffuse = findViewById(R.id.videoHeroColorDiffuse)
+        heroDimOverlay = findViewById(R.id.videoHeroDimOverlay)
         heroBottomBlend = findViewById(R.id.videoHeroBottomBlend)
+        heroTopBar = findViewById(R.id.videoTopBar)
+        collapsedAppBar = findViewById(R.id.videoCollapsedAppBar)
         contentContainer = findViewById(R.id.videoDetailContentContainer)
         titleText = findViewById(R.id.videoTitleText)
         runtimeText = findViewById(R.id.videoRuntimeText)
+        versionLabelText = findViewById(R.id.videoVersionLabelText)
         versionText = findViewById(R.id.videoVersionText)
+        audioLabelText = findViewById(R.id.videoAudioLabelText)
         audioText = findViewById(R.id.videoAudioText)
         studioText = findViewById(R.id.videoStudioText)
+        packedByText = findViewById(R.id.videoPackedByText)
+        chaptersHeaderText = findViewById(R.id.videoChaptersHeaderText)
+        mediaInfoHeaderText = findViewById(R.id.videoMediaInfoHeaderText)
         mediaTitleText = findViewById(R.id.mediaInfoTitleText)
+        videoInfoCard = findViewById(R.id.videoInfoCard)
+        audioInfoCard = findViewById(R.id.audioInfoCard)
+        videoInfoCardTitleText = findViewById(R.id.videoInfoCardTitleText)
+        audioInfoCardTitleText = findViewById(R.id.audioInfoCardTitleText)
         videoInfoText = findViewById(R.id.videoInfoBodyText)
         audioInfoText = findViewById(R.id.audioInfoBodyText)
         chaptersRecyclerView = findViewById(R.id.videoChaptersRecyclerView)
+        watchedButton = findViewById(R.id.videoWatchedButton)
         favoriteButton = findViewById(R.id.videoFavoriteButton)
+        collapsedFavoriteButton = findViewById(R.id.videoCollapsedFavoriteButton)
+        collapsedWatchedButton = findViewById(R.id.videoCollapsedWatchedButton)
+        collapsedTitleText = findViewById(R.id.videoCollapsedTitleText)
         playButton = findViewById(R.id.videoPlayButton)
         actionMoreButton = findViewById(R.id.videoActionMoreButton)
-        val topBar = findViewById<LinearLayout>(R.id.videoTopBar)
+        actionMoreCard = findViewById(R.id.videoActionMoreCard)
+
+        configureHeroHeight()
+        renderCoverScheme(currentCoverScheme)
 
         prepareDynamicActionButtons()
 
         findViewById<ImageButton>(R.id.videoBackButton).setDebouncedClickListener { finish() }
-        findViewById<ImageButton>(R.id.videoMoreButton).setDebouncedClickListener {
-            Toast.makeText(this, getString(R.string.more_actions_pending), Toast.LENGTH_SHORT).show()
-        }
+        findViewById<ImageButton>(R.id.videoCollapsedBackButton).setDebouncedClickListener { finish() }
         playButton.setDebouncedClickListener {
             openPlayer()
         }
@@ -133,12 +186,20 @@ class VideoDetailActivity : AppCompatActivity() {
             showVideoActionsSheet()
         }
         favoriteButton.setDebouncedClickListener { toggleFavorite() }
+        collapsedFavoriteButton.setDebouncedClickListener { toggleFavorite() }
+        watchedButton.setDebouncedClickListener { clearPlayedStateFromDetail() }
+        collapsedWatchedButton.setDebouncedClickListener { clearPlayedStateFromDetail() }
 
-        EdgeToEdgeHelper.applyInsets(topBar, applyTop = true)
+        EdgeToEdgeHelper.applyInsets(heroTopBar, applyTop = true)
+        EdgeToEdgeHelper.applyInsets(collapsedAppBar, applyTop = true)
         EdgeToEdgeHelper.applyInsets(rootView, applyBottom = true)
 
         chaptersRecyclerView.layoutManager = LinearLayoutManager(this, RecyclerView.HORIZONTAL, false)
         setupHeroStretch()
+        rootView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            updateTopBarState(scrollY)
+        }
+        updateTopBarState(0)
 
         loadVideoDetail()
     }
@@ -165,20 +226,24 @@ class VideoDetailActivity : AppCompatActivity() {
         currentDetail = detail
         prepareDynamicActionButtons()
         titleText.text = detail.title
+        collapsedTitleText.text = detail.title
         runtimeText.text = detail.runtimeLabel
         versionText.text = detail.versionLine
-        audioText.text = detail.audioLine
+        audioText.text = cleanAudioLine(detail.audioLine)
         runtimeText.visibility = if (detail.runtimeLabel.isBlank()) View.GONE else View.VISIBLE
         versionText.visibility = if (detail.versionLine.isBlank()) View.GONE else View.VISIBLE
-        audioText.visibility = if (detail.audioLine.isBlank()) View.GONE else View.VISIBLE
+        audioText.visibility = if (audioText.text.isNullOrBlank()) View.GONE else View.VISIBLE
         studioText.text = listOf(detail.subtitleLine, detail.studioLine)
             .filter { it.isNotBlank() }
             .joinToString("\n")
+        studioText.visibility = if (studioText.text.isNullOrBlank()) View.GONE else View.VISIBLE
         mediaTitleText.text = detail.mediaTitleLine.ifBlank { detail.title }
         videoInfoText.text = detail.mediaInfoCards.getOrNull(0)?.lines?.joinToString("\n").orEmpty()
         audioInfoText.text = detail.mediaInfoCards.getOrNull(1)?.lines?.joinToString("\n").orEmpty()
         isFavorite = detail.isFavorite
-        updateFavoriteIcon()
+        isPlayed = detail.isPlayed || detail.playbackPositionTicks > 0L
+        updateFavoriteButtons()
+        updateWatchedButtons()
         updatePlayButtonText(detail.playbackPositionTicks)
 
         chaptersRecyclerView.adapter = MediaPosterAdapter(
@@ -205,19 +270,24 @@ class VideoDetailActivity : AppCompatActivity() {
             url = detail.heroImageUrl,
             token = connection.accessToken,
             onFailure = {
-                val fallbackColor = Color.parseColor(ServerIconStyle.INDIGO.fillColor)
-                applyFallbackGradient(ServerIconStyle.INDIGO.fillColor)
-                applyDynamicPlayButtonColor(fallbackColor, Color.WHITE)
+                currentImageKey = detail.heroImageUrl ?: detail.itemId
+                heroBlurImage.setImageDrawable(null)
+                heroBlurImage.alpha = 0f
+                animateToCoverScheme(CoverColorExtractor.defaultScheme(currentImageKey))
                 showDynamicActionButtons()
             },
             onSuccess = { bitmap ->
-                val fallbackColor = Color.parseColor(ServerIconStyle.INDIGO.fillColor)
-                val buttonColors = MaterialYouColorHelper.extractButtonColors(bitmap, fallbackColor)
-                applyDynamicGradient(buttonColors.seed)
-                applyDynamicPlayButtonColor(buttonColors.container, buttonColors.content)
-                showDynamicActionButtons()
+                val imageKey = detail.heroImageUrl ?: detail.itemId
+                currentImageKey = imageKey
+                applyHeroDiffusion(bitmap)
+                CoverColorExtractor.extractColors(imageKey, bitmap) { scheme ->
+                    if (currentImageKey != imageKey) return@extractColors
+                    animateToCoverScheme(scheme)
+                    showDynamicActionButtons()
+                }
             }
         )
+        updateTopBarState(rootView.scrollY)
     }
 
     private fun openPlayer(startPositionMs: Long? = null) {
@@ -256,7 +326,7 @@ class VideoDetailActivity : AppCompatActivity() {
             runOnUiThread {
                 result.onSuccess {
                     isFavorite = target
-                    updateFavoriteIcon()
+                    updateFavoriteButtons()
                     Toast.makeText(
                         this,
                         if (isFavorite) getString(R.string.favorite_added) else getString(R.string.favorite_removed),
@@ -273,11 +343,20 @@ class VideoDetailActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateFavoriteIcon() {
-        favoriteButton.setImageResource(
-            if (isFavorite) R.drawable.ic_favorite_heart_filled else R.drawable.ic_favorite_heart_outline
-        )
-        favoriteButton.clearColorFilter()
+    private fun updateFavoriteButtons() {
+        val iconRes = if (isFavorite) R.drawable.ic_favorite_heart_filled else R.drawable.ic_favorite_heart_outline
+        favoriteButton.setImageResource(iconRes)
+        collapsedFavoriteButton.setImageResource(iconRes)
+        favoriteButton.imageTintList = ColorStateList.valueOf(Color.WHITE)
+        collapsedFavoriteButton.imageTintList = ColorStateList.valueOf(resolveCollapsedBarContentColor())
+    }
+
+    private fun updateWatchedButtons() {
+        val enabledAlpha = if (isPlayed) 1f else 0.52f
+        watchedButton.alpha = enabledAlpha
+        collapsedWatchedButton.alpha = enabledAlpha
+        watchedButton.imageTintList = ColorStateList.valueOf(Color.WHITE)
+        collapsedWatchedButton.imageTintList = ColorStateList.valueOf(resolveCollapsedBarContentColor())
     }
 
     private fun showVideoActionsSheet() {
@@ -424,6 +503,86 @@ class VideoDetailActivity : AppCompatActivity() {
         }
     }
 
+    private fun configureHeroHeight() {
+        val targetHeight = (resources.displayMetrics.heightPixels * 0.48f).toInt()
+        heroBaseHeight = targetHeight.coerceAtLeast((320f * resources.displayMetrics.density).toInt())
+        heroContainer.layoutParams = heroContainer.layoutParams.apply {
+            height = heroBaseHeight
+        }
+        heroBottomBlend.layoutParams = heroBottomBlend.layoutParams.apply {
+            height = (heroBaseHeight * 0.54f).toInt()
+        }
+    }
+
+    private fun updateTopBarState(scrollY: Int) {
+        val collapseStart = (heroBaseHeight * 0.44f).toInt()
+        val collapseRange = (heroBaseHeight - collapseStart).coerceAtLeast(1)
+        val progress = ((scrollY - collapseStart).toFloat() / collapseRange.toFloat()).coerceIn(0f, 1f)
+
+        collapsedAppBar.alpha = progress
+        collapsedAppBar.translationY = (-18f * resources.displayMetrics.density) * (1f - progress)
+        heroTopBar.alpha = (1f - progress * 1.18f).coerceIn(0f, 1f)
+
+        val collapsedBackground = ColorUtils.setAlphaComponent(
+            currentPageBackgroundColor,
+            (235 * progress).toInt().coerceIn(0, 235)
+        )
+        collapsedAppBar.setBackgroundColor(collapsedBackground)
+        val collapsedColor = resolveCollapsedBarContentColor()
+        collapsedTitleText.setTextColor(collapsedColor)
+        findViewById<ImageButton>(R.id.videoCollapsedBackButton).imageTintList = ColorStateList.valueOf(collapsedColor)
+        collapsedFavoriteButton.imageTintList = ColorStateList.valueOf(collapsedColor)
+        collapsedWatchedButton.imageTintList = ColorStateList.valueOf(collapsedColor)
+
+        heroImage.translationY = -scrollY * 0.08f
+        heroDimOverlay.alpha = 0.16f + progress * 0.14f
+    }
+
+    private fun resolveCollapsedBarContentColor(): Int {
+        return if (ColorUtils.calculateLuminance(currentPageBackgroundColor) > 0.62) {
+            getColor(R.color.text_primary)
+        } else {
+            Color.WHITE
+        }
+    }
+
+    private fun clearPlayedStateFromDetail() {
+        if (!isPlayed && (currentDetail?.playbackPositionTicks ?: 0L) <= 0L) {
+            Toast.makeText(this, getString(R.string.video_detail_no_watch_state), Toast.LENGTH_SHORT).show()
+            return
+        }
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_clear_played_state, null)
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogCancelButton)
+            .setDebouncedClickListener { dialog.dismiss() }
+        dialogView.findViewById<TextView>(R.id.clearPlayedStateDialogConfirmButton)
+            .setDebouncedClickListener {
+                dialog.dismiss()
+                networkExecutor.execute {
+                    val result = mediaRepository.clearPlayedState(connection, itemId)
+                    runOnUiThread {
+                        result.onSuccess {
+                            isPlayed = false
+                            currentDetail = currentDetail?.copy(playbackPositionTicks = 0L, isPlayed = false)
+                            updateWatchedButtons()
+                            loadVideoDetail()
+                        }.onFailure { error ->
+                            Toast.makeText(
+                                this,
+                                userFriendlyErrorMessage(error, R.string.favorite_update_failed),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+            }
+        dialog.show()
+    }
+
     private fun applyFallbackGradient(baseHex: String) {
         applyDynamicGradient(Color.parseColor(baseHex))
     }
@@ -450,8 +609,9 @@ class VideoDetailActivity : AppCompatActivity() {
         playButton.backgroundTintList = ColorStateList.valueOf(containerColor)
         playButton.setTextColor(contentColor)
         playButton.iconTint = ColorStateList.valueOf(contentColor)
-        actionMoreButton.backgroundTintList = ColorStateList.valueOf(adjustAlpha(containerColor, 0.24f))
-        actionMoreButton.imageTintList = ColorStateList.valueOf(contentColor)
+        actionMoreCard.setCardBackgroundColor(currentCoverScheme.cardColor)
+        actionMoreCard.strokeColor = currentCoverScheme.cardStrokeColor
+        actionMoreButton.imageTintList = ColorStateList.valueOf(currentCoverScheme.textPrimaryColor)
     }
 
     private fun updatePlayButtonText(playbackPositionTicks: Long) {
@@ -477,8 +637,30 @@ class VideoDetailActivity : AppCompatActivity() {
         }
     }
 
+    private fun cleanAudioLine(rawLine: String): String {
+        if (rawLine.isBlank()) return ""
+        return rawLine
+            .replace(Regex("\\bund\\b", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\baac\\b", RegexOption.IGNORE_CASE)) { match -> if (match.range.first == 0) "AAC" else "" }
+            .replace(Regex("\\s+AAC\\s*$", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return rawLine
+            .replace("und ", "")
+            .replace(" und", "")
+            .replace(Regex("\\baac\\b", RegexOption.IGNORE_CASE)) { match ->
+                if (match.range.first == 0) "AAC" else ""
+            }
+            .replace(Regex("\\s+AAC\\s*$", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .replace("stereo (", "stereo（")
+            .replace(")", "）")
+    }
+
     private fun applyDynamicGradient(baseColor: Int) {
         val backdrop = MaterialYouColorHelper.extractBackdropColors(baseColor)
+        currentPageBackgroundColor = backdrop.pageUpper
         rootView.background = GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(
@@ -488,6 +670,7 @@ class VideoDetailActivity : AppCompatActivity() {
                 backdrop.pageBottom
             )
         )
+        pageRoot.background = rootView.background
         rootContent.background = null
         heroBottomBlend.background = GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
@@ -496,11 +679,135 @@ class VideoDetailActivity : AppCompatActivity() {
                 backdrop.heroBlendUpper,
                 backdrop.heroBlendMid,
                 backdrop.heroBlendBottom,
+                backdrop.pageUpper,
                 backdrop.pageMid,
                 backdrop.pageBottom
             )
         )
+        heroColorDiffuse.background = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(
+                backdrop.glowTop,
+                backdrop.glowMid,
+                backdrop.glowBottom,
+                adjustAlpha(backdrop.pageUpper, 0.14f)
+            )
+        )
         contentContainer.background = null
+        updateTopBarState(rootView.scrollY)
+    }
+
+    private fun applyHeroDiffusion(bitmap: android.graphics.Bitmap) {
+        heroBlurImage.setImageBitmap(bitmap)
+        heroBlurImage.scaleX = 1.16f
+        heroBlurImage.scaleY = 1.16f
+        heroBlurImage.translationY = heroBaseHeight * 0.03f
+        heroBlurImage.alpha = 0.52f
+        heroBlurImage.setRenderEffect(RenderEffect.createBlurEffect(42f, 42f, Shader.TileMode.CLAMP))
+    }
+
+    private fun animateToCoverScheme(targetScheme: CoverColorScheme) {
+        val startScheme = currentCoverScheme
+        colorAnimator?.cancel()
+        if (startScheme == targetScheme) {
+            renderCoverScheme(targetScheme)
+            return
+        }
+        colorAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 320L
+            interpolator = FastOutSlowInInterpolator()
+            addUpdateListener { animator ->
+                renderCoverScheme(
+                    CoverColorExtractor.blendSchemes(
+                        startScheme,
+                        targetScheme,
+                        animator.animatedFraction
+                    )
+                )
+            }
+            start()
+        }
+    }
+
+    private fun renderCoverScheme(scheme: CoverColorScheme) {
+        currentCoverScheme = scheme
+        currentPageBackgroundColor = scheme.surfaceColor
+        pageRoot.setBackgroundColor(scheme.surfaceColor)
+        rootView.setBackgroundColor(scheme.surfaceColor)
+        rootContent.setBackgroundColor(scheme.surfaceColor)
+        contentContainer.background = null
+
+        val overlay25 = adjustAlpha(scheme.overlayColor, 0.25f)
+        val overlay55 = adjustAlpha(scheme.overlayColor, 0.55f)
+        heroBottomBlend.background = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(Color.TRANSPARENT, overlay25, overlay55, scheme.surfaceColor, scheme.surfaceColor)
+        ).apply {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                setColors(
+                    intArrayOf(Color.TRANSPARENT, overlay25, overlay55, scheme.surfaceColor, scheme.surfaceColor),
+                    floatArrayOf(0f, 0.35f, 0.65f, 0.90f, 1f)
+                )
+            }
+        }
+
+        heroColorDiffuse.background = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(
+                Color.TRANSPARENT,
+                adjustAlpha(scheme.surfaceColor, 0.10f),
+                adjustAlpha(scheme.surfaceColor, 0.18f),
+                adjustAlpha(scheme.surfaceColor, 0.24f)
+            )
+        ).apply {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                setColors(
+                    intArrayOf(
+                        Color.TRANSPARENT,
+                        adjustAlpha(scheme.surfaceColor, 0.10f),
+                        adjustAlpha(scheme.surfaceColor, 0.18f),
+                        adjustAlpha(scheme.surfaceColor, 0.24f)
+                    ),
+                    floatArrayOf(0f, 0.42f, 0.74f, 1f)
+                )
+            }
+        }
+
+        heroDimOverlay.setBackgroundColor(scheme.heroFogColor)
+        applyDynamicPlayButtonColor(scheme.buttonColor, scheme.buttonContentColor)
+        applyContentColors(scheme)
+        updateTopBarState(rootView.scrollY)
+    }
+
+    private fun applyContentColors(scheme: CoverColorScheme) {
+        titleText.setTextColor(scheme.textPrimaryColor)
+        runtimeText.setTextColor(scheme.textSecondaryColor)
+        versionLabelText.setTextColor(scheme.textPrimaryColor)
+        versionText.setTextColor(scheme.textPrimaryColor)
+        audioLabelText.setTextColor(scheme.textPrimaryColor)
+        audioText.setTextColor(scheme.textPrimaryColor)
+        studioText.setTextColor(scheme.textSecondaryColor)
+        packedByText.setTextColor(scheme.textPrimaryColor)
+        chaptersHeaderText.setTextColor(scheme.textPrimaryColor)
+        mediaInfoHeaderText.setTextColor(scheme.textPrimaryColor)
+        mediaTitleText.setTextColor(scheme.textPrimaryColor)
+        videoInfoCardTitleText.setTextColor(scheme.textPrimaryColor)
+        audioInfoCardTitleText.setTextColor(scheme.textPrimaryColor)
+        videoInfoText.setTextColor(scheme.textSecondaryColor)
+        audioInfoText.setTextColor(scheme.textSecondaryColor)
+        videoInfoCard.background = createInfoCardBackground(scheme)
+        audioInfoCard.background = createInfoCardBackground(scheme)
+    }
+
+    private fun createInfoCardBackground(scheme: CoverColorScheme): GradientDrawable {
+        return GradientDrawable().apply {
+            cornerRadius = 16f * resources.displayMetrics.density
+            setColor(scheme.cardColor)
+            setStroke(
+                (1f * resources.displayMetrics.density).toInt().coerceAtLeast(1),
+                scheme.cardStrokeColor
+            )
+        }
     }
 
     private fun setupHeroStretch() {

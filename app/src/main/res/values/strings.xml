@@ -289,6 +289,11 @@
     <string name="player_toggle_favorite">收藏或取消收藏</string>
     <string name="player_open_video_detail">打开视频详情</string>
     <string name="video_detail_load_failed">加载视频详情失败</string>
+    <string name="video_detail_version_label">版本：</string>
+    <string name="video_detail_audio_label">音频：</string>
+    <string name="video_detail_packed_by">Packed by Bilibili XCoder v2.0.2</string>
+    <string name="video_detail_toggle_watched">清除已观看状态</string>
+    <string name="video_detail_no_watch_state">当前还没有已观看状态</string>
     <string name="playback_url_missing">播放地址缺失</string>
     <string name="player_error">播放器加载失败</string>
     <string name="picture_in_picture">画中画播放</string>

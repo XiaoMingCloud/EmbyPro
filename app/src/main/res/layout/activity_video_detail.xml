@@ -1,199 +1,252 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/videoDetailScrollView"
+    android:id="@+id/videoDetailPageRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:background="@color/video_detail_default_bg">
 
-    <LinearLayout
-        android:id="@+id/videoDetailRootContent"
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/videoDetailScrollView"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:paddingBottom="16dp">
-
-        <FrameLayout
-            android:id="@+id/videoHeroContainer"
-            android:layout_width="match_parent"
-            android:layout_height="320dp">
-
-            <ImageView
-                android:id="@+id/videoHeroImage"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:scaleType="centerCrop" />
-
-            <View
-                android:id="@+id/videoHeroBottomBlend"
-                android:layout_width="match_parent"
-                android:layout_height="210dp"
-                android:layout_gravity="bottom" />
-
-            <LinearLayout
-                android:id="@+id/videoTopBar"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingStart="10dp"
-                android:paddingTop="12dp"
-                android:paddingEnd="10dp">
-
-                <FrameLayout
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="@drawable/bg_video_topbar_btn_circle">
-
-                    <ImageButton
-                        android:id="@+id/videoBackButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="@string/back"
-                        android:padding="7dp"
-                        android:scaleType="centerInside"
-                        android:src="@drawable/ic_back_ios_light" />
-                </FrameLayout>
-
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
-
-                <FrameLayout
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="@drawable/bg_video_topbar_btn_circle">
-
-                    <ImageButton
-                        android:id="@+id/videoFavoriteButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="@string/favorite"
-                        android:padding="8dp"
-                        android:scaleType="centerInside"
-                        android:src="@drawable/ic_favorite_heart_outline" />
-                </FrameLayout>
-
-                <FrameLayout
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:layout_marginStart="6dp"
-                    android:background="@drawable/bg_video_topbar_btn_circle">
-
-                    <ImageButton
-                        android:id="@+id/videoMoreButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="@string/more_actions"
-                        android:padding="8dp"
-                        android:scaleType="centerInside"
-                        android:src="@android:drawable/ic_menu_more"
-                        app:tint="@android:color/white" />
-                </FrameLayout>
-            </LinearLayout>
-        </FrameLayout>
+        android:layout_height="match_parent"
+        android:background="@color/video_detail_default_bg"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:overScrollMode="always">
 
         <LinearLayout
-            android:id="@+id/videoDetailContentContainer"
+            android:id="@+id/videoDetailRootContent"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="-22dp"
             android:orientation="vertical"
-            android:paddingStart="14dp"
-            android:paddingTop="60dp"
-            android:paddingEnd="14dp">
+            android:paddingBottom="28dp">
 
-            <!-- Glass info card: title, metadata, play button -->
+            <FrameLayout
+                android:id="@+id/videoHeroContainer"
+                android:layout_width="match_parent"
+                android:layout_height="360dp">
+
+                <ImageView
+                    android:id="@+id/videoHeroImage"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop" />
+
+                <ImageView
+                    android:id="@+id/videoHeroBlurImage"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:alpha="0.68"
+                    android:scaleType="centerCrop" />
+
+                <View
+                    android:id="@+id/videoHeroColorDiffuse"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <View
+                    android:id="@+id/videoHeroDimOverlay"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="#14000000" />
+
+                <LinearLayout
+                    android:id="@+id/videoTopBar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="14dp"
+                    android:paddingTop="12dp"
+                    android:paddingEnd="14dp">
+
+                    <FrameLayout
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
+                        android:background="@drawable/bg_video_topbar_btn_circle">
+
+                        <ImageButton
+                            android:id="@+id/videoBackButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="@string/back"
+                            android:padding="8dp"
+                            android:scaleType="centerInside"
+                            android:src="@drawable/ic_back_ios_light"
+                            app:tint="@android:color/white" />
+                    </FrameLayout>
+
+                    <View
+                        android:layout_width="0dp"
+                        android:layout_height="1dp"
+                        android:layout_weight="1" />
+
+                    <FrameLayout
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
+                        android:background="@drawable/bg_video_topbar_btn_circle">
+
+                        <ImageButton
+                            android:id="@+id/videoWatchedButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="@string/video_detail_toggle_watched"
+                            android:padding="8dp"
+                            android:scaleType="centerInside"
+                            android:src="@drawable/ic_video_watched"
+                            app:tint="@android:color/white" />
+                    </FrameLayout>
+
+                    <FrameLayout
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_video_topbar_btn_circle">
+
+                        <ImageButton
+                            android:id="@+id/videoFavoriteButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="@string/favorite"
+                            android:padding="8dp"
+                            android:scaleType="centerInside"
+                            android:src="@drawable/ic_favorite_heart_outline"
+                            app:tint="@android:color/white" />
+                    </FrameLayout>
+                </LinearLayout>
+
+                <View
+                    android:id="@+id/videoHeroBottomBlend"
+                    android:layout_width="match_parent"
+                    android:layout_height="296dp"
+                    android:layout_gravity="bottom" />
+            </FrameLayout>
+
             <LinearLayout
+                android:id="@+id/videoDetailContentContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/bg_video_detail_info_card"
+                android:layout_marginTop="-48dp"
                 android:orientation="vertical"
-                android:paddingStart="18dp"
-                android:paddingTop="18dp"
-                android:paddingEnd="18dp"
-                android:paddingBottom="18dp">
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp">
 
                 <TextView
                     android:id="@+id/videoTitleText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:maxLines="2"
                     android:textColor="@color/text_primary"
-                    android:textSize="22sp"
+                    android:textSize="23sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/videoRuntimeText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="8dp"
                     android:textColor="@color/text_secondary"
-                    android:textSize="14sp" />
+                    android:textSize="15sp" />
+
+                <LinearLayout
+                    android:id="@+id/videoVersionRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/videoVersionLabelText"
+                        android:layout_width="52dp"
+                        android:layout_height="wrap_content"
+                        android:text="@string/video_detail_version_label"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/videoVersionText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/videoAudioRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/videoAudioLabelText"
+                        android:layout_width="52dp"
+                        android:layout_height="wrap_content"
+                        android:text="@string/video_detail_audio_label"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/videoAudioText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/videoStudioText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
+                    android:layout_marginTop="14dp"
                     android:autoLink="web"
-                    android:textColor="@color/text_primary"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:id="@+id/videoVersionText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:textColor="@color/text_primary"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/videoAudioText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:textColor="@color/text_primary"
+                    android:textColor="@color/text_secondary"
                     android:textSize="13sp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp"
+                    android:layout_marginTop="24dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/videoPlayButton"
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_height="54dp"
                         android:layout_weight="1"
                         android:alpha="0"
                         android:enabled="false"
-                        android:minHeight="52dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
+                        android:minHeight="54dp"
                         android:text="@string/play"
                         android:textColor="@android:color/white"
-                        android:textSize="15sp"
+                        android:textSize="17sp"
                         android:textStyle="bold"
-                        app:cornerRadius="26dp"
+                        app:cornerRadius="27dp"
                         app:icon="@drawable/ic_video_play_small"
                         app:iconGravity="textStart"
-                        app:iconPadding="10dp"
+                        app:iconPadding="12dp"
                         app:iconTint="@android:color/white" />
 
                     <com.google.android.material.card.MaterialCardView
-                        android:layout_width="52dp"
-                        android:layout_height="52dp"
-                        android:layout_marginStart="12dp"
-                        app:cardBackgroundColor="#4DFFFFFF"
-                        app:cardCornerRadius="26dp"
+                        android:id="@+id/videoActionMoreCard"
+                        android:layout_width="54dp"
+                        android:layout_height="54dp"
+                        android:layout_marginStart="14dp"
+                        app:cardBackgroundColor="#66FFFFFF"
+                        app:cardCornerRadius="29dp"
                         app:cardElevation="0dp"
-                        app:strokeColor="#6DFFFFFF"
+                        app:strokeColor="#55FFFFFF"
                         app:strokeWidth="1dp">
 
                         <ImageButton
@@ -202,161 +255,182 @@
                             android:layout_height="match_parent"
                             android:background="?attr/selectableItemBackgroundBorderless"
                             android:contentDescription="@string/more_actions"
-                            android:padding="14dp"
+                            android:padding="15dp"
                             android:scaleType="centerInside"
-                            android:src="@drawable/ic_more_vertical" />
+                            android:src="@drawable/ic_more_vertical"
+                            app:tint="@color/text_primary" />
                     </com.google.android.material.card.MaterialCardView>
                 </LinearLayout>
-            </LinearLayout>
-
-            <!-- Chapters section -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="22dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <View
-                    android:layout_width="3dp"
-                    android:layout_height="18dp"
-                    android:background="@drawable/bg_video_section_divider" />
 
                 <TextView
-                    android:layout_width="0dp"
+                    android:id="@+id/videoPackedByText"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
-                    android:layout_weight="1"
+                    android:layout_marginTop="18dp"
+                    android:text="@string/video_detail_packed_by"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/videoChaptersHeaderText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="28dp"
                     android:text="@string/chapters"
                     android:textColor="@color/text_primary"
-                    android:textSize="18sp"
+                    android:textSize="16sp"
                     android:textStyle="bold" />
-            </LinearLayout>
 
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/videoChaptersRecyclerView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:clipToPadding="false"
-                android:paddingEnd="4dp" />
-
-            <!-- Studios section -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="22dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <View
-                    android:layout_width="3dp"
-                    android:layout_height="18dp"
-                    android:background="@drawable/bg_video_section_divider" />
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/videoChaptersRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:clipToPadding="false"
+                    android:paddingEnd="10dp" />
 
                 <TextView
-                    android:layout_width="0dp"
+                    android:id="@+id/videoMediaInfoHeaderText"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
-                    android:layout_weight="1"
-                    android:text="@string/studios"
-                    android:textColor="@color/text_primary"
-                    android:textSize="18sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/mediaInfoTitleText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:textColor="@color/text_secondary"
-                android:textSize="14sp" />
-
-            <!-- Media info section -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <View
-                    android:layout_width="3dp"
-                    android:layout_height="18dp"
-                    android:background="@drawable/bg_video_section_divider" />
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
-                    android:layout_weight="1"
+                    android:layout_marginTop="30dp"
                     android:text="@string/media_info"
                     android:textColor="@color/text_primary"
-                    android:textSize="18sp"
+                    android:textSize="16sp"
                     android:textStyle="bold" />
-            </LinearLayout>
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
+                <TextView
+                    android:id="@+id/mediaInfoTitleText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:lineSpacingExtra="2dp"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:orientation="horizontal">
 
                     <LinearLayout
+                        android:id="@+id/videoInfoCard"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:background="@drawable/bg_video_media_info_card"
                         android:orientation="vertical"
-                        android:padding="14dp">
+                        android:padding="16dp">
 
                         <TextView
+                            android:id="@+id/videoInfoCardTitleText"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/video_stream"
                             android:textColor="@color/text_primary"
-                            android:textSize="13sp"
+                            android:textSize="14sp"
                             android:textStyle="bold" />
 
                         <TextView
                             android:id="@+id/videoInfoBodyText"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
+                            android:layout_marginTop="10dp"
                             android:textColor="@color/text_secondary"
-                            android:textSize="12sp" />
+                            android:textSize="13sp" />
                     </LinearLayout>
 
                     <Space
-                        android:layout_width="12dp"
+                        android:layout_width="14dp"
                         android:layout_height="1dp" />
 
                     <LinearLayout
+                        android:id="@+id/audioInfoCard"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:background="@drawable/bg_video_media_info_card"
                         android:orientation="vertical"
-                        android:padding="14dp">
+                        android:padding="16dp">
 
                         <TextView
+                            android:id="@+id/audioInfoCardTitleText"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/audio_stream"
                             android:textColor="@color/text_primary"
-                            android:textSize="13sp"
+                            android:textSize="14sp"
                             android:textStyle="bold" />
 
                         <TextView
                             android:id="@+id/audioInfoBodyText"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
+                            android:layout_marginTop="10dp"
                             android:textColor="@color/text_secondary"
-                            android:textSize="12sp" />
+                            android:textSize="13sp" />
                     </LinearLayout>
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <LinearLayout
+        android:id="@+id/videoCollapsedAppBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:alpha="0"
+        android:elevation="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="8dp">
+
+        <ImageButton
+            android:id="@+id/videoCollapsedBackButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/back"
+            android:padding="8dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_back_ios_light" />
+
+        <TextView
+            android:id="@+id/videoCollapsedTitleText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/videoCollapsedWatchedButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/video_detail_toggle_watched"
+            android:padding="8dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_video_watched" />
+
+        <ImageButton
+            android:id="@+id/videoCollapsedFavoriteButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/favorite"
+            android:padding="8dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_favorite_heart_outline" />
     </LinearLayout>
-</androidx.core.widget.NestedScrollView>
+
+</FrameLayout>

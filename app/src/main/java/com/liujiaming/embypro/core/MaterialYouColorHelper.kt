@@ -29,7 +29,10 @@ data class MaterialYouBackdropColors(
     val heroBlendTop: Int,
     val heroBlendUpper: Int,
     val heroBlendMid: Int,
-    val heroBlendBottom: Int
+    val heroBlendBottom: Int,
+    val glowTop: Int,
+    val glowMid: Int,
+    val glowBottom: Int
 )
 
 /**
@@ -46,23 +49,32 @@ object MaterialYouColorHelper {
     }
 
     fun extractBackdropColors(seed: Int): MaterialYouBackdropColors {
+        val heroTint = createHeroTint(seed)
         return MaterialYouBackdropColors(
-            pageTop = createPageColor(seed, whiteBlend = 0.72f, saturationScale = 0.82f, lightnessBoost = 0.02f),
-            pageUpper = createPageColor(seed, whiteBlend = 0.78f, saturationScale = 0.74f, lightnessBoost = 0.03f),
-            pageMid = createPageColor(seed, whiteBlend = 0.84f, saturationScale = 0.66f, lightnessBoost = 0.04f),
-            pageBottom = createPageColor(seed, whiteBlend = 0.90f, saturationScale = 0.58f, lightnessBoost = 0.05f),
+            pageTop = createPageColor(seed, whiteBlend = 0.34f, saturationScale = 0.98f, lightnessBoost = 0.00f),
+            pageUpper = createPageColor(seed, whiteBlend = 0.46f, saturationScale = 0.90f, lightnessBoost = 0.01f),
+            pageMid = createPageColor(seed, whiteBlend = 0.58f, saturationScale = 0.82f, lightnessBoost = 0.03f),
+            pageBottom = createPageColor(seed, whiteBlend = 0.70f, saturationScale = 0.74f, lightnessBoost = 0.04f),
             heroBlendTop = Color.TRANSPARENT,
-            heroBlendUpper = adjustAlpha(createPageColor(seed, whiteBlend = 0.64f, saturationScale = 0.88f), 0.12f),
-            heroBlendMid = adjustAlpha(createPageColor(seed, whiteBlend = 0.72f, saturationScale = 0.76f), 0.68f),
-            heroBlendBottom = createPageColor(seed, whiteBlend = 0.82f, saturationScale = 0.68f, lightnessBoost = 0.03f)
+            heroBlendUpper = adjustAlpha(heroTint, 0.16f),
+            heroBlendMid = adjustAlpha(ColorUtils.blendARGB(heroTint, Color.WHITE, 0.08f), 0.40f),
+            heroBlendBottom = ColorUtils.blendARGB(
+                createPageColor(seed, whiteBlend = 0.56f, saturationScale = 0.84f, lightnessBoost = 0.02f),
+                heroTint,
+                0.26f
+            ),
+            glowTop = Color.TRANSPARENT,
+            glowMid = adjustAlpha(ColorUtils.blendARGB(heroTint, Color.WHITE, 0.06f), 0.24f),
+            glowBottom = adjustAlpha(ColorUtils.blendARGB(heroTint, createPageColor(seed, 0.48f, 0.88f), 0.22f), 0.64f)
         )
     }
 
     private fun extractBaseColor(bitmap: Bitmap, fallbackSeed: Int): Int {
         if (bitmap.width <= 0 || bitmap.height <= 0) return fallbackSeed
 
-        val cropTop = (bitmap.height * 0.55f).roundToInt().coerceIn(0, bitmap.height - 1)
-        val cropHeight = (bitmap.height - cropTop).coerceAtLeast(1)
+        val cropTop = (bitmap.height * 0.34f).roundToInt().coerceIn(0, bitmap.height - 1)
+        val cropBottom = (bitmap.height * 0.88f).roundToInt().coerceIn(cropTop + 1, bitmap.height)
+        val cropHeight = (cropBottom - cropTop).coerceAtLeast(1)
         val sampledRegion = runCatching {
             Bitmap.createBitmap(bitmap, 0, cropTop, bitmap.width, cropHeight)
         }.getOrElse { bitmap }
@@ -84,7 +96,11 @@ object MaterialYouColorHelper {
                 val color = sampledBitmap.getPixel(x, y)
                 if (Color.alpha(color) < 180) continue
                 ColorUtils.colorToHSL(color, pixelHsl)
-                val weight = scoreCandidate(color, pixelHsl)
+                val spatialWeight = calculateSpatialWeight(
+                    x = x.toFloat() / maxX.coerceAtLeast(1).toFloat(),
+                    y = y.toFloat() / maxY.coerceAtLeast(1).toFloat()
+                )
+                val weight = scoreCandidate(color, pixelHsl) * spatialWeight
                 if (weight <= 0f) continue
 
                 val hueBin = ((pixelHsl[0] / 15f).toInt()).coerceIn(0, 23)
@@ -117,7 +133,7 @@ object MaterialYouColorHelper {
         if (isNearNeutral(color, saturation, luminance)) return 0f
 
         var weight = 1f
-        weight *= normalize(saturation, 0.10f, 0.58f) * 0.55f + 0.45f
+        weight *= normalize(saturation, 0.12f, 0.64f) * 0.62f + 0.38f
         weight *= (1f - abs(lightness - 0.50f) / 0.50f).coerceIn(0.35f, 1f)
 
         if (hue in 22f..72f) {
@@ -136,11 +152,11 @@ object MaterialYouColorHelper {
         lightnessBoost: Float = 0f
     ): Int {
         val tunedSeed = createPageSeed(seed)
-        val blended = ColorUtils.blendARGB(tunedSeed, Color.WHITE, whiteBlend.coerceIn(0.70f, 0.85f))
+        val blended = ColorUtils.blendARGB(tunedSeed, Color.WHITE, whiteBlend.coerceIn(0.32f, 0.74f))
         val hsl = FloatArray(3)
         ColorUtils.colorToHSL(blended, hsl)
-        hsl[1] = (hsl[1] * saturationScale.coerceIn(0.60f, 0.80f)).coerceIn(0.08f, 0.28f)
-        hsl[2] = (hsl[2] + lightnessBoost).coerceIn(0.84f, 0.96f)
+        hsl[1] = (hsl[1] * saturationScale.coerceIn(0.72f, 1.02f)).coerceIn(0.20f, 0.46f)
+        hsl[2] = (hsl[2] + lightnessBoost).coerceIn(0.70f, 0.86f)
         return ColorUtils.HSLToColor(hsl)
     }
 
@@ -157,17 +173,40 @@ object MaterialYouColorHelper {
             hsl[0] = (hsl[0] + hueShift) % 360f
         }
 
-        hsl[1] = (hsl[1] * 0.82f).coerceIn(0.16f, 0.46f)
-        hsl[2] = hsl[2].coerceIn(0.32f, 0.62f)
+        if (hsl[0] in 160f..220f) {
+            hsl[0] += (208f - hsl[0]) * 0.28f
+        }
+        hsl[1] = (hsl[1] * 0.98f).coerceIn(0.34f, 0.72f)
+        hsl[2] = hsl[2].coerceIn(0.30f, 0.52f)
+        return ColorUtils.HSLToColor(hsl)
+    }
+
+    private fun createHeroTint(seed: Int): Int {
+        val hsl = FloatArray(3)
+        ColorUtils.colorToHSL(seed, hsl)
+        if (hsl[0] in 145f..225f) {
+            hsl[0] += (206f - hsl[0]) * 0.24f
+        }
+        hsl[1] = (hsl[1] * 1.10f).coerceIn(0.42f, 0.82f)
+        hsl[2] = hsl[2].coerceIn(0.34f, 0.56f)
         return ColorUtils.HSLToColor(hsl)
     }
 
     private fun createButtonColor(seed: Int): Int {
         val hsl = FloatArray(3)
         ColorUtils.colorToHSL(seed, hsl)
-        hsl[1] = (hsl[1] * 1.10f).coerceIn(0.28f, 0.84f)
-        hsl[2] = (hsl[2] * 0.80f).coerceIn(0.24f, 0.48f)
+        if (hsl[0] in 150f..220f) {
+            hsl[0] += (214f - hsl[0]) * 0.35f
+        }
+        hsl[1] = (hsl[1] * 1.04f).coerceIn(0.34f, 0.72f)
+        hsl[2] = (hsl[2] * 0.72f).coerceIn(0.34f, 0.48f)
         return ColorUtils.HSLToColor(hsl)
+    }
+
+    private fun calculateSpatialWeight(x: Float, y: Float): Float {
+        val horizontalFocus = 1f - abs(x - 0.42f).coerceAtMost(1f)
+        val verticalFocus = 1f - abs(y - 0.54f).coerceAtMost(1f)
+        return (0.58f + horizontalFocus * 0.24f + verticalFocus * 0.18f).coerceIn(0.55f, 1.15f)
     }
 
     private fun isNearNeutral(color: Int, saturation: Float, luminance: Float): Boolean {
