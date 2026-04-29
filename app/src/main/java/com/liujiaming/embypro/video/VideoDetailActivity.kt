@@ -349,8 +349,12 @@ class VideoDetailActivity : AppCompatActivity() {
         val iconRes = if (isFavorite) R.drawable.ic_favorite_heart_filled else R.drawable.ic_favorite_heart_outline
         favoriteButton.setImageResource(iconRes)
         collapsedFavoriteButton.setImageResource(iconRes)
-        favoriteButton.imageTintList = ColorStateList.valueOf(Color.WHITE)
-        collapsedFavoriteButton.imageTintList = ColorStateList.valueOf(resolveCollapsedBarContentColor())
+        // Set red tint when favorited, white otherwise
+        val favoriteTint = if (isFavorite) Color.parseColor("#FFE5484D") else Color.WHITE
+        favoriteButton.imageTintList = ColorStateList.valueOf(favoriteTint)
+        collapsedFavoriteButton.imageTintList = ColorStateList.valueOf(
+            if (isFavorite) Color.parseColor("#FFE5484D") else resolveCollapsedBarContentColor()
+        )
     }
 
     private fun updateWatchedButtons() {

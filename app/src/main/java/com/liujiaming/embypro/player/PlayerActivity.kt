@@ -5,6 +5,7 @@ import android.app.PictureInPictureParams
 import android.app.RemoteAction
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
+import android.view.animation.DecelerateInterpolator
 import android.content.pm.ActivityInfo
 import android.content.Context
 import android.content.Intent
@@ -65,8 +66,12 @@ class PlayerActivity : AppCompatActivity() {
     private val preferenceStore by lazy { AppPreferenceStore(this) }
 
     // UI components
+    private lateinit var playerPageContainer: View
+    private lateinit var playerPreviewPageContainer: View
     private lateinit var playerView: PlayerView
+    private lateinit var playerPreviewView: PlayerView
     private lateinit var coverImageView: ImageView
+    private lateinit var previewCoverImageView: ImageView
     private lateinit var progressTimeBar: View
     private lateinit var gestureText: TextView
     private lateinit var titleText: TextView
@@ -83,6 +88,7 @@ class PlayerActivity : AppCompatActivity() {
 
     // Player state
     private var player: ExoPlayer? = null
+    private var previewPlayer: ExoPlayer? = null
     private lateinit var playbackUrl: String
     private lateinit var accessToken: String
     private lateinit var title: String
@@ -109,11 +115,16 @@ class PlayerActivity : AppCompatActivity() {
     private var hasRenderedFirstFrame = false
     private var wasInPictureInPictureMode = false
     private var isFinishingForReplacement = false
+    private var isClosingPlayer = false
     private var hasReportedPlaybackStart = false
     private var shouldReturnDeletedItem = false
     private var isCurrentFavorite = false
     private var favoriteRequestInFlight = false
     private var favoriteStateRequestSerial = 0L
+    private var switchPreviewDirection = 0
+    private var switchPreviewTargetIndex = -1
+    private var switchPreviewRequestSerial = 0L
+    private var isSwitchTransitionAnimating = false
 
     // Gesture control state
     private lateinit var audioManager: AudioManager
@@ -172,8 +183,12 @@ class PlayerActivity : AppCompatActivity() {
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         currentBrightness = window.attributes.screenBrightness.takeIf { it >= 0f } ?: 0.5f
 
+        playerPageContainer = findViewById(R.id.playerPageContainer)
+        playerPreviewPageContainer = findViewById(R.id.playerPreviewPageContainer)
         playerView = findViewById(R.id.playerView)
+        playerPreviewView = findViewById(R.id.playerPreviewView)
         coverImageView = findViewById(R.id.playerCoverImage)
+        previewCoverImageView = findViewById(R.id.playerPreviewCoverImage)
         gestureText = findViewById(R.id.playerGestureText)
         titleText = findViewById(R.id.playerTitleText)
         moreButton = findViewById(R.id.playerMoreButton)
@@ -237,13 +252,21 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        val shouldEndPlayback = isFinishing || wasInPictureInPictureMode
+        val shouldEndPlayback = isClosingPlayer || isFinishing || wasInPictureInPictureMode
         val shouldReleasePlayer = !isInPictureInPictureMode || shouldEndPlayback
         if (activeInstance === this && shouldReleasePlayer) {
             activeInstance = null
         }
         if (shouldReleasePlayer) {
             releasePlayer(endPlayback = shouldEndPlayback)
+        }
+        releasePreviewPlayer()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (isClosingPlayer || isFinishing) {
+            releasePlayer(endPlayback = true)
         }
     }
 
@@ -252,7 +275,8 @@ class PlayerActivity : AppCompatActivity() {
             activeInstance = null
         }
         mainHandler.removeCallbacks(showLoadingRunnable)
-        releasePlayer(endPlayback = isFinishing || wasInPictureInPictureMode)
+        releasePlayer(endPlayback = isClosingPlayer || isFinishing || wasInPictureInPictureMode)
+        releasePreviewPlayer()
         super.onDestroy()
     }
 
@@ -280,6 +304,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     override fun finish() {
+        isClosingPlayer = true
         if (!isFinishingForReplacement) {
             setResult(
                 RESULT_OK,
@@ -310,22 +335,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun initializePlayer() {
         if (player != null) return
-
-        val httpFactory = DefaultHttpDataSource.Factory().apply {
-            if (accessToken.isNotBlank()) {
-                setDefaultRequestProperties(mapOf("X-Emby-Token" to accessToken))
-            }
-        }
-        val upstreamFactory = DefaultDataSource.Factory(this, httpFactory)
-
-        val cacheFactory = CacheDataSource.Factory()
-            .setCache(PlayerCache.get(this))
-            .setUpstreamDataSourceFactory(upstreamFactory)
-            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-
-        val exoPlayer = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(cacheFactory))
-            .build()
+        val exoPlayer = buildExoPlayer()
 
         playerView.player = exoPlayer
         playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
@@ -383,6 +393,23 @@ class PlayerActivity : AppCompatActivity() {
         syncPlaybackControls()
     }
 
+    private fun buildExoPlayer(): ExoPlayer {
+        val httpFactory = DefaultHttpDataSource.Factory().apply {
+            if (accessToken.isNotBlank()) {
+                setDefaultRequestProperties(mapOf("X-Emby-Token" to accessToken))
+            }
+        }
+        val upstreamFactory = DefaultDataSource.Factory(this, httpFactory)
+        val cacheFactory = CacheDataSource.Factory()
+            .setCache(PlayerCache.get(this))
+            .setUpstreamDataSourceFactory(upstreamFactory)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+
+        return ExoPlayer.Builder(this)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(cacheFactory))
+            .build()
+    }
+
     private fun releasePlayer(endPlayback: Boolean = false) {
         val currentPlayer = player ?: return
         playbackPosition = currentPlayer.currentPosition
@@ -404,6 +431,18 @@ class PlayerActivity : AppCompatActivity() {
         stopLoadingAnimation()
         mainHandler.removeCallbacks(showLoadingRunnable)
         centerTimeText.removeCallbacks(centerTimeTicker)
+    }
+
+    private fun releasePreviewPlayer() {
+        previewPlayerViewSafeDetach()
+        previewPlayer?.release()
+        previewPlayer = null
+    }
+
+    private fun previewPlayerViewSafeDetach() {
+        if (::playerPreviewView.isInitialized) {
+            playerPreviewView.player = null
+        }
     }
 
     private fun applySpeed(index: Int) {
@@ -529,7 +568,11 @@ class PlayerActivity : AppCompatActivity() {
         loadPlaylistItemAt(targetIndex, shouldKeepPlaying)
     }
 
-    private fun loadPlaylistItemAt(targetIndex: Int, shouldPlayWhenReady: Boolean) {
+    private fun loadPlaylistItemAt(
+        targetIndex: Int,
+        shouldPlayWhenReady: Boolean,
+        onApplied: (() -> Unit)? = null
+    ) {
         if (targetIndex !in playlistItemIds.indices) return
 
         isSwitchingItem = true
@@ -554,6 +597,7 @@ class PlayerActivity : AppCompatActivity() {
             swapToMedia(prefetchedPlayback.playbackUrl, shouldPlayWhenReady)
             PlayerCache.markPlayed(this, itemId)
             prefetchUpcomingVideosIfNeeded()
+            onApplied?.invoke()
             return
         }
 
@@ -580,6 +624,7 @@ class PlayerActivity : AppCompatActivity() {
                     swapToMedia(detail.playbackUrl.orEmpty(), shouldPlayWhenReady)
                     PlayerCache.markPlayed(this, itemId)
                     prefetchUpcomingVideosIfNeeded()
+                    onApplied?.invoke()
                 }.onFailure { error ->
                     updateLoadingVisibility(false, immediate = true)
                     Toast.makeText(
@@ -587,6 +632,7 @@ class PlayerActivity : AppCompatActivity() {
                         userFriendlyErrorMessage(error, R.string.player_error),
                         Toast.LENGTH_SHORT
                     ).show()
+                    onApplied?.invoke()
                 }
             }
         }
@@ -654,7 +700,7 @@ class PlayerActivity : AppCompatActivity() {
 
                 when (adjustingMode) {
                     AdjustMode.SEEK -> adjustSeek(dx / playerView.width)
-                    AdjustMode.SWITCH_ITEM -> previewSwitchItem()
+                    AdjustMode.SWITCH_ITEM -> previewSwitchItem(dy)
                     AdjustMode.LONG_PRESS_SEEK -> Unit
                     AdjustMode.BRIGHTNESS -> adjustBrightness(-dy / playerView.height)
                     AdjustMode.VOLUME -> adjustVolume(-dy / playerView.height)
@@ -674,7 +720,9 @@ class PlayerActivity : AppCompatActivity() {
                 } else if (adjustingMode == AdjustMode.SWITCH_ITEM) {
                     completeSwitchItem(event.y - initialTouchY)
                 }
-                gestureText.postDelayed({ gestureText.visibility = View.GONE }, 500)
+                if (adjustingMode != AdjustMode.SWITCH_ITEM) {
+                    gestureText.postDelayed({ gestureText.visibility = View.GONE }, 500)
+                }
                 adjustingMode = null
                 gestureSeekActive = false
             }
@@ -704,16 +752,177 @@ class PlayerActivity : AppCompatActivity() {
         showGestureLabel(getString(R.string.volume_label, (target * 100) / max))
     }
 
-    private fun previewSwitchItem() {
-        Unit
+    private fun previewSwitchItem(totalDy: Float) {
+        if (isSwitchTransitionAnimating || isSwitchingItem) return
+        val height = playerPageContainer.height.takeIf { it > 0 } ?: return
+        val direction = when {
+            totalDy < 0f -> 1
+            totalDy > 0f -> -1
+            else -> 0
+        }
+        if (direction == 0) return
+
+        val targetIndex = playlistIndex + direction
+        if (!canSwitchToIndex(targetIndex)) {
+            showGestureLabel(
+                getString(if (direction > 0) R.string.no_next_video else R.string.no_previous_video),
+                700
+            )
+            val resistedDy = totalDy.coerceIn(-height * 0.18f, height * 0.18f)
+            playerPageContainer.translationY = resistedDy
+            playerPreviewPageContainer.visibility = View.GONE
+            return
+        }
+
+        if (switchPreviewDirection != direction || switchPreviewTargetIndex != targetIndex) {
+            prepareSwitchPreview(direction, targetIndex)
+        }
+
+        val clampedDy = totalDy.coerceIn(-height.toFloat(), height.toFloat())
+        playerPageContainer.translationY = clampedDy
+        playerPreviewPageContainer.translationY = clampedDy + if (direction > 0) height else -height
+        playerPreviewPageContainer.visibility = View.VISIBLE
     }
 
     private fun completeSwitchItem(totalDy: Float) {
-        val threshold = playerView.height * 0.12f
-        when {
-            totalDy <= -threshold -> switchPlaylistItem(1)
-            totalDy >= threshold -> switchPlaylistItem(-1)
+        val height = playerPageContainer.height.takeIf { it > 0 } ?: return
+        val threshold = height * 0.18f
+        val direction = when {
+            totalDy <= -threshold -> 1
+            totalDy >= threshold -> -1
+            else -> 0
         }
+        val targetIndex = playlistIndex + direction
+        if (direction != 0 && canSwitchToIndex(targetIndex)) {
+            animateSwitchCommit(direction, targetIndex)
+        } else {
+            animateSwitchCancel()
+        }
+    }
+
+    private fun canSwitchToIndex(targetIndex: Int): Boolean {
+        return playlistItemIds.isNotEmpty() &&
+            playlistIndex in playlistItemIds.indices &&
+            targetIndex in playlistItemIds.indices
+    }
+
+    private fun prepareSwitchPreview(direction: Int, targetIndex: Int) {
+        switchPreviewDirection = direction
+        switchPreviewTargetIndex = targetIndex
+        playerView.hideController()
+        topBar.visibility = View.GONE
+        playerPreviewPageContainer.visibility = View.VISIBLE
+        playerPreviewPageContainer.translationY =
+            if (direction > 0) playerPageContainer.height.toFloat() else -playerPageContainer.height.toFloat()
+        previewCoverImageView.visibility = View.GONE
+        releasePreviewPlayer()
+
+        val targetItemId = playlistItemIds.getOrNull(targetIndex).orEmpty()
+        val prefetchedPlayback = PlayerCache.takePrefetchedPlayback(targetItemId)
+        if (prefetchedPlayback?.playbackUrl?.isNotBlank() == true) {
+            preparePreviewPlayer(prefetchedPlayback.playbackUrl, prefetchedPlayback.playbackPositionMs)
+        }
+
+        val requestSerial = ++switchPreviewRequestSerial
+        networkExecutor.execute {
+            val result = mediaRepository.fetchVideoDetail(connection, targetItemId)
+            runOnUiThread {
+                if (
+                    switchPreviewRequestSerial != requestSerial ||
+                    switchPreviewTargetIndex != targetIndex ||
+                    switchPreviewDirection != direction
+                ) {
+                    return@runOnUiThread
+                }
+                result.onSuccess { detail ->
+                    val heroImageUrl = detail.heroImageUrl.orEmpty()
+                    if (heroImageUrl.isNotBlank()) {
+                        previewCoverImageView.visibility = View.VISIBLE
+                        EmbyImageLoader.load(
+                            imageView = previewCoverImageView,
+                            url = heroImageUrl,
+                            token = accessToken,
+                            onFailure = {
+                                previewCoverImageView.visibility = View.GONE
+                            }
+                        )
+                    }
+                    val url = detail.playbackUrl.orEmpty()
+                    if (url.isNotBlank() && previewPlayer == null) {
+                        preparePreviewPlayer(url, detail.playbackPositionTicks / 10_000L)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun preparePreviewPlayer(url: String, startPositionMs: Long) {
+        val exoPlayer = buildExoPlayer().apply {
+            volume = 0f
+            setMediaItem(MediaItem.fromUri(Uri.parse(url)))
+            addListener(object : Player.Listener {
+                override fun onRenderedFirstFrame() {
+                    previewCoverImageView.visibility = View.GONE
+                }
+            })
+            prepare()
+            seekTo(startPositionMs.coerceAtLeast(0L))
+            playWhenReady = false
+        }
+        previewPlayer = exoPlayer
+        playerPreviewView.player = exoPlayer
+    }
+
+    private fun animateSwitchCommit(direction: Int, targetIndex: Int) {
+        val height = playerPageContainer.height.takeIf { it > 0 } ?: return
+        isSwitchTransitionAnimating = true
+        playerPageContainer.animate()
+            .translationY(if (direction > 0) -height.toFloat() else height.toFloat())
+            .setDuration(SWITCH_PAGE_ANIMATION_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+        playerPreviewPageContainer.animate()
+            .translationY(0f)
+            .setDuration(SWITCH_PAGE_ANIMATION_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                loadPlaylistItemAt(targetIndex, shouldPlayWhenReady = true) {
+                    resetSwitchTransitionViews()
+                }
+            }
+            .start()
+    }
+
+    private fun animateSwitchCancel() {
+        isSwitchTransitionAnimating = true
+        playerPageContainer.animate()
+            .translationY(0f)
+            .setDuration(SWITCH_PAGE_CANCEL_ANIMATION_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+        playerPreviewPageContainer.animate()
+            .translationY(if (switchPreviewDirection > 0) playerPageContainer.height.toFloat() else -playerPageContainer.height.toFloat())
+            .setDuration(SWITCH_PAGE_CANCEL_ANIMATION_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                resetSwitchTransitionViews()
+            }
+            .start()
+    }
+
+    private fun resetSwitchTransitionViews() {
+        playerPageContainer.animate().cancel()
+        playerPreviewPageContainer.animate().cancel()
+        playerPageContainer.translationY = 0f
+        playerPreviewPageContainer.translationY = 0f
+        playerPreviewPageContainer.visibility = View.GONE
+        previewCoverImageView.visibility = View.GONE
+        switchPreviewDirection = 0
+        switchPreviewTargetIndex = -1
+        switchPreviewRequestSerial++
+        isSwitchTransitionAnimating = false
+        releasePreviewPlayer()
+        syncPlaybackControls()
     }
 
     private fun startLongPressSeek() {
@@ -1272,6 +1481,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun finishForReplacement() {
         if (isFinishing || isDestroyed || isFinishingForReplacement) return
         isFinishingForReplacement = true
+        isClosingPlayer = true
         wasInPictureInPictureMode = true
         releasePlayer(endPlayback = true)
         finish()
@@ -1356,6 +1566,8 @@ class PlayerActivity : AppCompatActivity() {
         private const val LONG_PRESS_SEEK_MS = 8_000L
         private const val LONG_PRESS_REPEAT_MS = 350L
         private const val LOADING_VISIBILITY_DELAY_MS = 180L
+        private const val SWITCH_PAGE_ANIMATION_MS = 220L
+        private const val SWITCH_PAGE_CANCEL_ANIMATION_MS = 180L
 
         @Volatile
         private var activeInstance: PlayerActivity? = null

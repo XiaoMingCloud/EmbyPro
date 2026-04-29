@@ -5,28 +5,60 @@
     android:layout_height="match_parent"
     android:background="@android:color/black">
 
-    <androidx.media3.ui.PlayerView
-        android:id="@+id/playerView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:controller_layout_id="@layout/player_controls_view"
-        android:keepScreenOn="true"
-        app:show_fastforward_button="false"
-        app:show_next_button="false"
-        app:show_previous_button="false"
-        app:show_buffering="never"
-        app:show_rewind_button="false"
-        app:surface_type="texture_view"
-        app:use_controller="true" />
-
-    <ImageView
-        android:id="@+id/playerCoverImage"
+    <FrameLayout
+        android:id="@+id/playerPreviewPageContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@android:color/black"
-        android:adjustViewBounds="true"
-        android:scaleType="fitCenter"
-        android:visibility="gone" />
+        android:visibility="gone">
+
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/playerPreviewView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:show_buffering="never"
+            app:surface_type="texture_view"
+            app:use_controller="false" />
+
+        <ImageView
+            android:id="@+id/playerPreviewCoverImage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:adjustViewBounds="true"
+            android:background="@android:color/black"
+            android:scaleType="fitCenter"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/playerPageContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/black">
+
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/playerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:keepScreenOn="true"
+            app:controller_layout_id="@layout/player_controls_view"
+            app:show_buffering="never"
+            app:show_fastforward_button="false"
+            app:show_next_button="false"
+            app:show_previous_button="false"
+            app:show_rewind_button="false"
+            app:surface_type="texture_view"
+            app:use_controller="true" />
+
+        <ImageView
+            android:id="@+id/playerCoverImage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:adjustViewBounds="true"
+            android:background="@android:color/black"
+            android:scaleType="fitCenter"
+            android:visibility="gone" />
+    </FrameLayout>
 
     <LinearLayout
         android:id="@+id/playerTopBar"

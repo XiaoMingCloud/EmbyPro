@@ -83,40 +83,28 @@
                         android:layout_height="1dp"
                         android:layout_weight="1" />
 
-                    <FrameLayout
+                    <ImageButton
+                        android:id="@+id/videoWatchedButton"
                         android:layout_width="42dp"
                         android:layout_height="42dp"
-                        android:background="@drawable/bg_video_topbar_btn_circle">
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/video_detail_toggle_watched"
+                        android:padding="8dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_video_watched"
+                        app:tint="@android:color/white" />
 
-                        <ImageButton
-                            android:id="@+id/videoWatchedButton"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:background="?attr/selectableItemBackgroundBorderless"
-                            android:contentDescription="@string/video_detail_toggle_watched"
-                            android:padding="8dp"
-                            android:scaleType="centerInside"
-                            android:src="@drawable/ic_video_watched"
-                            app:tint="@android:color/white" />
-                    </FrameLayout>
-
-                    <FrameLayout
+                    <ImageButton
+                        android:id="@+id/videoFavoriteButton"
                         android:layout_width="42dp"
                         android:layout_height="42dp"
                         android:layout_marginStart="8dp"
-                        android:background="@drawable/bg_video_topbar_btn_circle">
-
-                        <ImageButton
-                            android:id="@+id/videoFavoriteButton"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:background="?attr/selectableItemBackgroundBorderless"
-                            android:contentDescription="@string/favorite"
-                            android:padding="8dp"
-                            android:scaleType="centerInside"
-                            android:src="@drawable/ic_favorite_heart_outline"
-                            app:tint="@android:color/white" />
-                    </FrameLayout>
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/favorite"
+                        android:padding="8dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_favorite_heart_outline"
+                        app:tint="@android:color/white" />
                 </LinearLayout>
 
                 <View
@@ -325,7 +313,7 @@
 
                         <LinearLayout
                             android:id="@+id/videoInfoCard"
-                            android:layout_width="284dp"
+                            android:layout_width="220dp"
                             android:layout_height="wrap_content"
                             android:background="@drawable/bg_video_media_info_card"
                             android:orientation="vertical"
@@ -355,7 +343,7 @@
 
                         <LinearLayout
                             android:id="@+id/audioInfoCard"
-                            android:layout_width="284dp"
+                            android:layout_width="220dp"
                             android:layout_height="wrap_content"
                             android:background="@drawable/bg_video_media_info_card"
                             android:orientation="vertical"
