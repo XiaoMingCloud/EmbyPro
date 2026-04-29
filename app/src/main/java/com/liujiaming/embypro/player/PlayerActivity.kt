@@ -5,7 +5,7 @@ import android.app.PictureInPictureParams
 import android.app.RemoteAction
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
-import android.view.animation.DecelerateInterpolator
+import android.view.animation.PathInterpolator
 import android.content.pm.ActivityInfo
 import android.content.Context
 import android.content.Intent
@@ -659,6 +659,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun handleTouch(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                cancelSwitchTransitionAnimation()
                 initialTouchX = event.x
                 initialTouchY = event.y
                 adjustingMode = null
@@ -786,7 +787,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun completeSwitchItem(totalDy: Float) {
         val height = playerPageContainer.height.takeIf { it > 0 } ?: return
-        val threshold = height * 0.18f
+        val threshold = height * SWITCH_PAGE_TRIGGER_FRACTION
         val direction = when {
             totalDy <= -threshold -> 1
             totalDy >= threshold -> -1
@@ -812,17 +813,14 @@ class PlayerActivity : AppCompatActivity() {
         playerView.hideController()
         topBar.visibility = View.GONE
         playerPreviewPageContainer.visibility = View.VISIBLE
+        playerPageContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        playerPreviewPageContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         playerPreviewPageContainer.translationY =
             if (direction > 0) playerPageContainer.height.toFloat() else -playerPageContainer.height.toFloat()
         previewCoverImageView.visibility = View.GONE
         releasePreviewPlayer()
 
         val targetItemId = playlistItemIds.getOrNull(targetIndex).orEmpty()
-        val prefetchedPlayback = PlayerCache.takePrefetchedPlayback(targetItemId)
-        if (prefetchedPlayback?.playbackUrl?.isNotBlank() == true) {
-            preparePreviewPlayer(prefetchedPlayback.playbackUrl, prefetchedPlayback.playbackPositionMs)
-        }
-
         val requestSerial = ++switchPreviewRequestSerial
         networkExecutor.execute {
             val result = mediaRepository.fetchVideoDetail(connection, targetItemId)
@@ -846,10 +844,6 @@ class PlayerActivity : AppCompatActivity() {
                                 previewCoverImageView.visibility = View.GONE
                             }
                         )
-                    }
-                    val url = detail.playbackUrl.orEmpty()
-                    if (url.isNotBlank() && previewPlayer == null) {
-                        preparePreviewPlayer(url, detail.playbackPositionTicks / 10_000L)
                     }
                 }
             }
@@ -876,15 +870,17 @@ class PlayerActivity : AppCompatActivity() {
     private fun animateSwitchCommit(direction: Int, targetIndex: Int) {
         val height = playerPageContainer.height.takeIf { it > 0 } ?: return
         isSwitchTransitionAnimating = true
+        playerPageContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        playerPreviewPageContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         playerPageContainer.animate()
             .translationY(if (direction > 0) -height.toFloat() else height.toFloat())
             .setDuration(SWITCH_PAGE_ANIMATION_MS)
-            .setInterpolator(DecelerateInterpolator())
+            .setInterpolator(SWITCH_PAGE_INTERPOLATOR)
             .start()
         playerPreviewPageContainer.animate()
             .translationY(0f)
             .setDuration(SWITCH_PAGE_ANIMATION_MS)
-            .setInterpolator(DecelerateInterpolator())
+            .setInterpolator(SWITCH_PAGE_INTERPOLATOR)
             .withEndAction {
                 loadPlaylistItemAt(targetIndex, shouldPlayWhenReady = true) {
                     resetSwitchTransitionViews()
@@ -895,15 +891,17 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun animateSwitchCancel() {
         isSwitchTransitionAnimating = true
+        playerPageContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        playerPreviewPageContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         playerPageContainer.animate()
             .translationY(0f)
             .setDuration(SWITCH_PAGE_CANCEL_ANIMATION_MS)
-            .setInterpolator(DecelerateInterpolator())
+            .setInterpolator(SWITCH_PAGE_INTERPOLATOR)
             .start()
         playerPreviewPageContainer.animate()
             .translationY(if (switchPreviewDirection > 0) playerPageContainer.height.toFloat() else -playerPageContainer.height.toFloat())
             .setDuration(SWITCH_PAGE_CANCEL_ANIMATION_MS)
-            .setInterpolator(DecelerateInterpolator())
+            .setInterpolator(SWITCH_PAGE_INTERPOLATOR)
             .withEndAction {
                 resetSwitchTransitionViews()
             }
@@ -915,6 +913,8 @@ class PlayerActivity : AppCompatActivity() {
         playerPreviewPageContainer.animate().cancel()
         playerPageContainer.translationY = 0f
         playerPreviewPageContainer.translationY = 0f
+        playerPageContainer.setLayerType(View.LAYER_TYPE_NONE, null)
+        playerPreviewPageContainer.setLayerType(View.LAYER_TYPE_NONE, null)
         playerPreviewPageContainer.visibility = View.GONE
         previewCoverImageView.visibility = View.GONE
         switchPreviewDirection = 0
@@ -923,6 +923,14 @@ class PlayerActivity : AppCompatActivity() {
         isSwitchTransitionAnimating = false
         releasePreviewPlayer()
         syncPlaybackControls()
+    }
+
+    private fun cancelSwitchTransitionAnimation() {
+        if (!::playerPageContainer.isInitialized || !::playerPreviewPageContainer.isInitialized) return
+        playerPageContainer.animate().cancel()
+        playerPreviewPageContainer.animate().cancel()
+        if (!isSwitchTransitionAnimating) return
+        resetSwitchTransitionViews()
     }
 
     private fun startLongPressSeek() {
@@ -1566,8 +1574,10 @@ class PlayerActivity : AppCompatActivity() {
         private const val LONG_PRESS_SEEK_MS = 8_000L
         private const val LONG_PRESS_REPEAT_MS = 350L
         private const val LOADING_VISIBILITY_DELAY_MS = 180L
-        private const val SWITCH_PAGE_ANIMATION_MS = 220L
-        private const val SWITCH_PAGE_CANCEL_ANIMATION_MS = 180L
+        private const val SWITCH_PAGE_ANIMATION_MS = 150L
+        private const val SWITCH_PAGE_CANCEL_ANIMATION_MS = 120L
+        private const val SWITCH_PAGE_TRIGGER_FRACTION = 0.07f
+        private val SWITCH_PAGE_INTERPOLATOR = PathInterpolator(0.2f, 0f, 0f, 1f)
 
         @Volatile
         private var activeInstance: PlayerActivity? = null
