@@ -20,6 +20,7 @@ import android.os.Looper
 import android.util.Rational
 import android.view.LayoutInflater
 import android.view.MotionEvent
+import android.view.TextureView
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
@@ -44,13 +45,16 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import okhttp3.Request
 import java.util.concurrent.ExecutorService
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Full-featured video player activity with ExoPlayer.
@@ -89,6 +93,26 @@ class PlayerActivity : AppCompatActivity() {
     // Player state
     private var player: ExoPlayer? = null
     private var previewPlayer: ExoPlayer? = null
+    private val playerPool by lazy {
+        VideoPlayerPool(
+            createPlayer = { buildExoPlayer() },
+            configurePlayer = { attachPlayerListener(it) }
+        )
+    }
+    private val preloadManager by lazy {
+        VideoPreloadManager(
+            mediaRepository = mediaRepository,
+            connection = connection,
+            playerPool = playerPool,
+            networkExecutor = networkExecutor,
+            mainHandler = mainHandler,
+            playbackParametersProvider = { PlaybackParameters(speeds[currentSpeedIndex]) },
+            isStillActive = { !isFinishing && !isDestroyed },
+            isExpectedNext = { targetIndex, targetItemId ->
+                playlistIndex + 1 == targetIndex && playlistItemIds.getOrNull(targetIndex) == targetItemId
+            }
+        )
+    }
     private lateinit var playbackUrl: String
     private lateinit var accessToken: String
     private lateinit var title: String
@@ -125,6 +149,7 @@ class PlayerActivity : AppCompatActivity() {
     private var switchPreviewTargetIndex = -1
     private var switchPreviewRequestSerial = 0L
     private var isSwitchTransitionAnimating = false
+    private var pendingSwitchRevealOnFirstFrame = false
 
     // Gesture control state
     private lateinit var audioManager: AudioManager
@@ -179,6 +204,7 @@ class PlayerActivity : AppCompatActivity() {
             finish()
             return
         }
+        warmUpEmbyConnection()
 
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         currentBrightness = window.attributes.screenBrightness.takeIf { it >= 0f } ?: 0.5f
@@ -259,6 +285,8 @@ class PlayerActivity : AppCompatActivity() {
         }
         if (shouldReleasePlayer) {
             releasePlayer(endPlayback = shouldEndPlayback)
+            preloadManager.clear()
+            playerPool.releaseSpare()
         }
         releasePreviewPlayer()
     }
@@ -276,7 +304,7 @@ class PlayerActivity : AppCompatActivity() {
         }
         mainHandler.removeCallbacks(showLoadingRunnable)
         releasePlayer(endPlayback = isClosingPlayer || isFinishing || wasInPictureInPictureMode)
-        releasePreviewPlayer()
+        releasePlayerPool()
         super.onDestroy()
     }
 
@@ -335,15 +363,28 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun initializePlayer() {
         if (player != null) return
-        val exoPlayer = buildExoPlayer()
+        val exoPlayer = playerPool.createCurrentPlayer()
 
         playerView.player = exoPlayer
         playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
         player = exoPlayer
         hasRenderedFirstFrame = false
 
+        exoPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(playbackUrl)))
+        exoPlayer.prepare()
+        exoPlayer.seekTo(playbackPosition)
+        exoPlayer.playbackParameters = PlaybackParameters(speeds[currentSpeedIndex])
+        exoPlayer.playWhenReady = playWhenReady
+        PlayerCache.markPlayed(this, itemId)
+        prefetchUpcomingVideosIfNeeded()
+        prepareNextPreloadPlayer()
+        syncPlaybackControls()
+    }
+
+    private fun attachPlayerListener(exoPlayer: ExoPlayer) {
         exoPlayer.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (exoPlayer !== player) return
                 updateLoadingVisibility(playbackState == Player.STATE_BUFFERING)
                 if (playbackState == Player.STATE_READY && exoPlayer.playWhenReady) {
                     playerView.hideController()
@@ -354,10 +395,12 @@ class PlayerActivity : AppCompatActivity() {
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (exoPlayer !== player) return
                 currentVideoSize = videoSize
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (exoPlayer !== player) return
                 syncPlaybackControls()
                 if (isPlaying) {
                     reportPlaybackStartedIfNeeded(exoPlayer.currentPosition)
@@ -369,12 +412,15 @@ class PlayerActivity : AppCompatActivity() {
             }
 
             override fun onRenderedFirstFrame() {
+                if (exoPlayer !== player) return
                 hasRenderedFirstFrame = true
                 hideCoverImage()
+                revealCommittedSwitchIfReady()
                 syncPlaybackControls()
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                if (exoPlayer !== player) return
                 Toast.makeText(
                     this@PlayerActivity,
                     userFriendlyPlaybackErrorMessage(error),
@@ -382,15 +428,6 @@ class PlayerActivity : AppCompatActivity() {
                 ).show()
             }
         })
-
-        exoPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(playbackUrl)))
-        exoPlayer.prepare()
-        exoPlayer.seekTo(playbackPosition)
-        exoPlayer.playbackParameters = PlaybackParameters(speeds[currentSpeedIndex])
-        exoPlayer.playWhenReady = playWhenReady
-        PlayerCache.markPlayed(this, itemId)
-        prefetchUpcomingVideosIfNeeded()
-        syncPlaybackControls()
     }
 
     private fun buildExoPlayer(): ExoPlayer {
@@ -407,6 +444,19 @@ class PlayerActivity : AppCompatActivity() {
 
         return ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(cacheFactory))
+            .setLoadControl(buildShortVideoLoadControl())
+            .build()
+    }
+
+    private fun buildShortVideoLoadControl(): DefaultLoadControl {
+        return DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                SHORT_VIDEO_MIN_BUFFER_MS,
+                SHORT_VIDEO_MAX_BUFFER_MS,
+                SHORT_VIDEO_PLAYBACK_BUFFER_MS,
+                SHORT_VIDEO_REBUFFER_BUFFER_MS
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
             .build()
     }
 
@@ -428,6 +478,7 @@ class PlayerActivity : AppCompatActivity() {
         playerView.player = null
         currentPlayer.release()
         player = null
+        playerPool.clearCurrent()
         stopLoadingAnimation()
         mainHandler.removeCallbacks(showLoadingRunnable)
         centerTimeText.removeCallbacks(centerTimeTicker)
@@ -435,7 +486,17 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun releasePreviewPlayer() {
         previewPlayerViewSafeDetach()
-        previewPlayer?.release()
+        if (previewPlayer !== preloadManager.nextPreload?.player) {
+            playerPool.recycleToSpare(previewPlayer, protectedPlayers = setOf(preloadManager.nextPreload?.player))
+        }
+        previewPlayer = null
+    }
+
+    private fun releasePlayerPool() {
+        previewPlayerViewSafeDetach()
+        preloadManager.clear()
+        playerPool.releaseAll(extraPlayers = listOf(previewPlayer))
+        player = null
         previewPlayer = null
     }
 
@@ -445,11 +506,38 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    private fun prepareNextPreloadPlayer() {
+        val previousPreloadPlayer = preloadManager.nextPreload?.player
+        preloadManager.releaseDistant(playlistIndex)
+        if (previousPreloadPlayer != null && preloadManager.nextPreload?.player !== previousPreloadPlayer && previewPlayer === previousPreloadPlayer) {
+            previewPlayerViewSafeDetach()
+            previewPlayer = null
+        }
+        preloadManager.prepareNext(playlistIndex, playlistItemIds, playlistItemTitles)
+    }
+
     private fun applySpeed(index: Int) {
         currentSpeedIndex = index.coerceIn(speeds.indices)
         val speed = speeds[currentSpeedIndex]
         player?.playbackParameters = PlaybackParameters(speed)
         showGestureLabel(getString(R.string.playback_speed_label, speed), 900)
+    }
+
+    private fun warmUpEmbyConnection() {
+        if (!connection.isValid) return
+        val baseUrl = connection.baseUrl.trimEnd('/')
+        networkExecutor.execute {
+            runCatching {
+                val request = Request.Builder()
+                    .url("$baseUrl/emby/System/Info/Public")
+                    .header("X-Emby-Token", accessToken)
+                    .get()
+                    .build()
+                NetworkClientProvider.client.newCall(request).execute().use { response ->
+                    response.body?.close()
+                }
+            }
+        }
     }
 
     private fun toggleContinuousPlay() {
@@ -577,7 +665,18 @@ class PlayerActivity : AppCompatActivity() {
 
         isSwitchingItem = true
         val targetItemId = playlistItemIds[targetIndex]
-        val prefetchedPlayback = PlayerCache.takePrefetchedPlayback(targetItemId)
+        val preloadedPlayback = preloadManager.takeIfMatches(targetIndex, targetItemId)
+        if (preloadedPlayback != null) {
+            isSwitchingItem = false
+            reportPlaybackStopped(player?.currentPosition ?: playbackPosition)
+            promotePreloadedPlayback(preloadedPlayback, shouldPlayWhenReady)
+            PlayerCache.markPlayed(this, itemId)
+            prefetchUpcomingVideosIfNeeded()
+            onApplied?.invoke()
+            return
+        }
+
+        val prefetchedPlayback = VideoPlaybackAddressCache.take(targetItemId)
         if (prefetchedPlayback != null) {
             isSwitchingItem = false
             reportPlaybackStopped(player?.currentPosition ?: playbackPosition)
@@ -597,6 +696,7 @@ class PlayerActivity : AppCompatActivity() {
             swapToMedia(prefetchedPlayback.playbackUrl, shouldPlayWhenReady)
             PlayerCache.markPlayed(this, itemId)
             prefetchUpcomingVideosIfNeeded()
+            prepareNextPreloadPlayer()
             onApplied?.invoke()
             return
         }
@@ -624,6 +724,7 @@ class PlayerActivity : AppCompatActivity() {
                     swapToMedia(detail.playbackUrl.orEmpty(), shouldPlayWhenReady)
                     PlayerCache.markPlayed(this, itemId)
                     prefetchUpcomingVideosIfNeeded()
+                    prepareNextPreloadPlayer()
                     onApplied?.invoke()
                 }.onFailure { error ->
                     updateLoadingVisibility(false, immediate = true)
@@ -636,6 +737,49 @@ class PlayerActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun promotePreloadedPlayback(preload: VideoPreloadedPlayback, shouldPlayWhenReady: Boolean) {
+        val oldPlayer = player
+        if (playerPreviewView.player === preload.player) {
+            previewPlayerViewSafeDetach()
+        }
+        previewPlayer = null
+        playerPool.promoteToCurrent(preload.player)
+        player = preload.player
+        playerView.player = preload.player
+        hasRenderedFirstFrame = false
+        applyPreloadedPlaybackMetadata(preload, shouldPlayWhenReady)
+        preload.player.playbackParameters = PlaybackParameters(speeds[currentSpeedIndex])
+        preload.player.playWhenReady = shouldPlayWhenReady
+        if (shouldPlayWhenReady) {
+            preload.player.play()
+            playerView.hideController()
+        } else {
+            preload.player.pause()
+            playerView.showController()
+        }
+        playerPool.recycleToSpare(oldPlayer, protectedPlayers = setOf(preloadManager.nextPreload?.player))
+        bindPlaylistPanel()
+        bindCoverImage()
+        refreshPlayerActionState()
+        prepareNextPreloadPlayer()
+        syncPlaybackControls()
+    }
+
+    private fun applyPreloadedPlaybackMetadata(preload: VideoPreloadedPlayback, shouldPlayWhenReady: Boolean) {
+        playlistIndex = preload.playlistIndex
+        itemId = preload.itemId
+        mediaSourceId = preload.mediaSourceId
+        playSessionId = preload.playSessionId
+        playbackUrl = preload.playbackUrl
+        title = preload.title
+        titleText.text = title
+        playbackPosition = preload.playbackPositionMs
+        playWhenReady = shouldPlayWhenReady
+        coverImageUrl = preload.coverImageUrl
+        isCurrentFavorite = preload.isFavorite
+        updatePlayerActionButtons()
     }
 
     private fun rotateVideo() {
@@ -770,7 +914,7 @@ class PlayerActivity : AppCompatActivity() {
                 700
             )
             val resistedDy = totalDy.coerceIn(-height * 0.18f, height * 0.18f)
-            playerPageContainer.translationY = resistedDy
+            playerPageContainer.translationY = resistedDy.roundToInt().toFloat()
             playerPreviewPageContainer.visibility = View.GONE
             return
         }
@@ -779,9 +923,11 @@ class PlayerActivity : AppCompatActivity() {
             prepareSwitchPreview(direction, targetIndex)
         }
 
-        val clampedDy = totalDy.coerceIn(-height.toFloat(), height.toFloat())
-        playerPageContainer.translationY = clampedDy
-        playerPreviewPageContainer.translationY = clampedDy + if (direction > 0) height else -height
+        applySwitchPageTranslations(
+            currentPageOffset = totalDy.coerceIn(-height.toFloat(), height.toFloat()),
+            direction = direction,
+            height = height
+        )
         playerPreviewPageContainer.visibility = View.VISIBLE
     }
 
@@ -813,14 +959,19 @@ class PlayerActivity : AppCompatActivity() {
         playerView.hideController()
         topBar.visibility = View.GONE
         playerPreviewPageContainer.visibility = View.VISIBLE
-        playerPageContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        playerPreviewPageContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         playerPreviewPageContainer.translationY =
             if (direction > 0) playerPageContainer.height.toFloat() else -playerPageContainer.height.toFloat()
-        previewCoverImageView.visibility = View.GONE
-        releasePreviewPlayer()
+        bindSwitchPreviewFallbackImage()
 
         val targetItemId = playlistItemIds.getOrNull(targetIndex).orEmpty()
+        val preloadedPlayback = preloadManager.peekIfMatches(targetIndex, targetItemId)
+        if (preloadedPlayback != null) {
+            previewPlayer = preloadedPlayback.player
+            playerPreviewView.player = preloadedPlayback.player
+        } else {
+            releasePreviewPlayer()
+        }
+
         val requestSerial = ++switchPreviewRequestSerial
         networkExecutor.execute {
             val result = mediaRepository.fetchVideoDetail(connection, targetItemId)
@@ -850,28 +1001,9 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
-    private fun preparePreviewPlayer(url: String, startPositionMs: Long) {
-        val exoPlayer = buildExoPlayer().apply {
-            volume = 0f
-            setMediaItem(MediaItem.fromUri(Uri.parse(url)))
-            addListener(object : Player.Listener {
-                override fun onRenderedFirstFrame() {
-                    previewCoverImageView.visibility = View.GONE
-                }
-            })
-            prepare()
-            seekTo(startPositionMs.coerceAtLeast(0L))
-            playWhenReady = false
-        }
-        previewPlayer = exoPlayer
-        playerPreviewView.player = exoPlayer
-    }
-
     private fun animateSwitchCommit(direction: Int, targetIndex: Int) {
         val height = playerPageContainer.height.takeIf { it > 0 } ?: return
         isSwitchTransitionAnimating = true
-        playerPageContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        playerPreviewPageContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         playerPageContainer.animate()
             .translationY(if (direction > 0) -height.toFloat() else height.toFloat())
             .setDuration(SWITCH_PAGE_ANIMATION_MS)
@@ -883,7 +1015,7 @@ class PlayerActivity : AppCompatActivity() {
             .setInterpolator(SWITCH_PAGE_INTERPOLATOR)
             .withEndAction {
                 loadPlaylistItemAt(targetIndex, shouldPlayWhenReady = true) {
-                    resetSwitchTransitionViews()
+                    waitForCommittedSwitchFirstFrame()
                 }
             }
             .start()
@@ -891,8 +1023,6 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun animateSwitchCancel() {
         isSwitchTransitionAnimating = true
-        playerPageContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        playerPreviewPageContainer.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         playerPageContainer.animate()
             .translationY(0f)
             .setDuration(SWITCH_PAGE_CANCEL_ANIMATION_MS)
@@ -911,18 +1041,67 @@ class PlayerActivity : AppCompatActivity() {
     private fun resetSwitchTransitionViews() {
         playerPageContainer.animate().cancel()
         playerPreviewPageContainer.animate().cancel()
+        mainHandler.removeCallbacks(switchRevealFallbackRunnable)
         playerPageContainer.translationY = 0f
         playerPreviewPageContainer.translationY = 0f
-        playerPageContainer.setLayerType(View.LAYER_TYPE_NONE, null)
-        playerPreviewPageContainer.setLayerType(View.LAYER_TYPE_NONE, null)
         playerPreviewPageContainer.visibility = View.GONE
+        previewCoverImageView.setImageDrawable(null)
         previewCoverImageView.visibility = View.GONE
         switchPreviewDirection = 0
         switchPreviewTargetIndex = -1
         switchPreviewRequestSerial++
         isSwitchTransitionAnimating = false
+        pendingSwitchRevealOnFirstFrame = false
         releasePreviewPlayer()
         syncPlaybackControls()
+    }
+
+    private fun waitForCommittedSwitchFirstFrame() {
+        playerPageContainer.animate().cancel()
+        playerPreviewPageContainer.animate().cancel()
+        playerPageContainer.translationY = 0f
+        playerPreviewPageContainer.translationY = 0f
+        pendingSwitchRevealOnFirstFrame = true
+        mainHandler.removeCallbacks(switchRevealFallbackRunnable)
+        mainHandler.postDelayed(switchRevealFallbackRunnable, SWITCH_REVEAL_FALLBACK_MS)
+    }
+
+    private fun applySwitchPageTranslations(currentPageOffset: Float, direction: Int, height: Int) {
+        val currentOffset = currentPageOffset.roundToInt().toFloat()
+        val previewOffset = currentOffset + if (direction > 0) height else -height
+        playerPageContainer.translationY = currentOffset
+        playerPreviewPageContainer.translationY = previewOffset
+    }
+
+    private fun revealCommittedSwitchIfReady() {
+        if (!pendingSwitchRevealOnFirstFrame) return
+        playerView.postOnAnimation {
+            resetSwitchTransitionViews()
+        }
+    }
+
+    private fun bindSwitchPreviewFallbackImage() {
+        val snapshot = (playerView.videoSurfaceView as? TextureView)?.bitmap
+        if (snapshot != null) {
+            previewCoverImageView.setImageBitmap(snapshot)
+            previewCoverImageView.visibility = View.VISIBLE
+            return
+        }
+
+        val currentCoverUrl = coverImageUrl.orEmpty()
+        if (currentCoverUrl.isNotBlank()) {
+            previewCoverImageView.visibility = View.VISIBLE
+            EmbyImageLoader.load(
+                imageView = previewCoverImageView,
+                url = currentCoverUrl,
+                token = accessToken,
+                onFailure = {
+                    previewCoverImageView.visibility = View.GONE
+                }
+            )
+        } else {
+            previewCoverImageView.visibility = View.GONE
+        }
     }
 
     private fun cancelSwitchTransitionAnimation() {
@@ -1048,6 +1227,7 @@ class PlayerActivity : AppCompatActivity() {
         }
         playbackUrl = url
         hasReportedPlaybackStart = false
+        hasRenderedFirstFrame = false
         currentPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(url)))
         currentPlayer.prepare()
         currentPlayer.seekTo(playbackPosition.coerceAtLeast(0L))
@@ -1082,10 +1262,9 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun prefetchUpcomingVideosIfNeeded() {
-        if (!isContinuousPlayEnabled) return
         if (playlistItemIds.isEmpty() || playlistIndex !in playlistItemIds.indices) return
 
-        val nextIds = ((playlistIndex + 1)..minOf(playlistIndex + 5, playlistItemIds.lastIndex))
+        val nextIds = ((playlistIndex + 1)..minOf(playlistIndex + PREFETCH_UPCOMING_COUNT, playlistItemIds.lastIndex))
             .map { playlistItemIds[it] }
         if (nextIds.isEmpty()) return
 
@@ -1096,8 +1275,8 @@ class PlayerActivity : AppCompatActivity() {
                 val detail = mediaRepository.fetchVideoDetail(connection, nextItemId).getOrNull()
                 val url = detail?.playbackUrl.orEmpty()
                 if (url.isNotBlank()) {
-                    PlayerCache.savePrefetchedPlayback(
-                        PlayerCache.PrefetchedPlayback(
+                    VideoPlaybackAddressCache.save(
+                        VideoPlaybackAddressCache.Entry(
                             itemId = nextItemId,
                             playbackUrl = url,
                             playbackPositionMs = detail?.playbackPositionTicks?.div(10_000L) ?: 0L,
@@ -1534,6 +1713,9 @@ class PlayerActivity : AppCompatActivity() {
             startLoadingAnimation()
         }
     }
+    private val switchRevealFallbackRunnable = Runnable {
+        revealCommittedSwitchIfReady()
+    }
     private val centerTimeTicker = object : Runnable {
         override fun run() {
             updateCenterTimeText()
@@ -1577,6 +1759,12 @@ class PlayerActivity : AppCompatActivity() {
         private const val SWITCH_PAGE_ANIMATION_MS = 150L
         private const val SWITCH_PAGE_CANCEL_ANIMATION_MS = 120L
         private const val SWITCH_PAGE_TRIGGER_FRACTION = 0.07f
+        private const val SWITCH_REVEAL_FALLBACK_MS = 1_200L
+        private const val PREFETCH_UPCOMING_COUNT = 10
+        private const val SHORT_VIDEO_MIN_BUFFER_MS = 1_000
+        private const val SHORT_VIDEO_MAX_BUFFER_MS = 8_000
+        private const val SHORT_VIDEO_PLAYBACK_BUFFER_MS = 250
+        private const val SHORT_VIDEO_REBUFFER_BUFFER_MS = 500
         private val SWITCH_PAGE_INTERPOLATOR = PathInterpolator(0.2f, 0f, 0f, 1f)
 
         @Volatile

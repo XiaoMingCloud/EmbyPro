@@ -16,8 +16,8 @@ import java.util.concurrent.Executors
 
 /**
  * Manages video cache and prefetching for smoother playback experience.
- * Uses ExoPlayer's SimpleCache with LRU eviction strategy (150MB max).
- * Supports prefetching initial video segments (24MB) for faster startup.
+ * Uses ExoPlayer's SimpleCache with LRU eviction strategy (300MB max).
+ * Supports prefetching initial video segments (12MB) for faster startup.
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 object PlayerCache {
@@ -151,7 +151,7 @@ object PlayerCache {
         val cacheDir = File(context.cacheDir, "video_cache")
         return SimpleCache(
             cacheDir,
-            LeastRecentlyUsedCacheEvictor(150L * 1024L * 1024L),
+            LeastRecentlyUsedCacheEvictor(MAX_CACHE_BYTES),
             StandaloneDatabaseProvider(context)
         )
     }
@@ -164,6 +164,7 @@ object PlayerCache {
     }
 
     private const val PREFS_NAME = "player_prefetch_cache"
-    private const val PREFETCH_BYTES = 24L * 1024L * 1024L
+    private const val PREFETCH_BYTES = 12L * 1024L * 1024L
+    private const val MAX_CACHE_BYTES = 300L * 1024L * 1024L
     private const val PREFETCH_EXPIRE_MS = 20L * 60L * 1000L
 }
