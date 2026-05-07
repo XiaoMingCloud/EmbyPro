@@ -294,8 +294,12 @@ class MusicPlaybackService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
-            ?: Intent(this, SplashActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val launchIntent = Intent(this, MusicPlayerActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putServerConnection(MusicPlayerSessionStore.currentConnection() ?: return@apply)
+            putExtra("extra_queue_ids", ArrayList<String>())
+            putExtra("extra_queue_titles", ArrayList<String>())
+        }
         val contentIntent = PendingIntent.getActivity(
             this,
             3,
@@ -341,6 +345,7 @@ class MusicPlaybackService : Service() {
         }
 
         currentArtworkUrl = artworkUrl
+        currentArtworkBitmap?.recycle()
         currentArtworkBitmap = null
 
         if (artworkUrl == null) {
@@ -355,6 +360,7 @@ class MusicPlaybackService : Service() {
             token = MusicPlayerSessionStore.currentConnection()?.accessToken
         ) { bitmap ->
             if (currentArtworkUrl != artworkUrl) return@loadBitmap
+            currentArtworkBitmap?.recycle()
             currentArtworkBitmap = bitmap
             syncMediaSessionState()
             updateForegroundNotification()

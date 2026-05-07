@@ -80,6 +80,7 @@ class MusicLibraryActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (!::connection.isInitialized) return
         MusicLibraryRepository.subscribe(stateListener)
         MusicLibraryRepository.connect(this, connection.baseUrl, connection.userId, connection.accessToken)
     }

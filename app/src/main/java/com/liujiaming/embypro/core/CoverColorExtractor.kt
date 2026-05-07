@@ -41,6 +41,10 @@ object CoverColorExtractor {
     private val evaluator = android.animation.ArgbEvaluator()
     private val cache = object : LruCache<String, CoverColorScheme>(CACHE_SIZE) {}
 
+    fun shutdown() {
+        executor.shutdown()
+    }
+
     fun defaultScheme(imageKey: String = ""): CoverColorScheme {
         val surface = Color.parseColor("#EAF3F6")
         val textPrimary = Color.parseColor("#1F2430")
@@ -61,14 +65,18 @@ object CoverColorExtractor {
     }
 
     fun extractColors(imageKey: String, bitmap: Bitmap, onResult: (CoverColorScheme) -> Unit) {
-        val cached = cache.get(imageKey)
-        if (cached != null) {
-            onResult(cached)
-            return
+        synchronized(cache) {
+            val cached = cache.get(imageKey)
+            if (cached != null) {
+                onResult(cached)
+                return
+            }
         }
         executor.execute {
             val scheme = extractColors(bitmap).copy(imageKey = imageKey)
-            cache.put(imageKey, scheme)
+            synchronized(cache) {
+                cache.put(imageKey, scheme)
+            }
             mainHandler.post { onResult(scheme) }
         }
     }
@@ -86,7 +94,7 @@ object CoverColorExtractor {
     }
 
     private fun buildSampleBitmap(bitmap: Bitmap): Bitmap {
-        if (bitmap.width <= 1 || bitmap.height <= 1) return bitmap
+        if (bitmap.isRecycled || bitmap.width <= 1 || bitmap.height <= 1) return bitmap
         val left = (bitmap.width * 0.05f).toInt().coerceIn(0, bitmap.width - 1)
         val right = (bitmap.width * 0.95f).toInt().coerceIn(left + 1, bitmap.width)
         val top = (bitmap.height * 0.45f).toInt().coerceIn(0, bitmap.height - 1)
@@ -182,6 +190,7 @@ object CoverColorExtractor {
     }
 
     private fun resolvePaletteFallback(bitmap: Bitmap): Int? {
+        if (bitmap.isRecycled) return null
         val palette = Palette.from(bitmap).maximumColorCount(12).generate()
         val swatch = palette.vibrantSwatch
             ?: palette.lightVibrantSwatch

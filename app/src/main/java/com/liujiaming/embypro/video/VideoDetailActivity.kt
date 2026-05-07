@@ -648,16 +648,9 @@ class VideoDetailActivity : AppCompatActivity() {
         if (rawLine.isBlank()) return ""
         return rawLine
             .replace(Regex("\\bund\\b", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("\\baac\\b", RegexOption.IGNORE_CASE)) { match -> if (match.range.first == 0) "AAC" else "" }
-            .replace(Regex("\\s+AAC\\s*$", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("\\s+"), " ")
-            .trim()
-        return rawLine
             .replace("und ", "")
             .replace(" und", "")
-            .replace(Regex("\\baac\\b", RegexOption.IGNORE_CASE)) { match ->
-                if (match.range.first == 0) "AAC" else ""
-            }
+            .replace(Regex("\\baac\\b", RegexOption.IGNORE_CASE)) { match -> if (match.range.first == 0) "AAC" else "" }
             .replace(Regex("\\s+AAC\\s*$", RegexOption.IGNORE_CASE), "")
             .replace(Regex("\\s+"), " ")
             .trim()

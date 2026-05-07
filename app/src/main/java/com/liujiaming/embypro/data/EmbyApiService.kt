@@ -437,7 +437,7 @@ class EmbyApiService(
         return runCatching {
             val cachedLibraries = fetchMediaLibraries(baseUrl, userId, accessToken).getOrThrow()
             val cachedMusicLibraries = cachedLibraries.filter { it.collectionType.equals("music", ignoreCase = true) }
-            if (cachedMusicLibraries.isNotEmpty() || cachedLibraries.any { it.collectionType.isNotBlank() }) {
+            if (cachedMusicLibraries.isNotEmpty()) {
                 return@runCatching cachedMusicLibraries
             }
 
@@ -1257,7 +1257,7 @@ class EmbyApiService(
         mediaSourceId = mediaSourceId,
         playSessionId = playSessionId,
         playbackPositionMs = playbackPositionMs,
-        isPaused = true
+        isPaused = false
     )
 
     fun fetchLibraryItemsPage(

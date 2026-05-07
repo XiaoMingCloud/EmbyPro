@@ -17,4 +17,10 @@ object AppExecutors {
             Runtime.getRuntime().availableProcessors().coerceAtLeast(4)
         )
     }
+
+    fun shutdown() {
+        if (io.isShutdown.not()) {
+            io.shutdown()
+        }
+    }
 }

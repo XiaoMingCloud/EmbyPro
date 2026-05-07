@@ -343,6 +343,7 @@ class MusicPlayerActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (!::connection.isInitialized) return
         MusicLibraryRepository.subscribe(stateListener)
         MusicPlaybackService.registerStateListener(playbackStateListener)
 
@@ -1320,7 +1321,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         if (currentPlayer != null && !isSeekingFromUser) {
             val duration = currentPlayer.duration.takeIf { it > 0 } ?: 0L
             val position = currentPlayer.currentPosition.coerceAtLeast(0L)
-            seekBar.max = duration.toInt().coerceAtLeast(1)
+            seekBar.max = duration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt().coerceAtLeast(1)
             seekBar.progress = position.toInt().coerceAtMost(seekBar.max)
             elapsedTextView.text = formatMillis(position)
             durationTextView.text = formatMillis(duration)

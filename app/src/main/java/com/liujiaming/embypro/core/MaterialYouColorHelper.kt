@@ -42,6 +42,7 @@ data class MaterialYouBackdropColors(
 object MaterialYouColorHelper {
 
     fun extractButtonColors(bitmap: Bitmap, fallbackSeed: Int): MaterialYouButtonColors {
+        if (bitmap.isRecycled) return MaterialYouButtonColors(seed = fallbackSeed, container = fallbackSeed, content = Color.WHITE)
         val seed = extractBaseColor(bitmap, fallbackSeed)
         val container = createButtonColor(seed)
         val content = if (ColorUtils.calculateLuminance(container) > 0.42) Color.BLACK else Color.WHITE
@@ -70,7 +71,7 @@ object MaterialYouColorHelper {
     }
 
     private fun extractBaseColor(bitmap: Bitmap, fallbackSeed: Int): Int {
-        if (bitmap.width <= 0 || bitmap.height <= 0) return fallbackSeed
+        if (bitmap.isRecycled || bitmap.width <= 0 || bitmap.height <= 0) return fallbackSeed
 
         val cropTop = (bitmap.height * 0.34f).roundToInt().coerceIn(0, bitmap.height - 1)
         val cropBottom = (bitmap.height * 0.88f).roundToInt().coerceIn(cropTop + 1, bitmap.height)

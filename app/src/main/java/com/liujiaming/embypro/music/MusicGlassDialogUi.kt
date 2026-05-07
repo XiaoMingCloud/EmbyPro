@@ -11,8 +11,7 @@ import android.view.WindowManager
 import kotlin.math.min
 
 internal fun Context.createMusicGlassDialog(contentView: android.view.View): Dialog {
-    return Dialog(this).apply {
-        requestWindowFeature(Window.FEATURE_NO_TITLE)
+    return Dialog(this, android.R.style.Theme_Translucent_NoTitleBar).apply {
         setContentView(contentView)
         setCanceledOnTouchOutside(true)
         setCancelable(true)

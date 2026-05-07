@@ -12,4 +12,12 @@ class EmbyProApplication : Application() {
         // Install the global music mini player overlay
         MusicMiniPlayerOverlay.install(this)
     }
+
+    override fun onTerminate() {
+        super.onTerminate()
+        AppExecutors.shutdown()
+        CoverColorExtractor.shutdown()
+        EmbyImageLoader.shutdown()
+        PlayerCache.shutdown()
+    }
 }

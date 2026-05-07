@@ -163,6 +163,10 @@ object PlayerCache {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
+    fun shutdown() {
+        prefetchExecutor.shutdown()
+    }
+
     private const val PREFS_NAME = "player_prefetch_cache"
     private const val PREFETCH_BYTES = 12L * 1024L * 1024L
     private const val MAX_CACHE_BYTES = 300L * 1024L * 1024L

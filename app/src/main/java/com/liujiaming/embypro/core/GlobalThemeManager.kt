@@ -66,8 +66,8 @@ object GlobalThemeManager {
         root.background = backgroundDrawable
         content.background = backgroundDrawable.constantState?.newDrawable()?.mutate() ?: backgroundDrawable
         WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
-            isAppearanceLightStatusBars = true
-            isAppearanceLightNavigationBars = true
+            isAppearanceLightStatusBars = option.lightSystemBars
+            isAppearanceLightNavigationBars = option.lightSystemBars
         }
         applyForegroundColors(root, option)
     }
@@ -133,7 +133,7 @@ object GlobalThemeManager {
 
             is TextView -> {
                 val currentColor = view.currentTextColor
-                val targetColor = if (isSecondaryTone(currentColor)) secondaryColor else primaryColor
+                val targetColor = if (isSecondaryTone(currentColor, primaryColor, secondaryColor)) secondaryColor else primaryColor
                 view.setTextColor(targetColor)
             }
 
@@ -189,11 +189,9 @@ object GlobalThemeManager {
      * Determines if a color is closer to the secondary tone than primary tone.
      * Uses RGB color distance calculation.
      */
-    private fun isSecondaryTone(color: Int): Boolean {
-        val secondary = Color.parseColor("#FF7E748E")
-        val primary = Color.parseColor("#FF272336")
-        val distanceToSecondary = colorDistance(color, secondary)
-        val distanceToPrimary = colorDistance(color, primary)
+    private fun isSecondaryTone(color: Int, primaryColor: Int, secondaryColor: Int): Boolean {
+        val distanceToSecondary = colorDistance(color, secondaryColor)
+        val distanceToPrimary = colorDistance(color, primaryColor)
         return distanceToSecondary < distanceToPrimary
     }
 

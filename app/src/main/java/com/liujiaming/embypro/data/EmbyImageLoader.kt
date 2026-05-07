@@ -116,6 +116,10 @@ object EmbyImageLoader {
         }
     }
 
+    fun shutdown() {
+        executor.shutdown()
+    }
+
     private fun loadImageBytes(context: Context, url: String, token: String?): ByteArray? {
         return try {
             val uri = Uri.parse(url)
