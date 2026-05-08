@@ -167,7 +167,7 @@ object GlobalThemeManager {
      * Resolves card stroke (border) color based on theme option.
      */
     private fun resolveCardStrokeColor(@Suppress("UNUSED_PARAMETER") option: GlobalThemeOption): Int {
-        return Color.parseColor("#99FFFFFF")
+        return Color.parseColor("#3D1B1B1F")
     }
 
     /**

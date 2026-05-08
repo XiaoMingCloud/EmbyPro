@@ -9,7 +9,7 @@
     <color name="white">#FFFFFFFF</color>
     <color name="screen_background">#FFF7F4FB</color>
     <color name="card_background">#FFF3EFF7</color>
-    <color name="card_stroke">#1F1B1B1F</color>
+    <color name="card_stroke">#3D1B1B1F</color>
     <color name="text_primary">#FF272336</color>
     <color name="text_secondary">#FF7E748E</color>
     <color name="text_accent">#FFA05950</color>
@@ -36,7 +36,7 @@
     <color name="global_font_blue">#FF2F6FD6</color>
     <color name="global_font_gold">#FBFBFB</color>
     <color name="home_search_surface">#FFF3EFF7</color>
-    <color name="home_search_stroke">#1F1B1B1F</color>
+    <color name="home_search_stroke">#3D1B1B1F</color>
     <color name="home_tab_video_bg">#FFFFD7E6</color>
     <color name="home_tab_audio_bg">#FFDDEBFF</color>
     <color name="home_secondary_tab_selected_bg">#FFF0EAF7</color>

@@ -166,7 +166,7 @@ object MusicMiniPlayerOverlay : Application.ActivityLifecycleCallbacks,
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(activity, 44).toFloat()
                 setColor(Color.WHITE)
-                setStroke(dp(activity, 1), Color.parseColor("#33272336"))
+                setStroke(dp(activity, 1), Color.parseColor("#66272336"))
             }
             elevation = dp(activity, 18).toFloat()
             translationZ = dp(activity, 8).toFloat()
